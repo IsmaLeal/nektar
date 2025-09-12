@@ -43,7 +43,6 @@
 
 #define LUE LIB_UTILITIES_EXPORT
 
-#include <LibUtilities/TimeIntegration/IMEXGearTimeIntegrationScheme.h>
 #include <LibUtilities/TimeIntegration/IMEXdirkTimeIntegrationSchemes.h>
 #include <LibUtilities/TimeIntegration/TimeIntegrationSchemeGLM.h>
 
@@ -86,19 +85,6 @@ public:
                 IMEXdirkTimeIntegrationScheme::SetupSchemeData(
                     m_integration_phases[0], order, freeParams);
             }
-        }
-        else if (variant == "Gear")
-        {
-            m_integration_phases    = TimeIntegrationAlgorithmGLMVector(2);
-            m_integration_phases[0] = TimeIntegrationAlgorithmGLMSharedPtr(
-                new TimeIntegrationAlgorithmGLM(this));
-            m_integration_phases[1] = TimeIntegrationAlgorithmGLMSharedPtr(
-                new TimeIntegrationAlgorithmGLM(this));
-
-            IMEXdirkTimeIntegrationScheme::SetupSchemeData(
-                m_integration_phases[0], 2, std::vector<NekDouble>{2, 2});
-            IMEXGearTimeIntegrationScheme::SetupSchemeData(
-                m_integration_phases[1]);
         }
         else if (variant == "")
         {
@@ -160,7 +146,7 @@ public:
         else
         {
             ASSERTL1(false, "IMEX Time integration scheme bad variant: " +
-                                variant + ". Must be blank, 'dirk' or 'Gear'");
+                                variant + ". Must be blank or 'dirk'");
         }
     }
 

@@ -81,16 +81,14 @@ void VCSMapping::v_InitObject(bool DeclareField)
     size_t physTot  = m_fields[0]->GetTotPoints();
     size_t intSteps = 1;
 
-    if (m_intScheme->GetName() == "IMEX" ||
-        m_intScheme->GetName() == "IMEXGear")
+    if (m_intScheme->GetName() == "IMEX")
     {
         m_intSteps = m_intScheme->GetOrder();
     }
     else
     {
-        NEKERROR(ErrorUtil::efatal,
-                 "Integration method not suitable: "
-                 "Options include IMEXGear or IMEXOrder{1,2,3,4}");
+        NEKERROR(ErrorUtil::efatal, "Integration method not suitable: "
+                                    "Options include IMEXOrder{1,2,3,4}");
     }
 
     m_presForcingCorrection = Array<OneD, Array<OneD, NekDouble>>(intSteps);
