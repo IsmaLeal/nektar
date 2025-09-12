@@ -41,7 +41,6 @@
 #include <LibUtilities/TimeIntegration/DIRKTimeIntegrationSchemes.h>
 #include <LibUtilities/TimeIntegration/EulerExponentialTimeIntegrationSchemes.h>
 #include <LibUtilities/TimeIntegration/EulerTimeIntegrationSchemes.h>
-#include <LibUtilities/TimeIntegration/IMEXGearTimeIntegrationScheme.h>
 #include <LibUtilities/TimeIntegration/IMEXTimeIntegrationSchemes.h>
 #include <LibUtilities/TimeIntegration/IMEXdirkTimeIntegrationSchemes.h>
 #include <LibUtilities/TimeIntegration/MCNABTimeIntegrationScheme.h>
@@ -96,9 +95,6 @@ FACTORYREGISTER(DIRK);
 
 // IMEXdirkTimeIntegrationSchemes.h
 FACTORYREGISTER(IMEXdirk);
-
-// IMEXGearTimeIntegrationScheme.h
-FACTORYREGISTER(IMEXGear);
 
 // IMEXTimeIntegrationSchemes.h
 FACTORYREGISTER(IMEX);

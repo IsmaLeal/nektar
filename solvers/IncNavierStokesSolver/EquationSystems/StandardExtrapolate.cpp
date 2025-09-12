@@ -96,16 +96,14 @@ void StandardExtrapolate::v_EvaluatePressureBCs(
 void StandardExtrapolate::v_SubSteppingTimeIntegration(
     const LibUtilities::TimeIntegrationSchemeSharedPtr &IntegrationScheme)
 {
-    if (IntegrationScheme->GetName() == "IMEX" ||
-        IntegrationScheme->GetName() == "IMEXGear")
+    if (IntegrationScheme->GetName() == "IMEX")
     {
         m_intSteps = IntegrationScheme->GetOrder();
     }
     else
     {
-        NEKERROR(ErrorUtil::efatal,
-                 "Integration method not suitable: "
-                 "Options include IMEXGear or IMEXOrder{1,2,3,4}");
+        NEKERROR(ErrorUtil::efatal, "Integration method not suitable: "
+                                    "Options include IMEXOrder{1,2,3,4}");
     }
 }
 
