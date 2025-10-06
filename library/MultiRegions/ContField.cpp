@@ -931,7 +931,7 @@ GlobalLinSysKey ContField::v_LinearAdvectionDiffusionReactionSolve(
             {
                 for (j = 0; j < (m_bndCondExpansions[i])->GetNcoeffs(); j++)
                 {
-                    wsp[map[bndcnt + j]] += bndcoeff[bndcnt + j];
+                    wsp[map[bndcnt + j]] += bndcoeff[j];
                 }
             }
         }
@@ -989,26 +989,104 @@ GlobalLinSysKey ContField::v_LinearAdvectionDiffusionReactionSolve(
  * @param   lambda      reaction coefficient
  * @param   dirForcing  Dirichlet Forcing.
  */
-void ContField::v_LinearAdvectionReactionSolve(
-    const Array<OneD, Array<OneD, NekDouble>> &velocity,
+GlobalLinSysKey ContField::v_LinearAdvectionReactionSolve(
     const Array<OneD, const NekDouble> &inarray,
-    Array<OneD, NekDouble> &outarray, const NekDouble lambda,
-    const Array<OneD, const NekDouble> &dirForcing)
+    Array<OneD, NekDouble> &outarray, const StdRegions::ConstFactorMap &factors,
+    const StdRegions::VarCoeffMap &pvarcoeff,
+    const MultiRegions::VarFactorsMap &varfactors,
+    const Array<OneD, const NekDouble> &dirForcing, const bool PhysSpaceForcing)
 {
     // Inner product of forcing
     Array<OneD, NekDouble> wsp(m_ncoeffs);
-    IProductWRTBase(inarray, wsp);
+    if (PhysSpaceForcing)
+    {
+        IProductWRTBase(inarray, wsp);
+        // Note -1.0 term necessary to invert forcing function to
+        // be consistent with matrix definition
+        Vmath::Neg(m_ncoeffs, wsp, 1);
+    }
+    else
+    {
+        Vmath::Smul(m_ncoeffs, -1.0, inarray, 1, wsp, 1);
+    }
+
+    // Forcing function with weak boundary conditions
+    int i, j;
+    int bndcnt = 0;
+    Array<OneD, NekDouble> sign =
+        m_locToGloMap->GetBndCondCoeffsToLocalCoeffsSign();
+    const Array<OneD, const int> map =
+        m_locToGloMap->GetBndCondCoeffsToLocalCoeffsMap();
+    // Add weak boundary conditions to forcing
+    for (i = 0; i < m_bndCondExpansions.size(); ++i)
+    {
+        if (m_bndConditions[i]->GetBoundaryConditionType() ==
+                SpatialDomains::eNeumann ||
+            m_bndConditions[i]->GetBoundaryConditionType() ==
+                SpatialDomains::eRobin)
+        {
+
+            const Array<OneD, const NekDouble> bndcoeff =
+                (m_bndCondExpansions[i])->GetCoeffs();
+
+            if (m_locToGloMap->GetSignChange())
+            {
+                for (j = 0; j < (m_bndCondExpansions[i])->GetNcoeffs(); j++)
+                {
+                    wsp[map[bndcnt + j]] += sign[bndcnt + j] * bndcoeff[j];
+                }
+            }
+            else
+            {
+                for (j = 0; j < (m_bndCondExpansions[i])->GetNcoeffs(); j++)
+                {
+                    wsp[map[bndcnt + j]] += bndcoeff[j];
+                }
+            }
+        }
+
+        bndcnt += m_bndCondExpansions[i]->GetNcoeffs();
+    }
+
+    StdRegions::MatrixType mtype = StdRegions::eLinearAdvectionReaction;
+
+    StdRegions::VarCoeffMap varcoeff(pvarcoeff);
+    if (factors.count(StdRegions::eFactorGJP))
+    {
+        // initialize if required
+        if (!m_GJPData)
+        {
+            m_GJPData = MemoryManager<GJPStabilisation>::AllocateSharedPtr(
+                GetSharedThisPtr());
+        }
+
+        if (m_GJPData->IsSemiImplicit())
+        {
+            ASSERTL0(false, "SemiImplicit GJPStabilisation not implemented for "
+                            "LinearAdvectionReactionSolve().")
+        }
+
+        // to set up forcing need initial guess in physical space
+        Array<OneD, NekDouble> phys(m_npoints), tmp;
+        BwdTrans(outarray, phys);
+        NekDouble scale = -1.0 * factors.find(StdRegions::eFactorGJP)->second;
+
+        m_GJPData->Apply(phys, wsp,
+                         pvarcoeff.count(StdRegions::eVarCoeffGJPNormVel)
+                             ? pvarcoeff.find(StdRegions::eVarCoeffGJPNormVel)
+                                   ->second.GetValue()
+                             : NullNekDouble1DArray,
+                         scale);
+
+        varcoeff.erase(StdRegions::eVarCoeffGJPNormVel);
+    }
 
     // Solve the system
-    StdRegions::ConstFactorMap factors;
-    factors[StdRegions::eFactorLambda] = lambda;
-    StdRegions::VarCoeffMap varcoeffs;
-    varcoeffs[StdRegions::eVarCoeffVelX] = velocity[0];
-    varcoeffs[StdRegions::eVarCoeffVelY] = velocity[1];
-    GlobalLinSysKey key(StdRegions::eLinearAdvectionReaction, m_locToGloMap,
-                        factors, varcoeffs);
+    GlobalLinSysKey key(mtype, m_locToGloMap, factors, varcoeff, varfactors);
 
     GlobalSolve(key, wsp, outarray, dirForcing);
+
+    return key;
 }
 
 /**

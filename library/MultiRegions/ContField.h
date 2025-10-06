@@ -240,12 +240,14 @@ protected:
 
     // Solve the linear advection problem assuming that m_coeff
     // vector contains an intial estimate for solution
-    MULTI_REGIONS_EXPORT void v_LinearAdvectionReactionSolve(
-        const Array<OneD, Array<OneD, NekDouble>> &velocity,
+    MULTI_REGIONS_EXPORT GlobalLinSysKey v_LinearAdvectionReactionSolve(
         const Array<OneD, const NekDouble> &inarray,
-        Array<OneD, NekDouble> &outarray, const NekDouble lambda,
-        const Array<OneD, const NekDouble> &dirForcing =
-            NullNekDouble1DArray) override;
+        Array<OneD, NekDouble> &outarray,
+        const StdRegions::ConstFactorMap &factors,
+        const StdRegions::VarCoeffMap &varcoeff,
+        const MultiRegions::VarFactorsMap &varfactors,
+        const Array<OneD, const NekDouble> &dirForcing,
+        const bool PhysSpaceForcing) override;
 
     /// Returns the boundary conditions expansion.
     inline const Array<OneD, const MultiRegions::ExpListSharedPtr> &

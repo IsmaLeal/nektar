@@ -123,6 +123,9 @@ IF( NEKTAR_SOLVER_ADR )
     ADD_NEKTAR_TEST(AdvDiff_QuadTri_GJP)
     ADD_NEKTAR_TEST(AdvDiff3D_AllElmt_GJP)
 
+    # 1D continuous advection (non-conservative)
+    ADD_NEKTAR_TEST(Advection1D_implicit)
+
     # 2D continuous advection (non-conservative)
     ADD_NEKTAR_TEST(Advection_m12_Order1)
     ADD_NEKTAR_TEST(Advection_m12_Order2)
