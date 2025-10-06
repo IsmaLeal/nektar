@@ -1240,6 +1240,21 @@ DNekScalMatSharedPtr SegExp::CreateMatrix(const MatrixKey &mkey)
             }
         }
         break;
+        case StdRegions::eLinearAdvection:
+        {
+            if ((m_metricinfo->GetGtype() == SpatialDomains::eDeformed) ||
+                (mkey.GetNVarCoeff()))
+            {
+                fac = 1.0;
+                goto UseLocRegionsMatrix;
+            }
+            else
+            {
+                fac = (m_metricinfo->GetJac(ptsKeys))[0];
+                goto UseStdRegionsMatrix;
+            }
+        }
+        break;
         case StdRegions::eHelmholtz:
         {
             NekDouble factor = mkey.GetConstFactor(StdRegions::eFactorLambda);
@@ -1260,6 +1275,116 @@ DNekScalMatSharedPtr SegExp::CreateMatrix(const MatrixKey &mkey)
 
             returnval =
                 MemoryManager<DNekScalMat>::AllocateSharedPtr(one, helm);
+        }
+        break;
+        case StdRegions::eLinearAdvectionReaction:
+        {
+            NekDouble lambda = mkey.GetConstFactor(StdRegions::eFactorLambda);
+
+            // Construct mass matrix
+            // Check for mass-specific varcoeffs to avoid unncessary
+            // re-computation of the elemental matrix every time step
+            StdRegions::VarCoeffMap massVarcoeffs = StdRegions::NullVarCoeffMap;
+            if (mkey.HasVarCoeff(StdRegions::eVarCoeffMass))
+            {
+                massVarcoeffs[StdRegions::eVarCoeffMass] =
+                    mkey.GetVarCoeff(StdRegions::eVarCoeffMass);
+            }
+            MatrixKey masskey(StdRegions::eMass, mkey.GetShapeType(), *this,
+                              mkey.GetConstFactors(), massVarcoeffs);
+            DNekScalMat &MassMat = *GetLocMatrix(masskey);
+
+            // Construct advection matrix
+            // Check for varcoeffs not required;
+            // assume advection velocity is always time-dependent
+            MatrixKey advkey(mkey, StdRegions::eLinearAdvection);
+            DNekScalMat &AdvMat = *GetLocMatrix(advkey);
+
+            int rows = MassMat.GetRows();
+            int cols = MassMat.GetColumns();
+
+            DNekMatSharedPtr adr =
+                MemoryManager<DNekMat>::AllocateSharedPtr(rows, cols);
+
+            NekDouble one = 1.0;
+            (*adr)        = -lambda * MassMat + AdvMat;
+
+            returnval = MemoryManager<DNekScalMat>::AllocateSharedPtr(one, adr);
+
+            // Clear memory for time-dependent matrices
+            DropLocMatrix(advkey);
+            if (!massVarcoeffs.empty())
+            {
+                DropLocMatrix(masskey);
+            }
+        }
+        break;
+        case StdRegions::eLinearAdvectionDiffusionReaction:
+        {
+            NekDouble lambda = mkey.GetConstFactor(StdRegions::eFactorLambda);
+
+            // Construct mass matrix
+            // Check for mass-specific varcoeffs to avoid unncessary
+            // re-computation of the elemental matrix every time step
+            StdRegions::VarCoeffMap massVarcoeffs = StdRegions::NullVarCoeffMap;
+            if (mkey.HasVarCoeff(StdRegions::eVarCoeffMass))
+            {
+                massVarcoeffs[StdRegions::eVarCoeffMass] =
+                    mkey.GetVarCoeff(StdRegions::eVarCoeffMass);
+            }
+            MatrixKey masskey(StdRegions::eMass, mkey.GetShapeType(), *this,
+                              mkey.GetConstFactors(), massVarcoeffs);
+            DNekScalMat &MassMat = *GetLocMatrix(masskey);
+
+            // Construct laplacian matrix (Check for varcoeffs)
+            // Take all varcoeffs if one or more are detected
+            // TODO We might want to have a map
+            // from MatrixType to Vector of Varcoeffs and vice-versa
+            StdRegions::VarCoeffMap lapVarcoeffs = StdRegions::NullVarCoeffMap;
+            if ((mkey.HasVarCoeff(StdRegions::eVarCoeffLaplacian)) ||
+                (mkey.HasVarCoeff(StdRegions::eVarCoeffD00)) ||
+                (mkey.HasVarCoeff(StdRegions::eVarCoeffD01)) ||
+                (mkey.HasVarCoeff(StdRegions::eVarCoeffD10)) ||
+                (mkey.HasVarCoeff(StdRegions::eVarCoeffD02)) ||
+                (mkey.HasVarCoeff(StdRegions::eVarCoeffD20)) ||
+                (mkey.HasVarCoeff(StdRegions::eVarCoeffD11)) ||
+                (mkey.HasVarCoeff(StdRegions::eVarCoeffD12)) ||
+                (mkey.HasVarCoeff(StdRegions::eVarCoeffD21)) ||
+                (mkey.HasVarCoeff(StdRegions::eVarCoeffD22)))
+            {
+                lapVarcoeffs = mkey.GetVarCoeffs();
+            }
+            MatrixKey lapkey(StdRegions::eLaplacian, mkey.GetShapeType(), *this,
+                             mkey.GetConstFactors(), lapVarcoeffs);
+            DNekScalMat &LapMat = *GetLocMatrix(lapkey);
+
+            // Construct advection matrix
+            // Check for varcoeffs not required;
+            // assume advection velocity is always time-dependent
+            MatrixKey advkey(mkey, StdRegions::eLinearAdvection);
+            DNekScalMat &AdvMat = *GetLocMatrix(advkey);
+
+            int rows = LapMat.GetRows();
+            int cols = LapMat.GetColumns();
+
+            DNekMatSharedPtr adr =
+                MemoryManager<DNekMat>::AllocateSharedPtr(rows, cols);
+
+            NekDouble one = 1.0;
+            (*adr)        = LapMat - lambda * MassMat + AdvMat;
+
+            returnval = MemoryManager<DNekScalMat>::AllocateSharedPtr(one, adr);
+
+            // Clear memory for time-dependent matrices
+            DropLocMatrix(advkey);
+            if (!massVarcoeffs.empty())
+            {
+                DropLocMatrix(masskey);
+            }
+            if (!lapVarcoeffs.empty())
+            {
+                DropLocMatrix(lapkey);
+            }
         }
         break;
         case StdRegions::eHybridDGHelmholtz:

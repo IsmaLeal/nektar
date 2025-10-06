@@ -15,6 +15,10 @@ v5.9.0
 - Unified IProductWRTDerivBaseOp align vector function for all 3D shapes (!2203)
 - Added a formula for the number of modes in a tetrahedron (!2205)
 - Remove duplicate IMEX Gear time-integration variant (!2225)
+- Fix bug in Neumann boundary condition for LinearAdvectionDiffusionReactionSolve (!2231)
+
+**ADRSolver**
+- Add implicit UnsteadyAdvection for continuous Galerkin (!2231)
 
 **CardiacEPSolver**
 - Add script for converting CellML models into Nektar++ cell model code (!2185)

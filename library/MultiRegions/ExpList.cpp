@@ -5149,15 +5149,18 @@ GlobalLinSysKey ExpList::v_LinearAdvectionDiffusionReactionSolve(
     return NullGlobalLinSysKey;
 }
 
-void ExpList::v_LinearAdvectionReactionSolve(
-    [[maybe_unused]] const Array<OneD, Array<OneD, NekDouble>> &velocity,
+GlobalLinSysKey ExpList::v_LinearAdvectionReactionSolve(
     [[maybe_unused]] const Array<OneD, const NekDouble> &inarray,
     [[maybe_unused]] Array<OneD, NekDouble> &outarray,
-    [[maybe_unused]] const NekDouble lambda,
-    [[maybe_unused]] const Array<OneD, const NekDouble> &dirForcing)
+    [[maybe_unused]] const StdRegions::ConstFactorMap &factors,
+    [[maybe_unused]] const StdRegions::VarCoeffMap &varcoeff,
+    [[maybe_unused]] const MultiRegions::VarFactorsMap &varfactors,
+    [[maybe_unused]] const Array<OneD, const NekDouble> &dirForcing,
+    [[maybe_unused]] const bool PhysSpaceForcing)
 {
     NEKERROR(ErrorUtil::efatal,
-             "This method is not defined or valid for this class type");
+             "LinearAdvectionReactionSolve not implemented.");
+    return NullGlobalLinSysKey;
 }
 
 void ExpList::v_HomogeneousFwdTrans(

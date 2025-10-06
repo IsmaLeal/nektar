@@ -83,9 +83,8 @@ GlobalLinSysIterative::GlobalLinSysIterative(
     m_useProjection    = m_numSuccessiveRHS > 0;
 
     // Check for advection matrix and switch to GMRES, if not already used
-    m_matrixType = StdRegions::MatrixTypeMap[pKey.GetMatrixType()];
-    m_isNonSymmetricLinSys =
-        m_matrixType.find("AdvectionDiffusionReaction") != string::npos;
+    m_matrixType           = StdRegions::MatrixTypeMap[pKey.GetMatrixType()];
+    m_isNonSymmetricLinSys = m_matrixType.find("Advection") != string::npos;
 
     if (m_isNonSymmetricLinSys &&
         !m_linSysIterSolver.compare("ConjugateGradient"))
@@ -94,10 +93,10 @@ GlobalLinSysIterative::GlobalLinSysIterative(
         WARNINGL0(
             false,
             "Detected ConjugateGradient solver and a "
-            "Advection-Diffusion-Reaction matrix. "
+            "Advection-type matrix. "
             "Switchted to a GMRES solver for this non-symmetric matrix type. "
-            "Change LinSysIterSolver to GMRES in the session file to suppress "
-            "this warning.");
+            "Change SolverInfo 'LinSysIterSolver' to GMRES in the session file "
+            "to suppress this warning.");
     }
 
     if (m_isAconjugate && m_linSysIterSolver.compare("GMRES") == 0 &&

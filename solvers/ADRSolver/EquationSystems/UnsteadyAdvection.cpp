@@ -87,6 +87,15 @@ void UnsteadyAdvection::v_InitObject(bool DeclareFields)
     m_velocity = Array<OneD, Array<OneD, NekDouble>>(m_spacedim);
     GetFunction("AdvectionVelocity")->Evaluate(vel, m_velocity);
 
+    // Set advection velocities
+    StdRegions::VarCoeffType varcoefftypes[] = {StdRegions::eVarCoeffVelX,
+                                                StdRegions::eVarCoeffVelY,
+                                                StdRegions::eVarCoeffVelZ};
+    for (int i = 0; i < m_spacedim; i++)
+    {
+        m_varcoeffs[varcoefftypes[i]] = m_velocity[i];
+    }
+
     // Type of advection class to be used
     switch (m_projectionType)
     {
@@ -168,7 +177,10 @@ void UnsteadyAdvection::v_InitObject(bool DeclareFields)
     // Otherwise it gives an error (no implicit integration)
     else
     {
-        ASSERTL0(false, "Implicit unsteady Advection not set up.");
+        m_ode.DefineImplicitSolve(&UnsteadyAdvection::DoImplicitSolve, this);
+        ASSERTL0(m_projectionType == MultiRegions::eGalerkin,
+                 "Implicit UnsteadyAdvection is not implemented for a "
+                 "Discontinuous Galerkin discretisation.")
     }
 }
 
@@ -327,6 +339,36 @@ void UnsteadyAdvection::DoOdeProjection(
         default:
             ASSERTL0(false, "Unknown projection scheme");
             break;
+    }
+}
+
+/**
+ * @brief Implicit solution of the unsteady advection problem.
+ */
+void UnsteadyAdvection::DoImplicitSolve(
+    const Array<OneD, const Array<OneD, NekDouble>> &inarray,
+    Array<OneD, Array<OneD, NekDouble>> &outarray,
+    [[maybe_unused]] const NekDouble time, const NekDouble lambda)
+{
+    StdRegions::ConstFactorMap factors;
+
+    int nvariables                     = inarray.size();
+    int npoints                        = m_fields[0]->GetNpoints();
+    factors[StdRegions::eFactorLambda] = -1.0 / lambda;
+
+    for (int i = 0; i < nvariables; ++i)
+    {
+        // Multiply 1.0/timestep/lambda
+        Vmath::Smul(npoints, factors[StdRegions::eFactorLambda], inarray[i], 1,
+                    outarray[i], 1);
+
+        // Solve a system of equations
+        m_fields[i]->LinearAdvectionReactionSolve(
+            outarray[i], m_fields[i]->UpdateCoeffs(), factors, m_varcoeffs);
+
+        m_fields[i]->BwdTrans(m_fields[i]->GetCoeffs(), outarray[i]);
+
+        m_fields[i]->SetPhysState(false);
     }
 }
 

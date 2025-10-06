@@ -623,6 +623,48 @@ DNekScalMatSharedPtr Expansion3D::CreateMatrix(const MatrixKey &mkey)
                 HelmMat.Scale(), NDTraceMat);
         }
         break;
+        case StdRegions::eLinearAdvectionReaction:
+        {
+            NekDouble lambda = mkey.GetConstFactor(StdRegions::eFactorLambda);
+
+            // Construct mass matrix
+            // Check for mass-specific varcoeffs to avoid unncessary
+            // re-computation of the elemental matrix every time step
+            StdRegions::VarCoeffMap massVarcoeffs = StdRegions::NullVarCoeffMap;
+            if (mkey.HasVarCoeff(StdRegions::eVarCoeffMass))
+            {
+                massVarcoeffs[StdRegions::eVarCoeffMass] =
+                    mkey.GetVarCoeff(StdRegions::eVarCoeffMass);
+            }
+            MatrixKey masskey(StdRegions::eMass, mkey.GetShapeType(), *this,
+                              mkey.GetConstFactors(), massVarcoeffs);
+            DNekScalMat &MassMat = *GetLocMatrix(masskey);
+
+            // Construct advection matrix
+            // Check for varcoeffs not required;
+            // assume advection velocity is always time-dependent
+            MatrixKey advkey(mkey, StdRegions::eLinearAdvection);
+            DNekScalMat &AdvMat = *GetLocMatrix(advkey);
+
+            int rows = MassMat.GetRows();
+            int cols = MassMat.GetColumns();
+
+            DNekMatSharedPtr adr =
+                MemoryManager<DNekMat>::AllocateSharedPtr(rows, cols);
+
+            NekDouble one = 1.0;
+            (*adr)        = -lambda * MassMat + AdvMat;
+
+            returnval = MemoryManager<DNekScalMat>::AllocateSharedPtr(one, adr);
+
+            // Clear memory for time-dependent matrices
+            DropLocMatrix(advkey);
+            if (!massVarcoeffs.empty())
+            {
+                DropLocMatrix(masskey);
+            }
+        }
+        break;
         case StdRegions::eLinearAdvectionDiffusionReaction:
         {
             NekDouble lambda = mkey.GetConstFactor(StdRegions::eFactorLambda);

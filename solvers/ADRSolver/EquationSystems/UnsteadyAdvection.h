@@ -71,6 +71,8 @@ protected:
     Array<OneD, NekDouble> m_traceVn;
     /// Forcing terms
     std::vector<SolverUtils::ForcingSharedPtr> m_forcing;
+    // Variable coefficients
+    StdRegions::VarCoeffMap m_varcoeffs;
 
     UnsteadyAdvection(const LibUtilities::SessionReaderSharedPtr &pSession,
                       const SpatialDomains::MeshGraphSharedPtr &pGraph);
@@ -89,6 +91,12 @@ protected:
     void DoOdeProjection(
         const Array<OneD, const Array<OneD, NekDouble>> &inarray,
         Array<OneD, Array<OneD, NekDouble>> &outarray, const NekDouble time);
+
+    // Compute implicit advection
+    void DoImplicitSolve(
+        const Array<OneD, const Array<OneD, NekDouble>> &inarray,
+        Array<OneD, Array<OneD, NekDouble>> &outarray,
+        [[maybe_unused]] const NekDouble time, const NekDouble lambda);
 
     /// Get the normal velocity
     Array<OneD, NekDouble> &GetNormalVelocity();

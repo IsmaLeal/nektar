@@ -966,8 +966,7 @@ void StdExpansion::LinearAdvectionDiffusionReactionMatrixOp_MatFree(
     }
 
     // Create mass matrix = Advection - Reaction
-    v_IProductWRTBase(tmp_adv,
-                      outarray); // Create mass matrix of Advection - Reaction
+    v_IProductWRTBase(tmp_adv, outarray);
 
     // Add Laplacian matrix
     if (addDiffusionTerm)
