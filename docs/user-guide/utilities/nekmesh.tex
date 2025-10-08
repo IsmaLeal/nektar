@@ -742,7 +742,9 @@ x_k = x_{k-1} + ar^k, \quad a = \frac{2(1-r)}{1 - r^{n+1}}
 \]
 in the standard segment $[-1,1]$. These are then projected into the coarse
 elements to construct a sequence of increasingly refined elements, as depicted
-in figure~\ref{fig:util:mc:split}.
+in figure~\ref{fig:util:mc:split}. A new improved implementation of the module
+was introduced for prisms as part of "bl:" in v5.9. The legacy one, supporting
+also O-type hex meshes, can be used by calling "blold:".
 
 \begin{figure}
   \begin{center}
@@ -781,7 +783,8 @@ of 2 and 7 integration points per element use the following command:
   You can also use an expression in terms of coordinates $(x,y,z)$ for $r$ to
   make the ratio spatially varying; e.g. \inltt{r=sin(x)}. In this case the
   function should be sufficiently smooth to prevent the elements
-  self-intersecting.
+  self-intersecting. For this functionality, use the legacy 
+  implementation "blold:".
 \end{notebox}
 
 \subsection{High-order cylinder generation}

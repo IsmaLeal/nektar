@@ -22,7 +22,7 @@ v5.9.0
 **NekMesh**
 - Minor Bug-fix for industrial pipeline !2057 (!2135)
 - Scaling the mesh nodes (!2115)
-
+- Improved Isoparametric Splitting for O-type Prisms "bl" legacy, which kept as "blold" (!1757)
 **CI**
 - Disable CWIPI on Fedora (!2199)
 

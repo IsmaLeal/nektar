@@ -44,6 +44,8 @@ IF(NEKTAR_USE_MESHGEN)
     ADD_NEKTAR_TEST(IndustrialPipeline/01_projectcad_shaftHO)
     ADD_NEKTAR_TEST(IndustrialPipeline/02_projectcad_3d_sphere_star)
     ADD_NEKTAR_TEST(IndustrialPipeline/03_projectcad_NACA0012)
+    ADD_NEKTAR_TEST(IndustrialPipeline/04_bl_ShaftHO)
+    ADD_NEKTAR_TEST(IndustrialPipeline/05_bl_NACA0012)
 
     IF(NEKTAR_USE_CCM)
         ADD_NEKTAR_TEST(MeshGen/StarCCM/projectcad_ahmed)
