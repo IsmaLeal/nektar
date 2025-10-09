@@ -379,7 +379,7 @@ public:
     template <typename MatrixType>
     explicit LinearSystem(const std::shared_ptr<MatrixType> &theA,
                           PointerWrapper wrapperType = eCopy)
-        : n(theA->GetRows()), A(theA->GetPtr()), m_ipivot(),
+        : n(theA->GetRows()), A(theA->GetPtr(), eVECTOR_WRAPPER), m_ipivot(),
           m_numberOfSubDiagonals(theA->GetNumberOfSubDiagonals()),
           m_numberOfSuperDiagonals(theA->GetNumberOfSuperDiagonals()),
           m_matrixType(theA->GetType()),
@@ -405,7 +405,7 @@ public:
     template <typename MatrixType>
     explicit LinearSystem(const MatrixType &theA,
                           PointerWrapper wrapperType = eCopy)
-        : n(theA.GetRows()), A(theA.GetPtr()), m_ipivot(),
+        : n(theA.GetRows()), A(theA.GetPtr(), eVECTOR_WRAPPER), m_ipivot(),
           m_numberOfSubDiagonals(theA.GetNumberOfSubDiagonals()),
           m_numberOfSuperDiagonals(theA.GetNumberOfSuperDiagonals()),
           m_matrixType(theA.GetType()), m_transposeFlag(theA.GetTransposeFlag())
