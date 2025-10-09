@@ -130,7 +130,7 @@ NekMatrix<DataType, StandardMatrixTag>::NekMatrix(
 {
     if (wrapperType == eWrapper)
     {
-        m_data = Array<OneD, DataType>(d);
+        m_data = Array<OneD, DataType>(d, eVECTOR_WRAPPER);
     }
     else
     {

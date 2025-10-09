@@ -291,33 +291,33 @@ public:
         if (m_count != nullptr)
         {
             *m_count -= 1;
-        }
-
-        if (m_count != nullptr && *m_count == 0)
-        {
-#ifdef WITH_PYTHON
-            if (*m_pythonInfo == nullptr)
+            if (*m_count == 0)
             {
+#ifdef WITH_PYTHON
+                if (*m_pythonInfo == nullptr)
+                {
+                    ArrayDestructionPolicy<DataType>::Destroy(m_data,
+                                                              m_capacity);
+                    MemoryManager<DataType>::RawDeallocate(m_data, m_capacity);
+                }
+                else if ((*rhs.m_pythonInfo) != nullptr &&
+                         (*m_pythonInfo)->m_pyObject !=
+                             (*rhs.m_pythonInfo)->m_pyObject)
+                {
+                    (*m_pythonInfo)->m_callback((*m_pythonInfo)->m_pyObject);
+                    delete *m_pythonInfo;
+                }
+
+                delete m_pythonInfo;
+                m_pythonInfo = nullptr;
+#else
                 ArrayDestructionPolicy<DataType>::Destroy(m_data, m_capacity);
                 MemoryManager<DataType>::RawDeallocate(m_data, m_capacity);
-            }
-            else if ((*rhs.m_pythonInfo) != nullptr &&
-                     (*m_pythonInfo)->m_pyObject !=
-                         (*rhs.m_pythonInfo)->m_pyObject)
-            {
-                (*m_pythonInfo)->m_callback((*m_pythonInfo)->m_pyObject);
-                delete *m_pythonInfo;
-            }
-
-            delete m_pythonInfo;
-            m_pythonInfo = nullptr;
-#else
-
-            ArrayDestructionPolicy<DataType>::Destroy(m_data, m_capacity);
-            MemoryManager<DataType>::RawDeallocate(m_data, m_capacity);
 #endif
-            delete m_count; // Clean up the memory used for the reference count.
-            m_count = nullptr;
+                delete m_count; // Clean up the memory used for the reference
+                                // count.
+                m_count = nullptr;
+            }
         }
 
         m_data     = rhs.m_data;
@@ -598,8 +598,11 @@ public:
 
 protected:
     std::shared_ptr<ArrayType> m_data;
+};
 
-private:
+enum AllowWrappingOfConstArrays
+{
+    eVECTOR_WRAPPER
 };
 
 /// \brief 1D Array
@@ -739,6 +742,12 @@ public:
     friend class LinearSystem;
 
 protected:
+    Array(const Array<OneD, const DataType> &rhs,
+          [[maybe_unused]] AllowWrappingOfConstArrays a)
+        : BaseType(rhs)
+    {
+    }
+
     void ChangeSize(size_type newSize)
     {
         ASSERTL1(newSize <= this->m_capacity,

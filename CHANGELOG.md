@@ -19,6 +19,7 @@ v5.9.0
 
 **ADRSolver**
 - Add implicit UnsteadyAdvection for continuous Galerkin (!2231)
+- Fixed performance regression after removal of eVECTOR_WRAPPER in !1848 (!2239)
 
 **CardiacEPSolver**
 - Add script for converting CellML models into Nektar++ cell model code (!2185)

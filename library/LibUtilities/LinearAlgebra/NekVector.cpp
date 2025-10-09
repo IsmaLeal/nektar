@@ -138,7 +138,7 @@ NekVector<DataType>::NekVector(unsigned int size, Array<OneD, DataType> &ptr,
 template <typename DataType>
 NekVector<DataType>::NekVector(const Array<OneD, const DataType> &ptr,
                                PointerWrapper h)
-    : m_size(ptr.size()), m_data(ptr), m_wrapperType(h)
+    : m_size(ptr.size()), m_data(ptr, eVECTOR_WRAPPER), m_wrapperType(h)
 {
     if (h == eCopy)
     {
@@ -151,7 +151,7 @@ template <typename DataType>
 NekVector<DataType>::NekVector(unsigned int size,
                                const Array<OneD, const DataType> &ptr,
                                PointerWrapper h)
-    : m_size(size), m_data(ptr), m_wrapperType(h)
+    : m_size(size), m_data(ptr, eVECTOR_WRAPPER), m_wrapperType(h)
 {
     if (h == eCopy)
     {
