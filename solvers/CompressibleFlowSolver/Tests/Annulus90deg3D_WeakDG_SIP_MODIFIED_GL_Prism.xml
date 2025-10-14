@@ -51,8 +51,8 @@
 
         <PARAMETERS>
             <!-- Computational parameters -->
-            <P> TimeStep       = 1e-4                                </P>
-            <P> NumSteps       = 30                                  </P>
+            <P> TimeStep       = 5e-5                                </P>
+            <P> NumSteps       = 10                                  </P>
             <P> IO_CheckSteps  = 30                                  </P> <!-- NumSteps/40 -->
             <P> IO_InfoSteps   = 1                                   </P>
             <P> IO_CFLSteps    = 1                                   </P>
@@ -159,6 +159,7 @@
             <E VAR="rhow" VALUE="rhoInf*wInf" />
             <E VAR="E"    VALUE="pInf/(Gamma - 1) + 0.5*rhoInf*(uInf*uInf + vInf*vInf)" />
         </FUNCTION>
+
     </CONDITIONS>
 
 </NEKTAR>

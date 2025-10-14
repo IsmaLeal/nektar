@@ -30,6 +30,7 @@ v5.9.0
 - Improved Isoparametric Splitting for O-type Prisms "bl" legacy, which kept as "blold" (!1757)
 **CI**
 - Disable CWIPI on Fedora (!2199)
+- Update Annulus test to run more efficiently (!1220)
 
 v5.8.0
 ------
