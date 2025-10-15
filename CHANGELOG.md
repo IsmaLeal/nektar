@@ -14,6 +14,7 @@ v5.9.0
 - Fix output messages clobbering error info in Lagrangian filter (!2200, !2202)
 - Unified IProductWRTDerivBaseOp align vector function for all 3D shapes (!2203)
 - Added a formula for the number of modes in a tetrahedron (!2205)
+- Added boundary condition and periodic boundary reader (!2221)
 - Remove duplicate IMEX Gear time-integration variant (!2225)
 - Fix bug in Neumann boundary condition for LinearAdvectionDiffusionReactionSolve (!2231)
 
