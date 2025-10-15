@@ -97,7 +97,7 @@ void ProcessBoundaryExtract::v_Process(po::variables_map &vm)
         m_f->m_comm->GetSpaceComm()->AllReduce(numBndExp,
                                                LibUtilities::ReduceMax);
 
-        // THis presumes boundary regions are numbered consecutively
+        // This presumes boundary regions are numbered consecutively
         for (int i = 0; i < numBndExp; ++i)
         {
             bndRegions.push_back(i);

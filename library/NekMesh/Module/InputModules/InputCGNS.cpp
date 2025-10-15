@@ -204,8 +204,9 @@ void InputCGNS::SetupElements()
         m_log(VERBOSE) << "Number of sections: " << nSections << endl;
     }
 
-    // each pair in contains the element type and the element's node indices
+    // each pair contains the element type and the element's node indices
     vector<pair<ElementType_t, vector<int>>> elemInfo;
+    map<string, pair<int, int>> SectionNameToRange;
 
     // Get the element vertices for each section
     for (int sectionInd = 1; sectionInd <= nSections; ++sectionInd)
@@ -236,6 +237,16 @@ void InputCGNS::SetupElements()
             cg_ElementDataSize(m_fileIndex, m_baseIndex, m_zoneIndex,
                                sectionInd, &elemDataSize);
 
+            // store section name and range for boundary composite processing
+            // if shape is specficied as seperate type
+            LibUtilities::ShapeType shapeType = m_elemType2ShapeType[elemType];
+            if (shapeType == LibUtilities::eTriangle ||
+                shapeType == LibUtilities::eQuadrilateral)
+            {
+                SectionNameToRange[sectionName] =
+                    pair<int, int>(elemInfo.size(), elemInfo.size() + elemSize);
+            }
+
             if (elemType == CGNS_ENUMV(ElementTypeNull) ||
                 elemType == CGNS_ENUMV(ElementTypeUserDefined) ||
                 elemType == CGNS_ENUMV(NGON_n) ||
@@ -253,6 +264,83 @@ void InputCGNS::SetupElements()
             {
                 ExtractSeparatedElemInfo(elemDataSize, elemSize, elemType,
                                          sectionInd, elemInfo);
+            }
+        }
+    }
+
+    // read zone connectivity grid for periodic BCs if exist
+    int nConns;
+    map<string, set<int>> ConnNameToFaces;
+    if (cg_nconns(m_fileIndex, m_baseIndex, m_zoneIndex, &nConns))
+    {
+        m_log(FATAL) << "Error reading number of connectivities." << std::endl;
+        cg_close(m_fileIndex);
+    }
+    else
+    {
+        m_log(VERBOSE) << "Number of connectivities: " << nConns << std::endl;
+
+        for (int connInd = 1; connInd <= nConns; ++connInd)
+        {
+
+            char connName[33], donorName[33];
+            GridLocation_t location;
+            GridConnectivityType_t connType;
+            PointSetType_t ptsetType, donorPtsetType;
+            cgsize_t npnts, ndataDonor;
+            ZoneType_t donorZoneType;
+            DataType_t donorDataType;
+
+            if (cg_conn_info(m_fileIndex, m_baseIndex, m_zoneIndex, connInd,
+                             connName, &location, &connType, &ptsetType, &npnts,
+                             donorName, &donorZoneType, &donorPtsetType,
+                             &donorDataType, &ndataDonor))
+            {
+                m_log(FATAL) << "Error reading connectivity info in  "
+                             << connInd << std::endl;
+                cg_close(m_fileIndex);
+            }
+            else
+            {
+                m_log(VERBOSE) << "Reading connectivity info" << endl;
+            }
+            // check to see points are given as a cell list if not give error
+            if (donorPtsetType != CGNS_ENUMV(PointListDonor))
+            {
+                m_log(FATAL) << "Periodic boudnary curretly needs to be provide"
+                                " as a point-list rather than a cell list"
+                             << std::endl;
+            }
+
+            float RotCenter[3], RotAngle[3], Translation[3];
+
+            // read connectivity transation information to add to name
+            cg_conn_periodic_read(m_fileIndex, m_baseIndex, m_zoneIndex,
+                                  connInd, RotCenter, RotAngle, Translation);
+
+            string NameFull =
+                string(connName) +
+                ":Trans=" + boost::lexical_cast<string>(Translation[0]) + "," +
+                boost::lexical_cast<string>(Translation[1]) + "," +
+                boost::lexical_cast<string>(Translation[2]);
+
+            cgsize_t *pnts = new cgsize_t[npnts];
+            if (cg_conn_read_short(m_fileIndex, m_baseIndex, m_zoneIndex,
+                                   connInd, pnts))
+            {
+                m_log(FATAL) << "Error reading connectivity section " << connInd
+                             << std::endl;
+                cg_close(m_fileIndex);
+            }
+            else
+            {
+                for (unsigned n = 0; n < npnts; ++n)
+                {
+                    ConnNameToFaces[NameFull].insert(pnts[n]);
+                }
+
+                m_log(VERBOSE) << "Added connectivity list for " << connName
+                               << " using num faces: " << npnts << std::endl;
             }
         }
     }
@@ -277,9 +365,7 @@ void InputCGNS::SetupElements()
     // 3D Zone
     // Reset node ordering so that all prism faces have
     // consistent numbering for singular vertex re-ordering
-#if 1
     ResetNodes(m_mesh->m_node, ElementFaces, FaceNodes, elemInfo, VolumeElems);
-#endif
 
     int nComposite = 0, i = 0;
     int nelements = ElementFaces.size();
@@ -291,7 +377,7 @@ void InputCGNS::SetupElements()
     {
         Array<OneD, int> Nodes =
             SortFaceNodes(m_mesh->m_node, ElementFaces[i], FaceNodes);
-        if (ElementFaces[i].size() == 5 && Nodes.size() == 6) // if a prism
+        if (ElementFaces[i].size() == 5 && Nodes.size() == 6) // is a prism
         {
             GenElement3D(m_mesh->m_node, elemInfo[VolumeElems[i]].second,
                          ElementFaces[i], FaceNodes,
@@ -301,7 +387,10 @@ void InputCGNS::SetupElements()
     }
     m_log(VERBOSE) << "  - # of prisms: " << cnt << endl;
 
-    nComposite++;
+    if (cnt)
+    {
+        nComposite++;
+    }
 
     // create Pyras second
     cnt = 0;
@@ -309,7 +398,7 @@ void InputCGNS::SetupElements()
     {
         Array<OneD, int> Nodes =
             SortFaceNodes(m_mesh->m_node, ElementFaces[i], FaceNodes);
-        if (ElementFaces[i].size() == 5 && Nodes.size() == 5) // if a pyra
+        if (ElementFaces[i].size() == 5 && Nodes.size() == 5) // is a pyra
         {
             GenElement3D(m_mesh->m_node, elemInfo[VolumeElems[i]].second,
                          ElementFaces[i], FaceNodes,
@@ -319,13 +408,16 @@ void InputCGNS::SetupElements()
     }
     m_log(VERBOSE) << "  - # of pyramids: " << cnt << endl;
 
-    nComposite++;
+    if (cnt)
+    {
+        nComposite++;
+    }
 
     // create Tets third
     cnt = 0;
     for (i = 0; i < nelements; ++i)
     {
-        if (ElementFaces[i].size() == 4) // if a tetra
+        if (ElementFaces[i].size() == 4) // is a tetra
         {
             GenElement3D(m_mesh->m_node, elemInfo[VolumeElems[i]].second,
                          ElementFaces[i], FaceNodes,
@@ -334,13 +426,17 @@ void InputCGNS::SetupElements()
         }
     }
     m_log(VERBOSE) << "  - # of tetrahedra: " << cnt << endl;
-    nComposite++;
+
+    if (cnt)
+    {
+        nComposite++;
+    }
 
     // create Hexes fourth
     cnt = 0;
     for (i = 0; i < nelements; ++i)
     {
-        if (ElementFaces[i].size() == 6) // if a hexa
+        if (ElementFaces[i].size() == 6) // is a hexa
         {
             GenElement3D(m_mesh->m_node, elemInfo[VolumeElems[i]].second,
                          ElementFaces[i], FaceNodes,
@@ -349,7 +445,10 @@ void InputCGNS::SetupElements()
         }
     }
     m_log(VERBOSE) << "  - # of hexa: " << cnt << endl;
-    nComposite++;
+    if (cnt)
+    {
+        nComposite++;
+    }
 
     // Insert vertices into map.
     for (auto &node : m_mesh->m_node)
@@ -358,13 +457,121 @@ void InputCGNS::SetupElements()
     }
 
     // create Boundary elements last
-    cnt = 0;
-    for (int i : BoundaryElems)
+    for (auto sec : SectionNameToRange)
     {
-        GenElement2D(m_mesh->m_node, elemInfo[i].second, elemInfo[i].first,
-                     nComposite, true);
+        cnt = 0;
+        for (int i = sec.second.first; i < sec.second.second; ++i)
+        {
+            GenElement2D(m_mesh->m_node, elemInfo[i].second, elemInfo[i].first,
+                         nComposite, true);
+            ++cnt;
+        }
+
+        if (cnt)
+        {
+            m_mesh->m_faceLabels[nComposite] = sec.first;
+            m_log(VERBOSE) << "  - # of bndry elmts in " + sec.first + " :"
+                           << cnt << endl;
+            nComposite++;
+        }
     }
-    m_log(VERBOSE) << "  - # of boundary elements: " << cnt << endl;
+
+    // create periodic boundary elements  if present
+
+    // set up list of faces that are not shared by two elements
+    // and so are an external face
+    set<FaceSharedPtr> facelist;
+    if (ConnNameToFaces.size())
+    {
+        // process faces to make a unique list in m_mesh->m_faceSet
+        ProcessFaces();
+
+        for (auto &it : m_mesh->m_faceSet)
+        {
+            // if only has one element link and no tag id store element shared
+            // ptr
+            if (it->m_elLink.size() == 1)
+            {
+                facelist.insert(it);
+            }
+        }
+    }
+
+    for (auto &con : ConnNameToFaces)
+    {
+        // find faces with nodes along periodic points.
+        cnt = 0;
+        for (auto &it : facelist)
+        {
+            bool OnBoundary = true;
+            for (int i = 0; i < it->m_vertexList.size(); ++i)
+            {
+                if (con.second.count(it->m_vertexList[i]->m_id + 1) == 0)
+                {
+                    OnBoundary = false;
+                }
+            }
+
+            if (OnBoundary)
+            {
+                // using the face information generate a 2D element and add to
+                // m_mesh_m_element
+
+                vector<int> tags;
+                tags.push_back(nComposite);
+
+                bool faceNodes, volumeNodes;
+                LibUtilities::ShapeType shapeType =
+                    (it->m_edgeList.size() == 3) ? LibUtilities::eTriangle
+                                                 : LibUtilities::eQuadrilateral;
+                faceNodes   = it->m_faceNodes.size() ? true : false;
+                volumeNodes = false;
+                LibUtilities::PointsType edgeCurveType =
+                    LibUtilities::ePolyEvenlySpaced;
+                LibUtilities::PointsType faceCurveType =
+                    (shapeType == LibUtilities::eTriangle)
+                        ? LibUtilities::eNodalTriEvenlySpaced
+                        : LibUtilities::ePolyEvenlySpaced;
+                int order = it->m_edgeList[0]->m_edgeNodes.size() + 1;
+
+                ElmtConfig conf(shapeType, order, faceNodes, volumeNodes, false,
+                                edgeCurveType, faceCurveType);
+
+                vector<NodeSharedPtr> nodeList;
+                for (int i = 0; i < it->m_vertexList.size(); ++i)
+                {
+                    nodeList.push_back(it->m_vertexList[i]);
+                }
+                for (int i = 0; i < it->m_edgeList.size(); ++i)
+                {
+                    for (int j = 0; j < it->m_edgeList[i]->m_edgeNodes.size();
+                         ++j)
+                    {
+                        nodeList.push_back(it->m_edgeList[i]->m_edgeNodes[j]);
+                    }
+                }
+                for (int i = 0; i < it->m_faceNodes.size(); ++i)
+                {
+                    nodeList.push_back(it->m_faceNodes[i]);
+                }
+
+                ElementSharedPtr E = GetElementFactory().CreateInstance(
+                    shapeType, conf, nodeList, tags);
+
+                m_mesh->m_element[E->GetDim()].push_back(E);
+
+                ++cnt;
+            }
+        }
+
+        if (cnt)
+        {
+            m_mesh->m_faceLabels[nComposite] = con.first;
+            m_log(VERBOSE) << "  - # of bndry elmts in " + con.first + " :"
+                           << cnt << endl;
+            nComposite++;
+        }
+    }
 }
 
 void InputCGNS::ExtractSeparatedElemInfo(
@@ -411,13 +618,20 @@ void InputCGNS::ExtractMixedElemInfo(
     cgsize_t elemDataSize, int elemSize, int sectionInd,
     vector<pair<ElementType_t, vector<int>>> &elemInfo)
 {
+
+    if (elemSize == 0)
+    {
+        return;
+    }
+
     cgsize_t *ielem      = new cgsize_t[elemDataSize];
     cgsize_t *offsetData = new cgsize_t[elemSize + 1];
     cgsize_t iparentdata;
 
-    // The data array ElementStartOffset contains the starting positions of each
-    // element in the ElementConnectivity data array and its last value
-    // corresponds to the ElementConnectivity total size.
+    // The data array ElementStartOffset contains the starting
+    // positions of each element in the ElementConnectivity data array
+    // and its last value corresponds to the ElementConnectivity total
+    // size.
     // https://cgns.github.io/CGNS_docs_current/sids/gridflow.html#Elements
     if (cg_poly_elements_read(m_fileIndex, m_baseIndex, m_zoneIndex, sectionInd,
                               ielem, offsetData, &iparentdata))
@@ -725,8 +939,8 @@ void InputCGNS::ResetNodes(vector<NodeSharedPtr> &Vnodes,
                 if ((FacesDone[PrismToFaces[prismid][0]] == false) &&
                     (FacesDone[PrismToFaces[prismid][1]] == false))
                 {
-                    // number all nodes consecutive since
-                    // already correctly re-arranged.
+                    // number all nodes consecutive since already correctly
+                    // re-arranged.
                     for (i = 0; i < 3; ++i)
                     {
                         if (NodeReordering[Nodes[face1_map[i]]] == -1)
@@ -758,7 +972,7 @@ void InputCGNS::ResetNodes(vector<NodeSharedPtr> &Vnodes,
                                   ? 2
                                   : max_id1;
 
-                    // add numbering according to order of
+                    // add numbering according to the order of
                     int id0 = (max_id1 == 1) ? 0 : 1;
 
                     if (NodeReordering[Nodes[face1_map[id0]]] == -1)
@@ -851,7 +1065,8 @@ void InputCGNS::ResetNodes(vector<NodeSharedPtr> &Vnodes,
 
 /**
  * Replace a 'problematic' pyramid with a smaller pyramid and four tets.
- * The tets shield the apex and pyramid tri-faces from neighbouring elements.
+ * The tets shield the apex and pyramid tri-faces from neighbouring
+ * elements.
  */
 void InputCGNS::PyramidShielding(
     vector<NodeSharedPtr> &Vnodes, Array<OneD, vector<int>> &ElementFaces,
@@ -967,7 +1182,8 @@ void InputCGNS::PyramidShielding(
      * newFaceNodesIdx[0] = {{a, b, c},
      *                       {d, e   },
      *                       {f      }}
-     * We split the face by rows to make it easier to reverse the orientation
+     * We split the face by rows to make it easier to reverse the
+     * orientation
      */
 
     // c) mid-face nodes
@@ -1034,8 +1250,8 @@ void InputCGNS::PyramidShielding(
                      *
                      *   tmp = a + f_u * (b-a) + f_v * (c-a)
                      *   where a = oldVert[i]  (base node)
-                     *           b = new apex
-                     *           c = old apex
+                     *         b = new apex
+                     *         c = old apex
                      */
 
                     frac_u = (i + 1) / (n + 1);
@@ -1083,8 +1299,8 @@ void InputCGNS::PyramidShielding(
 
             if ((n - 1 - k) > 2)
             {
-                m_log(WARNING) << "Too many mid-volume nodes in this "
-                                  "cross-section";
+                m_log(WARNING)
+                    << "Too many mid-volume nodes in this cross-section";
             }
             else if ((n - 1 - k) == 1)
             {
@@ -1296,11 +1512,11 @@ void InputCGNS::PyramidShielding(
 }
 
 /**
- * Starting from a pyramid apex, traverse along a prism line (a line of prisms
- * with their tri faces touching) recursively
- * Ensure that the collapsed points for each of the tri faces match up with
- * each other and with the pyramid apex - this is done by IDing these points
- * with revNodeId--, ensuring that they have a higher index than the other tri
+ * Starting from a pyramid apex, traverse along a prism line (a line of
+ * prisms with their tri faces touching) recursively Ensure that the
+ * collapsed points for each of the tri faces match up with each other and
+ * with the pyramid apex - this is done by IDing these points with
+ * revNodeId--, ensuring that they have a higher index than the other tri
  * nodes
  */
 void InputCGNS::TraversePyraPrismLine(
