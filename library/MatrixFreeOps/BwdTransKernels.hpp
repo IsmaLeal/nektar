@@ -248,6 +248,7 @@ NEK_FORCE_INLINE static void BwdTransTetKernel(
             {
                 vec_t prod = in[cnt_pqr] * basis2[k + nq2 * mode]; // Load 2x
                 ++mode;
+                ++cnt_pqr;
 
                 for (int r = 1; r < nm2 - p - q; ++r, ++mode, ++cnt_pqr)
                 {

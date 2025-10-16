@@ -17,6 +17,7 @@ v5.9.0
 - Added boundary condition and periodic boundary reader (!2221)
 - Remove duplicate IMEX Gear time-integration variant (!2225)
 - Fix bug in Neumann boundary condition for LinearAdvectionDiffusionReactionSolve (!2231)
+- Fix MatrixFree BwdTrans Tet kernel and update collection unit tests for non-homogeneous inputs (!2251)
 
 **ADRSolver**
 - Add implicit UnsteadyAdvection for continuous Galerkin (!2231)
