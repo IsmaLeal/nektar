@@ -1693,7 +1693,7 @@ void SessionReader::PartitionComm()
         int nProcY  = 1;
         int nProcX  = 1;
         int nStripZ = 1;
-        int nTime   = 1;
+        int nTime   = 0;
         if (DefinesCmdLineArgument("npx"))
         {
             nProcX = GetCmdLineArgument<int>("npx");
@@ -1714,21 +1714,36 @@ void SessionReader::PartitionComm()
         {
             nTime = GetCmdLineArgument<int>("npt");
         }
-        ASSERTL0(m_comm->GetSize() % nTime == 0,
-                 "Cannot exactly partition time using npt value.");
-        ASSERTL0((m_comm->GetSize() / nTime) % (nProcZ * nProcY * nProcX) == 0,
-                 "Cannot exactly partition using PROC_Z value.");
-        ASSERTL0(nProcZ % nProcY == 0,
-                 "Cannot exactly partition using PROC_Y value.");
-        ASSERTL0(nProcY % nProcX == 0,
-                 "Cannot exactly partition using PROC_X value.");
+
+        if (nTime)
+        {
+            ASSERTL0(m_comm->GetSize() % nTime == 0,
+                     "Cannot exactly partition time using npt value.");
+            ASSERTL0((m_comm->GetSize() / nTime) % (nProcZ * nProcY * nProcX) ==
+                         0,
+                     "Cannot exactly partition using PROC_Z value.");
+            ASSERTL0(nProcZ % nProcY == 0,
+                     "Cannot exactly partition using PROC_Y value.");
+            ASSERTL0(nProcY % nProcX == 0,
+                     "Cannot exactly partition using PROC_X value.");
+        }
+        else
+        {
+            ASSERTL0(m_comm->GetSize() % (nProcZ * nProcY * nProcX) == 0,
+                     "Cannot exactly partition using PROC_Z value.");
+            ASSERTL0(nProcZ % nProcY == 0,
+                     "Cannot exactly partition using PROC_Y value.");
+            ASSERTL0(nProcY % nProcX == 0,
+                     "Cannot exactly partition using PROC_X value.");
+        }
 
         // Number of processes associated with the spectral method
         int nProcSm = nProcZ * nProcY * nProcX;
 
         // Number of processes associated with the spectral element
         // method.
-        int nProcSem = m_comm->GetSize() / nTime / nProcSm;
+        int nProcSem = nTime ? m_comm->GetSize() / nTime / nProcSm
+                             : m_comm->GetSize() / nProcSm;
 
         m_comm->SplitComm(nProcSm, nProcSem, nTime);
         m_comm->GetColumnComm()->SplitComm(nProcZ / nStripZ, nStripZ);

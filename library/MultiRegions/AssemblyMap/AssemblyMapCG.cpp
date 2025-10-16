@@ -91,7 +91,7 @@ int AssemblyMapCG::CreateGraph(
 
     LocalRegions::ExpansionSharedPtr exp, bndExp;
     const LocalRegions::ExpansionVector &locExpVector = *(locExp.GetExp());
-    LibUtilities::CommSharedPtr vComm                 = m_comm->GetRowComm();
+    LibUtilities::CommSharedPtr vRowComm              = m_comm->GetRowComm();
 
     m_numLocalBndCondCoeffs = 0;
     m_systemSingular        = checkIfSystemSingular;
@@ -205,10 +205,10 @@ int AssemblyMapCG::CreateGraph(
      */
 
     // Collate information on Dirichlet vertices from all processes
-    int n = vComm->GetSize();
-    int p = vComm->GetRank();
+    int n = vRowComm->GetSize();
+    int p = vRowComm->GetRank();
 
-    if (vComm->IsSerial())
+    if (vRowComm->IsSerial())
     {
         // for FieldConvert Comm this is true and it resets
         // parallel processing back to serial case
@@ -224,8 +224,8 @@ int AssemblyMapCG::CreateGraph(
     Array<OneD, int> edgeoffsets(n, 0);
     vertcounts[p] = graph[0].size();
     edgecounts[p] = graph[1].size();
-    vComm->AllReduce(vertcounts, LibUtilities::ReduceSum);
-    vComm->AllReduce(edgecounts, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(vertcounts, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(edgecounts, LibUtilities::ReduceSum);
 
     for (i = 1; i < n; ++i)
     {
@@ -252,8 +252,8 @@ int AssemblyMapCG::CreateGraph(
     {
         edgelist[edgeoffsets[p] + i++] = it.first;
     }
-    vComm->AllReduce(vertlist, LibUtilities::ReduceSum);
-    vComm->AllReduce(edgelist, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(vertlist, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(edgelist, LibUtilities::ReduceSum);
 
     // Now we have a list of all Dirichlet vertices and edges on all
     // processors.
@@ -351,8 +351,8 @@ int AssemblyMapCG::CreateGraph(
 
     vertcounts[p] = extraDirVertIds.size();
     edgecounts[p] = extraDirEdgeIds.size();
-    vComm->AllReduce(vertcounts, LibUtilities::ReduceSum);
-    vComm->AllReduce(edgecounts, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(vertcounts, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(edgecounts, LibUtilities::ReduceSum);
     nTotVerts = Vmath::Vsum(n, vertcounts, 1);
     nTotEdges = Vmath::Vsum(n, edgecounts, 1);
 
@@ -385,10 +385,10 @@ int AssemblyMapCG::CreateGraph(
         ++i;
     }
 
-    vComm->AllReduce(vertids, LibUtilities::ReduceSum);
-    vComm->AllReduce(vertprocs, LibUtilities::ReduceSum);
-    vComm->AllReduce(edgeids, LibUtilities::ReduceSum);
-    vComm->AllReduce(edgeprocs, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(vertids, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(vertprocs, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(edgeids, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(edgeprocs, LibUtilities::ReduceSum);
 
     // Set up list of vertices that need to be shared to other
     // partitions
@@ -411,13 +411,13 @@ int AssemblyMapCG::CreateGraph(
 
     // Check between processes if the whole system is singular
     int s = m_systemSingular ? 1 : 0;
-    vComm->AllReduce(s, LibUtilities::ReduceMin);
+    vRowComm->AllReduce(s, LibUtilities::ReduceMin);
     m_systemSingular = s == 1 ? true : false;
 
     // Find the minimum boundary vertex ID on each process
     Array<OneD, int> bcminvertid(n, 0);
     bcminvertid[p] = vMaxVertId;
-    vComm->AllReduce(bcminvertid, LibUtilities::ReduceMax);
+    vRowComm->AllReduce(bcminvertid, LibUtilities::ReduceMax);
 
     // Find the process rank with the minimum boundary vertex ID
     int maxIdx = Vmath::Imax(n, bcminvertid, 1);
@@ -454,7 +454,7 @@ int AssemblyMapCG::CreateGraph(
         }
     }
 
-    vComm->AllReduce(meshVertId, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(meshVertId, LibUtilities::ReduceSum);
 
     // When running in parallel, we need to ensure that the singular
     // mesh vertex is communicated to any periodic vertices, otherwise
@@ -1144,7 +1144,7 @@ int AssemblyMapCG::CreateGraph(
         // the vertices and edges respectively to identify those
         // vertices and edges which are located on partition boundary.
         Array<OneD, long> vertArray(unique_verts, &procVerts[0]);
-        Gs::gs_data *tmp1 = Gs::Init(vertArray, vComm, verbose);
+        Gs::gs_data *tmp1 = Gs::Init(vertArray, vRowComm, verbose);
         Array<OneD, NekDouble> tmp4(unique_verts, 1.0);
         Array<OneD, NekDouble> tmp5(unique_edges, 1.0);
         Array<OneD, NekDouble> tmp6(unique_faces, 1.0);
@@ -1154,7 +1154,7 @@ int AssemblyMapCG::CreateGraph(
         if (unique_edges > 0)
         {
             Array<OneD, long> edgeArray(unique_edges, &procEdges[0]);
-            Gs::gs_data *tmp2 = Gs::Init(edgeArray, vComm, verbose);
+            Gs::gs_data *tmp2 = Gs::Init(edgeArray, vRowComm, verbose);
             Gs::Gather(tmp5, Gs::gs_add, tmp2);
             Gs::Finalise(tmp2);
         }
@@ -1162,7 +1162,7 @@ int AssemblyMapCG::CreateGraph(
         if (unique_faces > 0)
         {
             Array<OneD, long> faceArray(unique_faces, &procFaces[0]);
-            Gs::gs_data *tmp3 = Gs::Init(faceArray, vComm, verbose);
+            Gs::gs_data *tmp3 = Gs::Init(faceArray, vRowComm, verbose);
             Gs::Gather(tmp6, Gs::gs_add, tmp3);
             Gs::Finalise(tmp3);
         }
@@ -1286,7 +1286,7 @@ int AssemblyMapCG::CreateGraph(
         bottomUpGraph)
     {
         m_lowestStaticCondLevel = bottomUpGraph->GetNlevels() - 1;
-        vComm->AllReduce(m_lowestStaticCondLevel, LibUtilities::ReduceMax);
+        vRowComm->AllReduce(m_lowestStaticCondLevel, LibUtilities::ReduceMax);
     }
     else
     {
@@ -1332,7 +1332,7 @@ AssemblyMapCG::AssemblyMapCG(
     int globalId;
     int nEdgeInteriorCoeffs;
     int firstNonDirGraphVertId;
-    LibUtilities::CommSharedPtr vComm = m_comm->GetRowComm();
+    LibUtilities::CommSharedPtr vRowComm = m_comm->GetRowComm();
     LocalRegions::ExpansionSharedPtr exp, bndExp;
     StdRegions::Orientation edgeOrient;
     StdRegions::Orientation faceOrient;
@@ -1467,7 +1467,7 @@ AssemblyMapCG::AssemblyMapCG(
         edgeId[i]    = dofIt.first + 1;
         edgeDof[i++] = (NekDouble)dofIt.second;
     }
-    Gs::gs_data *tmp = Gs::Init(edgeId, vComm, verbose);
+    Gs::gs_data *tmp = Gs::Init(edgeId, vRowComm, verbose);
     Gs::Gather(edgeDof, Gs::gs_min, tmp);
     Gs::Finalise(tmp);
     for (i = 0; i < dofs[1].size(); i++)
@@ -1500,7 +1500,7 @@ AssemblyMapCG::AssemblyMapCG(
         faceP[i]  = (NekDouble)dofIt->second;
         faceQ[i]  = (NekDouble)dofIt2->second;
     }
-    Gs::gs_data *tmp2 = Gs::Init(faceId, vComm, verbose);
+    Gs::gs_data *tmp2 = Gs::Init(faceId, vRowComm, verbose);
     Gs::Gather(faceP, Gs::gs_min, tmp2);
     Gs::Gather(faceQ, Gs::gs_min, tmp2);
     Gs::Finalise(tmp2);
@@ -2125,7 +2125,7 @@ AssemblyMapCG::AssemblyMapCG(
         }
     }
 
-    m_dirBndGsh = Gs::Init(paraDirBnd, vComm, verbose);
+    m_dirBndGsh = Gs::Init(paraDirBnd, vRowComm, verbose);
 
     // Set up the local to global map for the next level when using
     // multi-level static condensation
@@ -2193,7 +2193,7 @@ AssemblyMapCG::AssemblyMapCG(
 
     // Add up hash values if parallel
     int hash = m_hash;
-    vComm->AllReduce(hash, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(hash, LibUtilities::ReduceSum);
     m_hash = hash;
 
     CalculateBndSystemBandWidth();
@@ -2347,7 +2347,7 @@ void AssemblyMapCG::SetUpUniversalC0ContMap(const ExpList &locExp,
     Array<OneD, unsigned int> interiorMap;
 
     const LocalRegions::ExpansionVector &locExpVector = *(locExp.GetExp());
-    LibUtilities::CommSharedPtr vCommRow              = m_comm->GetRowComm();
+    LibUtilities::CommSharedPtr vRowComm              = m_comm->GetRowComm();
     const bool verbose = locExp.GetSession()->DefinesCmdLineArgument("verbose");
 
     m_globalToUniversalMap = Nektar::Array<OneD, int>(m_numGlobalCoeffs, -1);
@@ -2397,12 +2397,12 @@ void AssemblyMapCG::SetUpUniversalC0ContMap(const ExpList &locExp,
     }
 
     // Tell other processes about how many dof we have
-    vCommRow->AllReduce(nVert, LibUtilities::ReduceSum);
-    vCommRow->AllReduce(nEdge, LibUtilities::ReduceSum);
-    vCommRow->AllReduce(nFace, LibUtilities::ReduceSum);
-    vCommRow->AllReduce(maxEdgeDof, LibUtilities::ReduceMax);
-    vCommRow->AllReduce(maxFaceDof, LibUtilities::ReduceMax);
-    vCommRow->AllReduce(maxIntDof, LibUtilities::ReduceMax);
+    vRowComm->AllReduce(nVert, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(nEdge, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(nFace, LibUtilities::ReduceSum);
+    vRowComm->AllReduce(maxEdgeDof, LibUtilities::ReduceMax);
+    vRowComm->AllReduce(maxFaceDof, LibUtilities::ReduceMax);
+    vRowComm->AllReduce(maxIntDof, LibUtilities::ReduceMax);
 
     // Assemble global to universal mapping for this process
     for (i = 0; i < locExpVector.size(); ++i)
@@ -2556,9 +2556,9 @@ void AssemblyMapCG::SetUpUniversalC0ContMap(const ExpList &locExp,
         tmp[i] = m_globalToUniversalMap[i];
     }
 
-    m_gsh    = Gs::Init(tmp, vCommRow, verbose);
-    m_bndGsh = Gs::Init(tmp2, vCommRow, verbose);
-    Gs::Unique(tmp, vCommRow);
+    m_gsh    = Gs::Init(tmp, vRowComm, verbose);
+    m_bndGsh = Gs::Init(tmp2, vRowComm, verbose);
+    Gs::Unique(tmp, vRowComm);
     for (unsigned int i = 0; i < m_numGlobalCoeffs; ++i)
     {
         m_globalToUniversalMapUnique[i] = (tmp[i] >= 0 ? 1 : 0);
@@ -2658,7 +2658,7 @@ AssemblyMapSharedPtr AssemblyMapCG::v_LinearSpaceMap(const ExpList &locexp,
     // Set up global to universal map
     if (m_globalToUniversalMap.size())
     {
-        LibUtilities::CommSharedPtr vCommRow =
+        LibUtilities::CommSharedPtr vRowComm =
             m_session->GetComm()->GetRowComm();
         int nglocoeffs                          = returnval->m_numGlobalCoeffs;
         returnval->m_globalToUniversalMap       = Array<OneD, int>(nglocoeffs);
@@ -2680,8 +2680,8 @@ AssemblyMapSharedPtr AssemblyMapCG::v_LinearSpaceMap(const ExpList &locexp,
         {
             tmp[i] = returnval->m_globalToUniversalMap[i];
         }
-        returnval->m_gsh = Gs::Init(tmp, vCommRow, verbose);
-        Gs::Unique(tmp, vCommRow);
+        returnval->m_gsh = Gs::Init(tmp, vRowComm, verbose);
+        Gs::Unique(tmp, vRowComm);
         for (unsigned int i = 0; i < nglocoeffs; ++i)
         {
             returnval->m_globalToUniversalMapUnique[i] = (tmp[i] >= 0 ? 1 : 0);

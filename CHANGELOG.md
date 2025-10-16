@@ -18,6 +18,7 @@ v5.9.0
 - Remove duplicate IMEX Gear time-integration variant (!2225)
 - Fix bug in Neumann boundary condition for LinearAdvectionDiffusionReactionSolve (!2231)
 - Fix MatrixFree BwdTrans Tet kernel and update collection unit tests for non-homogeneous inputs (!2251)
+- Use MPI_Comm_split instead of MPI_Cart_create and MPI_Cart_sub (!2250)
 
 **ADRSolver**
 - Add implicit UnsteadyAdvection for continuous Galerkin (!2231)
