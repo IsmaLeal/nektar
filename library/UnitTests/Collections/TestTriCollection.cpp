@@ -120,6 +120,10 @@ BOOST_AUTO_TEST_CASE(TestTriBwdTrans_StdMat_UniformP)
     c.Initialise(Collections::eBwdTrans);
 
     Array<OneD, NekDouble> coeffs(Exp->GetNcoeffs(), 1.0), tmp;
+    for (int i = 0; i < coeffs.size(); ++i)
+    {
+        coeffs[i] = i + 1;
+    }
     Array<OneD, NekDouble> phys1(Exp->GetTotPoints());
     Array<OneD, NekDouble> phys2(Exp->GetTotPoints());
 
@@ -180,6 +184,10 @@ BOOST_AUTO_TEST_CASE(TestTriBwdTrans_StdMat_VariableP)
     c.Initialise(Collections::eBwdTrans);
 
     Array<OneD, NekDouble> coeffs(Exp->GetNcoeffs(), 1.0), tmp;
+    for (int i = 0; i < coeffs.size(); ++i)
+    {
+        coeffs[i] = i + 1;
+    }
     Array<OneD, NekDouble> phys1(Exp->GetTotPoints());
     Array<OneD, NekDouble> phys2(Exp->GetTotPoints());
 
@@ -245,6 +253,10 @@ BOOST_AUTO_TEST_CASE(TestTriBwdTrans_StdMat_VariableP_MultiElmt)
     c.Initialise(Collections::eBwdTrans);
 
     Array<OneD, NekDouble> coeffs(nelmts * Exp->GetNcoeffs(), 1.0), tmp;
+    for (int i = 0; i < coeffs.size(); ++i)
+    {
+        coeffs[i] = i + 1;
+    }
     Array<OneD, NekDouble> phys1(nelmts * Exp->GetTotPoints());
     Array<OneD, NekDouble> phys2(nelmts * Exp->GetTotPoints());
 
@@ -310,6 +322,10 @@ BOOST_AUTO_TEST_CASE(TestTriBwdTrans_IterPerExp_UniformP)
     c.Initialise(Collections::eBwdTrans);
 
     Array<OneD, NekDouble> coeffs(Exp->GetNcoeffs(), 1.0), tmp;
+    for (int i = 0; i < coeffs.size(); ++i)
+    {
+        coeffs[i] = i + 1;
+    }
     Array<OneD, NekDouble> phys1(Exp->GetTotPoints());
     Array<OneD, NekDouble> phys2(Exp->GetTotPoints());
 
@@ -370,6 +386,10 @@ BOOST_AUTO_TEST_CASE(TestTriBwdTrans_IterPerExp_VariableP)
     c.Initialise(Collections::eBwdTrans);
 
     Array<OneD, NekDouble> coeffs(Exp->GetNcoeffs(), 1.0), tmp;
+    for (int i = 0; i < coeffs.size(); ++i)
+    {
+        coeffs[i] = i + 1;
+    }
     Array<OneD, NekDouble> phys1(Exp->GetTotPoints());
     Array<OneD, NekDouble> phys2(Exp->GetTotPoints());
 
@@ -434,6 +454,10 @@ BOOST_AUTO_TEST_CASE(TestTriBwdTrans_MatrixFree_UniformP)
     c.Initialise(Collections::eBwdTrans);
 
     Array<OneD, NekDouble> coeffs(Exp->GetNcoeffs(), 1.0), tmp;
+    for (int i = 0; i < coeffs.size(); ++i)
+    {
+        coeffs[i] = i + 1;
+    }
     Array<OneD, NekDouble> physRef(Exp->GetTotPoints());
     Array<OneD, NekDouble> phys(Exp->GetTotPoints());
 
@@ -498,6 +522,10 @@ BOOST_AUTO_TEST_CASE(TestTriBwdTrans_MatrixFree_UniformP_OverInt)
     c.Initialise(Collections::eBwdTrans);
 
     Array<OneD, NekDouble> coeffs(Exp->GetNcoeffs(), 1.0), tmp;
+    for (int i = 0; i < coeffs.size(); ++i)
+    {
+        coeffs[i] = i + 1;
+    }
     Array<OneD, NekDouble> physRef(Exp->GetTotPoints());
     Array<OneD, NekDouble> phys(Exp->GetTotPoints());
 
@@ -563,6 +591,10 @@ BOOST_AUTO_TEST_CASE(TestTriBwdTrans_SumFac_UniformP)
     c.Initialise(Collections::eBwdTrans);
 
     Array<OneD, NekDouble> coeffs(nelmts * Exp->GetNcoeffs(), 1.0), tmp;
+    for (int i = 0; i < coeffs.size(); ++i)
+    {
+        coeffs[i] = i + 1;
+    }
     Array<OneD, NekDouble> phys1(nelmts * Exp->GetTotPoints());
     Array<OneD, NekDouble> phys2(nelmts * Exp->GetTotPoints());
 
@@ -632,6 +664,10 @@ BOOST_AUTO_TEST_CASE(TestTriBwdTrans_SumFac_UniformP_MultiElmt)
     c.Initialise(Collections::eBwdTrans);
 
     Array<OneD, NekDouble> coeffs(nelmts * Exp->GetNcoeffs(), 1.0), tmp;
+    for (int i = 0; i < coeffs.size(); ++i)
+    {
+        coeffs[i] = i + 1;
+    }
     Array<OneD, NekDouble> phys1(nelmts * Exp->GetTotPoints());
     Array<OneD, NekDouble> phys2(nelmts * Exp->GetTotPoints());
 
@@ -701,6 +737,10 @@ BOOST_AUTO_TEST_CASE(TestTriBwdTrans_SumFac_VariableP)
     c.Initialise(Collections::eBwdTrans);
 
     Array<OneD, NekDouble> coeffs(nelmts * Exp->GetNcoeffs(), 1.0), tmp;
+    for (int i = 0; i < coeffs.size(); ++i)
+    {
+        coeffs[i] = i + 1;
+    }
     Array<OneD, NekDouble> phys1(nelmts * Exp->GetTotPoints());
     Array<OneD, NekDouble> phys2(nelmts * Exp->GetTotPoints());
 
@@ -770,6 +810,10 @@ BOOST_AUTO_TEST_CASE(TestTriBwdTrans_SumFac_VariableP_MultiElmt)
     c.Initialise(Collections::eBwdTrans);
 
     Array<OneD, NekDouble> coeffs(nelmts * Exp->GetNcoeffs(), 1.0), tmp;
+    for (int i = 0; i < coeffs.size(); ++i)
+    {
+        coeffs[i] = i + 1;
+    }
     Array<OneD, NekDouble> phys1(nelmts * Exp->GetTotPoints());
     Array<OneD, NekDouble> phys2(nelmts * Exp->GetTotPoints());
 
