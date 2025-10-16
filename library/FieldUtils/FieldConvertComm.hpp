@@ -61,7 +61,7 @@ public:
     }
     void v_SplitComm(int pRows, int pColumns, int pTime) override
     {
-        ASSERTL0(pTime == 1,
+        ASSERTL0(pTime == 0,
                  "FieldConvertComm does not support parallel in time!");
         // Compute row and column in grid.
         m_commRow = std::shared_ptr<FieldConvertComm>(

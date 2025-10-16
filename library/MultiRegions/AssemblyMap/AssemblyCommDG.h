@@ -101,7 +101,7 @@ class AllToAll final : public ExchangeMethod
 public:
     /// Default constructor.
     MULTI_REGIONS_EXPORT AllToAll(
-        const LibUtilities::CommSharedPtr &comm, const int &maxQuad,
+        const LibUtilities::CommSharedPtr &rowComm, const int &maxQuad,
         const int &nRanks,
         const std::map<int, std::vector<int>> &rankSharedEdges,
         const std::map<int, std::vector<int>> &edgeToTrace);
@@ -112,7 +112,7 @@ public:
 
 private:
     /// Communicator
-    LibUtilities::CommSharedPtr m_comm;
+    LibUtilities::CommSharedPtr m_rowComm;
     /// Max number of quadrature points in an element
     int m_maxQuad = 0;
     /// Number of ranks/processes/partitions
@@ -135,7 +135,7 @@ class AllToAllV final : public ExchangeMethod
 public:
     /// Default constructor.
     MULTI_REGIONS_EXPORT AllToAllV(
-        const LibUtilities::CommSharedPtr &comm,
+        const LibUtilities::CommSharedPtr &rowComm,
         const std::map<int, std::vector<int>> &rankSharedEdges,
         const std::map<int, std::vector<int>> &edgeToTrace, const int &nRanks);
 
@@ -145,7 +145,7 @@ public:
 
 private:
     /// Communicator
-    LibUtilities::CommSharedPtr m_comm;
+    LibUtilities::CommSharedPtr m_rowComm;
     /// List of trace map indices of the quad points to exchange
     std::vector<int> m_allVEdgeIndex;
     /// List of counts for MPI_alltoallv
@@ -168,7 +168,7 @@ class NeighborAllToAllV final : public ExchangeMethod
 public:
     /// Default constructor.
     MULTI_REGIONS_EXPORT NeighborAllToAllV(
-        const LibUtilities::CommSharedPtr &comm,
+        const LibUtilities::CommSharedPtr &rowComm,
         const std::map<int, std::vector<int>> &rankSharedEdges,
         const std::map<int, std::vector<int>> &edgeToTrace);
 
@@ -178,7 +178,7 @@ public:
 
 private:
     /// Communicator
-    LibUtilities::CommSharedPtr m_comm;
+    LibUtilities::CommSharedPtr m_rowComm;
     /// List of displacements
     Array<OneD, int> m_sendDisp;
     /// List of trace map indices of the quad points to exchange
@@ -200,7 +200,7 @@ class Pairwise final : public ExchangeMethod
 {
 public:
     MULTI_REGIONS_EXPORT Pairwise(
-        const LibUtilities::CommSharedPtr &comm,
+        const LibUtilities::CommSharedPtr &rowComm,
         const std::map<int, std::vector<int>> &rankSharedEdges,
         const std::map<int, std::vector<int>> &edgeToTrace);
 
@@ -210,7 +210,7 @@ public:
 
 private:
     /// Communicator
-    LibUtilities::CommSharedPtr m_comm;
+    LibUtilities::CommSharedPtr m_rowComm;
     /// List of trace index locations in recv/send buff
     Array<OneD, int> m_edgeTraceIndex;
     /// Receive buffer for exchange
@@ -288,11 +288,11 @@ private:
         const Array<OneD, const ExpListSharedPtr> &bndCondExp,
         const Array<OneD, const SpatialDomains::BoundaryConditionShPtr>
             &bndCond,
-        const PeriodicMap &perMap, const LibUtilities::CommSharedPtr &comm);
+        const PeriodicMap &perMap, const LibUtilities::CommSharedPtr &rowComm);
 
     /// Timing of the MPI exchange method.
     static std::tuple<NekDouble, NekDouble, NekDouble> Timing(
-        const LibUtilities::CommSharedPtr &comm, const int &count,
+        const LibUtilities::CommSharedPtr &rowComm, const int &count,
         const int &num, const ExchangeMethodSharedPtr &f);
 };
 

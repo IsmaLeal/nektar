@@ -162,7 +162,7 @@ public:
     inline CommRequestSharedPtr CreateRequest(int num);
     LIB_UTILITIES_EXPORT inline CommSharedPtr CommCreateIf(int flag);
     LIB_UTILITIES_EXPORT inline void SplitComm(int pRows, int pColumns,
-                                               int pTime = 1);
+                                               int pTime = 0);
     LIB_UTILITIES_EXPORT inline CommSharedPtr GetRowComm();
     LIB_UTILITIES_EXPORT inline CommSharedPtr GetColumnComm();
     LIB_UTILITIES_EXPORT inline CommSharedPtr GetTimeComm();

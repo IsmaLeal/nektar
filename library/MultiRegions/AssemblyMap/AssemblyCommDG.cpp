@@ -41,11 +41,11 @@
 namespace Nektar::MultiRegions
 {
 
-AllToAll::AllToAll(const LibUtilities::CommSharedPtr &comm, const int &maxQuad,
-                   const int &nRanks,
+AllToAll::AllToAll(const LibUtilities::CommSharedPtr &rowComm,
+                   const int &maxQuad, const int &nRanks,
                    const std::map<int, std::vector<int>> &rankSharedEdges,
                    const std::map<int, std::vector<int>> &edgeToTrace)
-    : m_comm(comm), m_maxQuad(maxQuad), m_nRanks(nRanks)
+    : m_rowComm(rowComm), m_maxQuad(maxQuad), m_nRanks(nRanks)
 {
     for (size_t i = 0; i < nRanks; ++i)
     {
@@ -57,7 +57,7 @@ AllToAll::AllToAll(const LibUtilities::CommSharedPtr &comm, const int &maxQuad,
         }
     }
 
-    comm->AllReduce(m_maxCount, LibUtilities::ReduceMax);
+    rowComm->AllReduce(m_maxCount, LibUtilities::ReduceMax);
 
     // Creates the edge index vector where value -1 indicates
     // padding of value 0 to be inserted instead of value from Fwd
@@ -96,11 +96,11 @@ AllToAll::AllToAll(const LibUtilities::CommSharedPtr &comm, const int &maxQuad,
     }
 }
 
-AllToAllV::AllToAllV(const LibUtilities::CommSharedPtr &comm,
+AllToAllV::AllToAllV(const LibUtilities::CommSharedPtr &rowComm,
                      const std::map<int, std::vector<int>> &rankSharedEdges,
                      const std::map<int, std::vector<int>> &edgeToTrace,
                      const int &nRanks)
-    : m_comm(comm)
+    : m_rowComm(rowComm)
 {
     m_allVSendCount = Array<OneD, int>(nRanks, 0);
     for (size_t i = 0; i < nRanks; ++i)
@@ -130,10 +130,10 @@ AllToAllV::AllToAllV(const LibUtilities::CommSharedPtr &comm,
 }
 
 NeighborAllToAllV::NeighborAllToAllV(
-    const LibUtilities::CommSharedPtr &comm,
+    const LibUtilities::CommSharedPtr &rowComm,
     const std::map<int, std::vector<int>> &rankSharedEdges,
     const std::map<int, std::vector<int>> &edgeToTrace)
-    : m_comm(comm)
+    : m_rowComm(rowComm)
 {
     int nNeighbours = rankSharedEdges.size();
     Array<OneD, int> destinations(nNeighbours, 0);
@@ -146,7 +146,7 @@ NeighborAllToAllV::NeighborAllToAllV(
         ++cnt;
     }
 
-    comm->DistGraphCreateAdjacent(destinations, weights, 1);
+    rowComm->DistGraphCreateAdjacent(destinations, weights, 1);
 
     // Setting up indices
     m_sendCount = Array<OneD, int>(nNeighbours, 0);
@@ -172,10 +172,10 @@ NeighborAllToAllV::NeighborAllToAllV(
     }
 }
 
-Pairwise::Pairwise(const LibUtilities::CommSharedPtr &comm,
+Pairwise::Pairwise(const LibUtilities::CommSharedPtr &rowComm,
                    const std::map<int, std::vector<int>> &rankSharedEdges,
                    const std::map<int, std::vector<int>> &edgeToTrace)
-    : m_comm(comm)
+    : m_rowComm(rowComm)
 {
     int cnt         = 0;
     int nNeighbours = rankSharedEdges.size();
@@ -221,8 +221,8 @@ Pairwise::Pairwise(const LibUtilities::CommSharedPtr &comm,
         }
     }
 
-    m_recvRequest = m_comm->CreateRequest(vecPairPartitionTrace.size());
-    m_sendRequest = m_comm->CreateRequest(vecPairPartitionTrace.size());
+    m_recvRequest = m_rowComm->CreateRequest(vecPairPartitionTrace.size());
+    m_sendRequest = m_rowComm->CreateRequest(vecPairPartitionTrace.size());
 
     // Construct persistent requests
     for (size_t i = 0; i < vecPairPartitionTrace.size(); ++i)
@@ -230,12 +230,12 @@ Pairwise::Pairwise(const LibUtilities::CommSharedPtr &comm,
         size_t len = vecPairPartitionTrace[i].second.size();
 
         // Initialise receive requests
-        m_comm->RecvInit(vecPairPartitionTrace[i].first,
-                         m_recvBuff[sendDisp[i]], len, m_recvRequest, i);
+        m_rowComm->RecvInit(vecPairPartitionTrace[i].first,
+                            m_recvBuff[sendDisp[i]], len, m_recvRequest, i);
 
         // Initialise send requests
-        m_comm->SendInit(vecPairPartitionTrace[i].first,
-                         m_sendBuff[sendDisp[i]], len, m_sendRequest, i);
+        m_rowComm->SendInit(vecPairPartitionTrace[i].first,
+                            m_sendBuff[sendDisp[i]], len, m_sendRequest, i);
     }
 }
 
@@ -258,7 +258,7 @@ void AllToAll::PerformExchange(const Array<OneD, NekDouble> &testFwd,
         }
     }
 
-    m_comm->AlltoAll(sendBuff, recvBuff);
+    m_rowComm->AlltoAll(sendBuff, recvBuff);
 
     for (size_t j = 0; j < size; ++j)
     {
@@ -278,8 +278,8 @@ void AllToAllV::PerformExchange(const Array<OneD, NekDouble> &testFwd,
     Vmath::Gathr(int(m_allVEdgeIndex.size()), testFwd.data(),
                  m_allVEdgeIndex.data(), sendBuff.data());
 
-    m_comm->AlltoAllv(sendBuff, m_allVSendCount, m_allVSendDisp, recvBuff,
-                      m_allVSendCount, m_allVSendDisp);
+    m_rowComm->AlltoAllv(sendBuff, m_allVSendCount, m_allVSendDisp, recvBuff,
+                         m_allVSendCount, m_allVSendDisp);
 
     Vmath::Scatr(int(m_allVEdgeIndex.size()), recvBuff.data(),
                  m_allVEdgeIndex.data(), testBwd.data());
@@ -293,8 +293,8 @@ void NeighborAllToAllV::PerformExchange(const Array<OneD, NekDouble> &testFwd,
     Vmath::Gathr(int(m_edgeTraceIndex.size()), testFwd.data(),
                  m_edgeTraceIndex.data(), sendBuff.data());
 
-    m_comm->NeighborAlltoAllv(sendBuff, m_sendCount, m_sendDisp, recvBuff,
-                              m_sendCount, m_sendDisp);
+    m_rowComm->NeighborAlltoAllv(sendBuff, m_sendCount, m_sendDisp, recvBuff,
+                                 m_sendCount, m_sendDisp);
 
     Vmath::Scatr(int(m_edgeTraceIndex.size()), recvBuff.data(),
                  m_edgeTraceIndex.data(), testBwd.data());
@@ -304,18 +304,18 @@ void Pairwise::PerformExchange(const Array<OneD, NekDouble> &testFwd,
                                Array<OneD, NekDouble> &testBwd)
 {
     // Perform receive posts
-    m_comm->StartAll(m_recvRequest);
+    m_rowComm->StartAll(m_recvRequest);
 
     // Fill send buffer from Fwd trace
     Vmath::Gathr(int(m_edgeTraceIndex.size()), testFwd.data(),
                  m_edgeTraceIndex.data(), m_sendBuff.data());
 
     // Perform send posts
-    m_comm->StartAll(m_sendRequest);
+    m_rowComm->StartAll(m_sendRequest);
 
     // Wait for all send/recvs to complete
-    m_comm->WaitAll(m_sendRequest);
-    m_comm->WaitAll(m_recvRequest);
+    m_rowComm->WaitAll(m_sendRequest);
+    m_rowComm->WaitAll(m_recvRequest);
 
     // Fill Bwd trace from recv buffer
     Vmath::Scatr(int(m_edgeTraceIndex.size()), m_recvBuff.data(),
@@ -330,10 +330,10 @@ AssemblyCommDG::AssemblyCommDG(
     const Array<OneD, const SpatialDomains::BoundaryConditionShPtr> &bndCond,
     const PeriodicMap &perMap)
 {
-    auto comm = locExp.GetComm()->GetRowComm();
+    auto rowComm = locExp.GetComm()->GetRowComm();
 
     // If serial then skip initialising graph structure and the MPI timing
-    if (comm->IsSerial())
+    if (rowComm->IsSerial())
     {
         m_exchange =
             ExchangeMethodSharedPtr(MemoryManager<Serial>::AllocateSharedPtr());
@@ -342,8 +342,8 @@ AssemblyCommDG::AssemblyCommDG(
     {
         // Initialise graph structure and link processes across partition
         // boundaries
-        AssemblyCommDG::InitialiseStructure(locExp, trace, elmtToTrace,
-                                            bndCondExp, bndCond, perMap, comm);
+        AssemblyCommDG::InitialiseStructure(
+            locExp, trace, elmtToTrace, bndCondExp, bndCond, perMap, rowComm);
 
         // Timing MPI comm methods, warm up with 10 iterations then time over 50
         std::vector<ExchangeMethodSharedPtr> MPIFuncs;
@@ -356,27 +356,27 @@ AssemblyCommDG::AssemblyCommDG(
         {
             MPIFuncs.emplace_back(ExchangeMethodSharedPtr(
                 MemoryManager<AllToAll>::AllocateSharedPtr(
-                    comm, m_maxQuad, m_nRanks, m_rankSharedEdges,
+                    rowComm, m_maxQuad, m_nRanks, m_rankSharedEdges,
                     m_edgeToTrace)));
             MPIFuncsNames.emplace_back("AllToAll");
 
             MPIFuncs.emplace_back(ExchangeMethodSharedPtr(
                 MemoryManager<AllToAllV>::AllocateSharedPtr(
-                    comm, m_rankSharedEdges, m_edgeToTrace, m_nRanks)));
+                    rowComm, m_rankSharedEdges, m_edgeToTrace, m_nRanks)));
             MPIFuncsNames.emplace_back("AllToAllV");
         }
 
         MPIFuncs.emplace_back(
             ExchangeMethodSharedPtr(MemoryManager<Pairwise>::AllocateSharedPtr(
-                comm, m_rankSharedEdges, m_edgeToTrace)));
+                rowComm, m_rankSharedEdges, m_edgeToTrace)));
         MPIFuncsNames.emplace_back("PairwiseSendRecv");
 
         // Disable neighbor MPI method on unsupported MPI version (below 3.0)
-        if (std::get<0>(comm->GetVersion()) >= 3)
+        if (std::get<0>(rowComm->GetVersion()) >= 3)
         {
             MPIFuncs.emplace_back(ExchangeMethodSharedPtr(
                 MemoryManager<NeighborAllToAllV>::AllocateSharedPtr(
-                    comm, m_rankSharedEdges, m_edgeToTrace)));
+                    rowComm, m_rankSharedEdges, m_edgeToTrace)));
             MPIFuncsNames.emplace_back("NeighborAllToAllV");
         }
 
@@ -386,7 +386,7 @@ AssemblyCommDG::AssemblyCommDG(
         std::vector<NekDouble> avg(MPIFuncs.size(), -1);
         bool verbose = locExp.GetSession()->DefinesCmdLineArgument("verbose");
 
-        if (verbose && comm->TreatAsRankZero())
+        if (verbose && rowComm->TreatAsRankZero())
         {
             std::cout << "MPI setup for trace exchange: " << std::endl;
         }
@@ -402,10 +402,10 @@ AssemblyCommDG::AssemblyCommDG(
 
         for (size_t i = 0; i < MPIFuncs.size(); ++i)
         {
-            Timing(comm, warmup, numPoints, MPIFuncs[i]);
+            Timing(rowComm, warmup, numPoints, MPIFuncs[i]);
             std::tie(avg[i], min, max) =
-                Timing(comm, iter, numPoints, MPIFuncs[i]);
-            if (verbose && comm->TreatAsRankZero())
+                Timing(rowComm, iter, numPoints, MPIFuncs[i]);
+            if (verbose && rowComm->TreatAsRankZero())
             {
                 std::cout << "  " << MPIFuncsNames[i]
                           << " times (avg, min, max)"
@@ -420,7 +420,7 @@ AssemblyCommDG::AssemblyCommDG(
         int fastestMPI = std::distance(
             avg.begin(), std::min_element(avg.begin(), avg.end()));
 
-        if (verbose && comm->TreatAsRankZero())
+        if (verbose && rowComm->TreatAsRankZero())
         {
             std::cout << "  Chosen fastest method: "
                       << MPIFuncsNames[fastestMPI] << std::endl;
@@ -459,7 +459,7 @@ void AssemblyCommDG::InitialiseStructure(
         &elmtToTrace,
     const Array<OneD, const ExpListSharedPtr> &bndCondExp,
     const Array<OneD, const SpatialDomains::BoundaryConditionShPtr> &bndCond,
-    const PeriodicMap &perMap, const LibUtilities::CommSharedPtr &comm)
+    const PeriodicMap &perMap, const LibUtilities::CommSharedPtr &rowComm)
 {
     Array<OneD, int> tmp;
     int quad = 0, nDim = 0, eid = 0, offset = 0;
@@ -585,7 +585,7 @@ void AssemblyCommDG::InitialiseStructure(
     }
 
     // Find max quadrature points across all processes for AllToAll method
-    comm->AllReduce(m_maxQuad, LibUtilities::ReduceMax);
+    rowComm->AllReduce(m_maxQuad, LibUtilities::ReduceMax);
 
     // Create list of boundary edge IDs
     std::set<int> bndIdList;
@@ -644,10 +644,10 @@ void AssemblyCommDG::InitialiseStructure(
     }
 
     // Send uniqueEdgeIds size so all partitions can prepare buffers
-    m_nRanks = comm->GetSize();
+    m_nRanks = rowComm->GetSize();
     Array<OneD, int> rankNumEdges(m_nRanks);
     Array<OneD, int> localEdgeSize(1, uniqueEdgeIds.size());
-    comm->AllGather(localEdgeSize, rankNumEdges);
+    rowComm->AllGather(localEdgeSize, rankNumEdges);
 
     Array<OneD, int> rankLocalEdgeDisp(m_nRanks, 0);
     for (size_t i = 1; i < m_nRanks; ++i)
@@ -668,11 +668,11 @@ void AssemblyCommDG::InitialiseStructure(
         std::accumulate(rankNumEdges.begin(), rankNumEdges.end(), 0), 0);
 
     // Send all unique edge IDs to all partitions
-    comm->AllGatherv(localEdgeIdsArray, rankLocalEdgeIds, rankNumEdges,
-                     rankLocalEdgeDisp);
+    rowComm->AllGatherv(localEdgeIdsArray, rankLocalEdgeIds, rankNumEdges,
+                        rankLocalEdgeDisp);
 
     // Find what edge Ids match with other ranks
-    size_t myRank = comm->GetRank();
+    size_t myRank = rowComm->GetRank();
     for (size_t i = 0; i < m_nRanks; ++i)
     {
         if (i == myRank)
@@ -696,16 +696,16 @@ void AssemblyCommDG::InitialiseStructure(
  * Timing of the exchange method @p f, performing the exchange @p count times
  * for array of length @p num.
  *
- * @param comm   Communicator
- * @param count  Number of timing iterations to run
- * @param num    Number of quadrature points to communicate
- * @param f      #ExchangeMethod to time
+ * @param rowComm  Row Communicator
+ * @param count    Number of timing iterations to run
+ * @param num      Number of quadrature points to communicate
+ * @param f        ExchangeMethod to time
  *
  * @return tuple of loop times {avg, min, max}
  */
 std::tuple<NekDouble, NekDouble, NekDouble> AssemblyCommDG::Timing(
-    const LibUtilities::CommSharedPtr &comm, const int &count, const int &num,
-    const ExchangeMethodSharedPtr &f)
+    const LibUtilities::CommSharedPtr &rowComm, const int &count,
+    const int &num, const ExchangeMethodSharedPtr &f)
 {
     Array<OneD, NekDouble> testFwd(num, 1);
     Array<OneD, NekDouble> testBwd(num, -2);
@@ -720,15 +720,15 @@ std::tuple<NekDouble, NekDouble, NekDouble> AssemblyCommDG::Timing(
 
     // These can just be 'reduce' but need to setup the wrapper in comm.h
     Array<OneD, NekDouble> minTime(1, t.TimePerTest(count));
-    comm->AllReduce(minTime, LibUtilities::ReduceMin);
+    rowComm->AllReduce(minTime, LibUtilities::ReduceMin);
 
     Array<OneD, NekDouble> maxTime(1, t.TimePerTest(count));
-    comm->AllReduce(maxTime, LibUtilities::ReduceMax);
+    rowComm->AllReduce(maxTime, LibUtilities::ReduceMax);
 
     Array<OneD, NekDouble> sumTime(1, t.TimePerTest(count));
-    comm->AllReduce(sumTime, LibUtilities::ReduceSum);
+    rowComm->AllReduce(sumTime, LibUtilities::ReduceSum);
 
-    NekDouble avgTime = sumTime[0] / comm->GetSize();
+    NekDouble avgTime = sumTime[0] / rowComm->GetSize();
     return std::make_tuple(avgTime, minTime[0], maxTime[0]);
 }
 

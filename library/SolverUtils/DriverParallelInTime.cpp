@@ -141,6 +141,8 @@ void DriverParallelInTime::SetParallelInTimeEquationSystem(
                  "Ensure equation name is correct and module is compiled.\n");
 
     // Set fine parallel-in-time solver.
+    ASSERTL0(m_session->DefinesCmdLineArgument("npt"),
+             "Number of parallel-in-time processes npt must be specified.");
     m_session->SetTag("AdvectiveType", AdvectiveType);
     m_session->SetTag("ParallelInTimeSolver", "TimeLevel0");
     m_equ[0] = GetEquationSystemFactory().CreateInstance(vEquation, m_session,
@@ -159,9 +161,7 @@ void DriverParallelInTime::SetParallelInTimeEquationSystem(
     int nsz = m_session->DefinesCmdLineArgument("nsz")
                   ? m_session->GetCmdLineArgument<int>("nsz")
                   : 1;
-    int npt = m_session->DefinesCmdLineArgument("npt")
-                  ? m_session->GetCmdLineArgument<int>("npt")
-                  : 1;
+    int npt = m_session->GetCmdLineArgument<int>("npt");
 
     // Convert into string.
     std::string npx_string    = std::to_string(npx);
