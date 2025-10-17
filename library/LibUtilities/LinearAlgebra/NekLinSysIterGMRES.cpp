@@ -61,7 +61,7 @@ NekLinSysIterGMRES::NekLinSysIterGMRES(
     m_KrylovMaxHessMatBand = pKey.m_KrylovMaxHessMatBand;
 
     m_maxrestart       = ceil(NekDouble(m_NekLinSysMaxIterations) /
-                              NekDouble(pKey.m_LinSysMaxStorage));
+                        NekDouble(pKey.m_LinSysMaxStorage));
     m_LinSysMaxStorage = min(m_NekLinSysMaxIterations, pKey.m_LinSysMaxStorage);
 
     m_GMRESCentralDifference = pKey.m_GMRESCentralDifference;
@@ -123,8 +123,8 @@ int NekLinSysIterGMRES::DoGMRES(const int nGlobal,
     }
 
     // Get vector sizes
-    NekDouble eps = 0.0;
     int nNonDir   = nGlobal - nDir;
+    NekDouble eps = 0.0;
 
     Array<OneD, NekDouble> tmp;
 
@@ -156,8 +156,10 @@ int NekLinSysIterGMRES::DoGMRES(const int nGlobal,
         restarted = true;
     }
 
+    // Verbose print error, iteration count, tolerance, ..
     if (m_verbose)
     {
+        // Compute "real eps" based on solution x as r = Ax - b
         Array<OneD, NekDouble> r0(nGlobal, 0.0);
         m_operator.DoNekSysLhsEval(pOutput, r0, m_GMRESCentralDifference);
         Vmath::Vsub(nNonDir, &pInput[0] + nDir, 1, &r0[0] + nDir, 1,
@@ -169,18 +171,14 @@ int NekLinSysIterGMRES::DoGMRES(const int nGlobal,
 
         if (m_root)
         {
-            int nwidthcolm = 13;
-
-            cout << std::scientific << std::setw(nwidthcolm)
-                 << std::setprecision(nwidthcolm - 8)
-                 << "       GMRES iterations made = " << m_totalIterations
+            cout << "GMRES iterations made = " << m_totalIterations
                  << " using tolerance of " << m_NekLinSysTolerance
                  << " (error = " << sqrt(eps * m_prec_factor / m_rhs_magnitude)
+                 << ", rhs_mag = " << sqrt(m_rhs_magnitude)
+                 << " with (GMRES eps = " << eps << " REAL eps= " << eps1
                  << ")";
 
-            cout << " WITH (GMRES eps = " << eps << " REAL eps= " << eps1
-                 << ")";
-
+            // Append appropriate message when finalising GMRES
             if (m_converged)
             {
                 cout << " CONVERGED" << endl;
@@ -386,6 +384,7 @@ NekDouble NekLinSysIterGMRES::DoGmresRestart(
                 m_converged = true;
             }
         }
+
         nswp++;
         m_totalIterations++;
 
