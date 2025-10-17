@@ -32,6 +32,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+#include "LocalRegions/PointExp.h"
 #include <LocalRegions/HexExp.h>
 #include <SpatialDomains/MeshGraph.h>
 #include <boost/test/tools/floating_point_comparison.hpp>
@@ -208,4 +209,52 @@ BOOST_AUTO_TEST_CASE(TestScaledAndTranslatedHexExp)
     BOOST_CHECK_CLOSE(c0[4], .44126383098, epsilon);
     BOOST_CHECK_CLOSE(c0[5], .5, epsilon);
 }
+
+BOOST_AUTO_TEST_CASE(TestPointExpThatIsStdRegion)
+{
+    SpatialDomains::PointGeomUniquePtr v0(
+        new SpatialDomains::PointGeom(3u, 0u, -1.0, -1.0, -1.0));
+
+    Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
+        Nektar::LibUtilities::eGaussLobattoLegendre;
+    Nektar::LibUtilities::BasisType basisTypeDir1 =
+        Nektar::LibUtilities::eModified_A;
+    unsigned int numQuadPoints = 1;
+    unsigned int numModes      = 1;
+    const Nektar::LibUtilities::PointsKey quadPointsKeyDir1(numQuadPoints,
+                                                            quadPointsTypeDir1);
+    const Nektar::LibUtilities::BasisKey basisKeyDir1(basisTypeDir1, numModes,
+                                                      quadPointsKeyDir1);
+
+    Nektar::LocalRegions::PointExpSharedPtr pointExp =
+        MemoryManager<Nektar::LocalRegions::PointExp>::AllocateSharedPtr(
+            v0.get());
+
+    NekDouble c0 = 0, c1 = 0, c2 = 0;
+    pointExp->GetCoords(c0, c1, c2);
+
+    std::shared_ptr<StdRegions::StdPointExp> stdPoint =
+        std::dynamic_pointer_cast<StdRegions::StdPointExp>(pointExp);
+
+    Array<OneD, NekDouble> c0_arr =
+        Array<OneD, NekDouble>(pointExp->GetTotPoints());
+    Array<OneD, NekDouble> c1_arr =
+        Array<OneD, NekDouble>(pointExp->GetTotPoints());
+    Array<OneD, NekDouble> c2_arr =
+        Array<OneD, NekDouble>(pointExp->GetTotPoints());
+    stdPoint->GetCoords(c0_arr, c1_arr, c2_arr);
+
+    double epsilon = 1.0e-8;
+    BOOST_CHECK_CLOSE(c0, -1.0, epsilon);
+    BOOST_CHECK_CLOSE(c0_arr[0], -1.0, epsilon);
+
+    // Get geometry type and check that it is always Regular
+    auto gtype = pointExp->GetMetricInfo()->GetGtype();
+    BOOST_CHECK_EQUAL(gtype, SpatialDomains::eRegular);
+
+    // Get jacobian and check it is equal to one
+    auto jac = pointExp->GetMetricInfo()->GetJac(pointExp->GetPointsKeys());
+    BOOST_CHECK_CLOSE(jac[0], 1.0, epsilon);
+}
+
 } // namespace Nektar::HexExpTests

@@ -36,6 +36,7 @@
 
 #include <SpatialDomains/PointGeom.h>
 #include <SpatialDomains/SegGeom.h>
+#include <StdRegions/StdPointExp.h>
 #include <StdRegions/StdRegions.hpp>
 
 namespace Nektar::SpatialDomains
@@ -216,6 +217,20 @@ bool operator!=(const PointGeom *x, const PointGeom &y)
 
 void PointGeom::v_GenGeomFactors()
 {
+    if (!m_setupState)
+    {
+        m_xmap = MemoryManager<StdRegions::StdPointExp>::AllocateSharedPtr();
+        SetUpCoeffs(m_xmap->GetNcoeffs());
+        m_setupState = true;
+    }
+
+    if (m_geomFactorsState != ePtsFilled)
+    {
+        SpatialDomains::GeomType gType = eRegular;
+        m_geomFactors = MemoryManager<GeomFactors>::AllocateSharedPtr(
+            gType, m_coordim, m_xmap, m_coeffs);
+        m_geomFactorsState = ePtsFilled;
+    }
 }
 
 } // namespace Nektar::SpatialDomains
