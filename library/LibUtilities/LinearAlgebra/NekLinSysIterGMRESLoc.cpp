@@ -63,7 +63,7 @@ NekLinSysIterGMRESLoc::NekLinSysIterGMRESLoc(
     m_KrylovMaxHessMatBand = pKey.m_KrylovMaxHessMatBand;
 
     m_maxrestart       = ceil(NekDouble(m_NekLinSysMaxIterations) /
-                              NekDouble(pKey.m_LinSysMaxStorage));
+                        NekDouble(pKey.m_LinSysMaxStorage));
     m_LinSysMaxStorage = min(m_NekLinSysMaxIterations, pKey.m_LinSysMaxStorage);
 
     m_GMRESCentralDifference = pKey.m_GMRESCentralDifference;
@@ -172,18 +172,14 @@ int NekLinSysIterGMRESLoc::DoGMRES(const int nLocal,
 
         if (m_root)
         {
-            int nwidthcolm = 13;
-
-            cout << std::scientific << std::setw(nwidthcolm)
-                 << std::setprecision(nwidthcolm - 8)
-                 << "       GMRES iterations made = " << m_totalIterations
+            cout << "GMRES iterations made = " << m_totalIterations
                  << " using tolerance of " << m_NekLinSysTolerance
                  << " (error = " << sqrt(eps * m_prec_factor / m_rhs_magnitude)
+                 << ", rhs_mag = " << sqrt(m_rhs_magnitude)
+                 << " with (GMRES eps = " << eps << " REAL eps= " << eps1
                  << ")";
 
-            cout << " WITH (GMRES eps = " << eps << " REAL eps= " << eps1
-                 << ")";
-
+            // Append appropriate message when finalising GMRES
             if (m_converged)
             {
                 cout << " CONVERGED" << endl;
