@@ -61,7 +61,7 @@ protected:
 
     int v_GetShapeDimension() const final
     {
-        return 1;
+        return 0;
     }
 
     int v_GetNtraces() const final

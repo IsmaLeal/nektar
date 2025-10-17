@@ -241,6 +241,12 @@ Array<OneD, NekDouble> GeomFactors::ComputeJac(
              "Dimension of target point distribution does not match "
              "expansion dimension.");
 
+    // A point always has a unit jacobian
+    if (m_expDim == 0)
+    {
+        return Array<OneD, NekDouble>(1, 1.0);
+    }
+
     int i = 0, j = 0, k = 0, l = 0;
     int ptsTgt = 1;
 
