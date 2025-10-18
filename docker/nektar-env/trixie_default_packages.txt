@@ -1,15 +1,10 @@
 build-essential
 ccache
-clang-tidy-16
-clang-tools-16
-clang-format-16
 cmake
-git-core
 libboost-iostreams-dev
 libboost-program-options-dev
 libboost-system-dev
 liblapack-dev
 libscotch-dev
 libtinyxml-dev
-patch
 zlib1g-dev

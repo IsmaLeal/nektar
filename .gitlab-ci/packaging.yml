@@ -408,6 +408,48 @@ package-source-doc-deploy:
 #    - package-debian-unstable-build
 
 ##
+## Debian trixie
+##
+package-debian-trixie-env:
+  <<: *package-env-build
+
+package-debian-trixie-build:
+  <<: *package-deb-build
+  needs: ["package-debian-trixie-env"]
+  variables:
+    image_name: pkg-env:debian-trixie
+
+package-debian-trixie-test:
+  <<: *package-deb-test
+  needs: ["package-debian-trixie-build"]
+  dependencies:
+    - package-debian-trixie-build
+  variables:
+    image_name: debian:trixie
+
+package-debian-trixie-deploy-dev:
+  <<: *package-deb-deploy-dev
+  needs: ["package-debian-trixie-build", "package-debian-trixie-test"]
+  dependencies:
+    - package-debian-trixie-build
+
+package-debian-trixie-deploy:
+  <<: *package-deb-deploy
+  needs: ["package-debian-trixie-build", "package-debian-trixie-deploy-dev"]
+  dependencies:
+    - package-debian-trixie-build
+
+package-debian-trixie-cleanup:
+  <<: *package-env-cleanup
+  needs: 
+    - job: package-debian-trixie-deploy-dev
+    - job: package-debian-trixie-deploy
+      optional: true
+  variables:
+    image_name: pkg-env:debian-trixie
+
+
+##
 ## Debian bookworm
 ##
 package-debian-bookworm-env:

@@ -33,9 +33,11 @@ v5.9.0
 - Minor Bug-fix for industrial pipeline !2057 (!2135)
 - Scaling the mesh nodes (!2115)
 - Improved Isoparametric Splitting for O-type Prisms "bl" legacy, which kept as "blold" (!1757)
-**CI**
+
+**CI and Packaging**
 - Disable CWIPI on Fedora (!2199)
 - Update Annulus test to run more efficiently (!1220)
+- Add testing and packaging for Debian Trixie (!2249)
 
 v5.8.0
 ------
