@@ -69,9 +69,9 @@ void InputMCF::ParseFile(string nm)
     vector<string> filename;
     filename.push_back(nm);
 
-    char *prgname = (char *)"NekMesh";
+    char *prgname[] = {(char *)"NekMesh", nullptr};
     LibUtilities::SessionReaderSharedPtr pSession =
-        LibUtilities::SessionReader::CreateInstance(1, &prgname, filename);
+        LibUtilities::SessionReader::CreateInstance(1, prgname, filename);
     pSession->InitSession();
 
     auto comm = pSession->GetComm();

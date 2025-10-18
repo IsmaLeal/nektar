@@ -237,38 +237,82 @@ include:
   <<: *build-env-debian-template-default
   stage: build-env-full
 
+debian-trixie-default-build-env:
+  <<: *build-env-debian-template-default
+
+debian-trixie-full-build-env:
+  <<: *build-env-debian-template-full
+  needs: ["debian-trixie-default-build-env"]
+  variables:
+    PIP_FLAGS: "--break-system-packages"
+
 debian-bookworm-default-build-env:
   <<: *build-env-debian-template-default
 
 debian-bookworm-full-build-env:
   <<: *build-env-debian-template-full
-  needs: ["debian-bookworm-default-build-env"]
   variables:
     PIP_FLAGS: "--break-system-packages"
+  needs: ["debian-bookworm-default-build-env"]
 
-debian-bullseye-default-build-env:
-  <<: *build-env-debian-template-default
-
-debian-bullseye-full-build-env:
-  <<: *build-env-debian-template-full
-  variables:
-    REMOVE_UCX: 1
-  needs: ["debian-bullseye-default-build-env"]
-
-debian-bullseye-performance-build-env:
+debian-bookworm-performance-build-env:
   <<: *build-env-debian-template-performance
   tags:
     - perf
+
+debian-trixie-default-build-and-test:
+  <<: *build-and-test-template
+  needs: ["debian-trixie-default-build-env"]
+
+debian-trixie-full-build-and-test:
+  <<: *build-and-test-template
+  needs: ["debian-trixie-full-build-env"]
+  variables:
+    DISABLE_CWIPI: true
+    GIT_SUBMODULE_STRATEGY: recursive
+
+debian-trixie-full-avx2-build-and-test:
+  <<: *build-and-test-template
+  needs: ["debian-trixie-full-build-env"]
+  variables:
+    BUILD_SIMD: avx2
+    DISABLE_CWIPI: true
+  tags:
+    - avx2
+
+debian-trixie-full-avx512-build-and-test:
+  <<: *build-and-test-template
+  needs: ["debian-trixie-full-build-env"]
+  variables:
+    BUILD_SIMD: avx512
+    DISABLE_CWIPI: true
+  tags:
+    - avx512
+
+debian-trixie-full-clang19-build-and-test:
+  <<: *build-and-test-template
+  needs: ["debian-trixie-full-build-env"]
+  variables:
+    BUILD_CC: clang-19
+    BUILD_CXX: clang++-19
+    DISABLE_CWIPI: true
 
 debian-bookworm-default-build-and-test:
   <<: *build-and-test-template
   needs: ["debian-bookworm-default-build-env"]
 
+debian-bookworm-performance-build-and-test:
+  <<: *build-and-test-template
+  stage: build-and-test
+  needs: ["debian-bookworm-performance-build-env"]
+  tags:
+    - perf
+  timeout: 1h
+  allow_failure: true
+
 debian-bookworm-full-build-and-test:
   <<: *build-and-test-template
   needs: ["debian-bookworm-full-build-env"]
-  variables:
-    GIT_SUBMODULE_STRATEGY: recursive
 
 debian-bookworm-full-avx2-build-and-test:
   <<: *build-and-test-template
@@ -286,47 +330,27 @@ debian-bookworm-full-avx512-build-and-test:
   tags:
     - avx512
 
-debian-bookworm-full-clang15-build-and-test:
-  <<: *build-and-test-template
-  needs: ["debian-bookworm-full-build-env"]
-  variables:
-    BUILD_CC: clang-15
-    BUILD_CXX: clang++-15
-
-debian-bullseye-default-build-and-test:
-  <<: *build-and-test-template
-  needs: ["debian-bullseye-default-build-env"]
-
-debian-bullseye-performance-build-and-test:
-  <<: *build-and-test-template
-  stage: build-and-test
-  needs: ["debian-bullseye-performance-build-env"]
-  tags:
-    - perf
-  timeout: 1h
-  allow_failure: true
-
-debian-bullseye-full-build-and-test:
-  <<: *build-and-test-template
-  needs: ["debian-bullseye-full-build-env"]
-
-debian-bullseye-full-avx2-build-and-test:
-  <<: *build-and-test-template
-  needs: ["debian-bullseye-full-build-env"]
-  variables:
-    BUILD_SIMD: avx2
-  tags:
-    - avx2
-
-debian-bullseye-full-avx512-build-and-test:
-  <<: *build-and-test-template
-  needs: ["debian-bullseye-full-build-env"]
-  variables:
-    BUILD_SIMD: avx512
-  tags:
-    - avx512
-
 # COMPILER WARNINGS
+debian-trixie-default-warnings:
+  <<: *compiler-warning-template
+  needs: ["debian-trixie-default-build-and-test"]
+
+debian-trixie-full-warnings:
+  <<: *compiler-warning-template
+  needs: ["debian-trixie-full-build-and-test"]
+
+debian-trixie-full-avx2-warnings:
+  <<: *compiler-warning-template
+  needs: ["debian-trixie-full-avx2-build-and-test"]
+
+debian-trixie-full-avx512-warnings:
+  <<: *compiler-warning-template
+  needs: ["debian-trixie-full-avx512-build-and-test"]
+
+debian-trixie-full-clang19-warnings:
+  <<: *compiler-warning-template
+  needs: ["debian-trixie-full-clang19-build-and-test"]
+
 debian-bookworm-default-warnings:
   <<: *compiler-warning-template
   needs: ["debian-bookworm-default-build-and-test"]
@@ -343,67 +367,49 @@ debian-bookworm-full-avx512-warnings:
   <<: *compiler-warning-template
   needs: ["debian-bookworm-full-avx512-build-and-test"]
 
-debian-bookworm-full-clang15-warnings:
+debian-bookworm-performance-warnings:
   <<: *compiler-warning-template
-  needs: ["debian-bookworm-full-clang15-build-and-test"]
-
-debian-bullseye-default-warnings:
-  <<: *compiler-warning-template
-  needs: ["debian-bullseye-default-build-and-test"]
-
-debian-bullseye-full-warnings:
-  <<: *compiler-warning-template
-  needs: ["debian-bullseye-full-build-and-test"]
-
-debian-bullseye-full-avx2-warnings:
-  <<: *compiler-warning-template
-  needs: ["debian-bullseye-full-avx2-build-and-test"]
-
-debian-bullseye-full-avx512-warnings:
-  <<: *compiler-warning-template
-  needs: ["debian-bullseye-full-avx512-build-and-test"]
-
-debian-bullseye-performance-warnings:
-  <<: *compiler-warning-template
-  needs: ["debian-bullseye-performance-build-and-test"]
+  needs: ["debian-bookworm-performance-build-and-test"]
 
 # CODE FORMATTING
-debian-bullseye-clang-format:
+debian-bookworm-clang-format:
   <<: *clang-format-template
   needs: []
 
 ## CLANG-TIDY
-debian-bullseye-clang-tidy:
+debian-bookworm-clang-tidy:
   <<: *clang-tidy-template
-  image: $CI_REGISTRY_IMAGE:env-debian-bullseye-full
-  needs: ["debian-bullseye-full-build-env"]
+  image: $CI_REGISTRY_IMAGE:env-debian-bookworm-full
+  needs: ["debian-bookworm-full-build-env"]
 
-debian-bullseye-header-format:
+debian-bookworm-header-format:
   <<: *header-format-template
   needs: []
 
-debian-bullseye-xml-format:
+debian-bookworm-xml-format:
   <<: *xml-format-template
   needs: []
 
 # DOCUMENTATION
-debian-bookworm-documentation-build-env:
+debian-trixie-documentation-build-env:
   <<: *execution-conditions
   image: docker:19.03.6
   stage: build-env-full
   script:
+    - OS_DISTRO=$(echo $CI_JOB_NAME | cut -d- -f 1)
+    - OS_VERSION=$(echo $CI_JOB_NAME | cut -d- -f 2)
     - export IMAGE=$CI_REGISTRY_IMAGE:env-documentation
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - sed -e "s %%BASE_IMAGE%% $CI_REGISTRY_IMAGE g" docker/nektar-env/Dockerfile_debian_documentation > Dockerfile
+    - sed -e "s %%OS_DISTRO%% $OS_DISTRO g" -e "s %%OS_VERSION%% $OS_VERSION g" -e "s %%REGISTRY%% $CI_REGISTRY_IMAGE g" docker/nektar-env/Dockerfile_${OS_DISTRO}_documentation > Dockerfile
     - docker pull $IMAGE || true
     - docker build --pull -t $IMAGE .
     - docker push $IMAGE
-  needs: ["debian-bookworm-default-build-env"]
+  needs: ["debian-trixie-default-build-env"]
 
 .build-documentation-template: &build-documentation-template
   <<: *build-and-test-template
   image: $CI_REGISTRY_IMAGE:env-documentation
-  needs: ["debian-bookworm-documentation-build-env"]
+  needs: ["debian-trixie-documentation-build-env"]
 
 user-guide-build:
   <<: *build-documentation-template
@@ -478,7 +484,7 @@ ubuntu-jammy-default-build-and-test:
 
 ubuntu-jammy-full-build-and-test:
   <<: *build-and-test-template
-  needs: ["ubuntu-focal-full-build-env"]
+  needs: ["ubuntu-jammy-full-build-env"]
 
 ubuntu-focal-default-build-and-test:
   <<: *build-and-test-template
