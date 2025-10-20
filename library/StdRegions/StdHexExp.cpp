@@ -124,13 +124,6 @@ void StdHexExp::v_StdPhysDeriv(const Array<OneD, const NekDouble> &inarray,
     StdHexExp::v_PhysDeriv(inarray, out_d0, out_d1, out_d2);
 }
 
-void StdHexExp::v_StdPhysDeriv(const int dir,
-                               const Array<OneD, const NekDouble> &inarray,
-                               Array<OneD, NekDouble> &outarray)
-{
-    StdHexExp::v_PhysDeriv(dir, inarray, outarray);
-}
-
 /**
  * Backward transformation is three dimensional tensorial expansion
  * \f$ u (\xi_{1i}, \xi_{2j}, \xi_{3k})

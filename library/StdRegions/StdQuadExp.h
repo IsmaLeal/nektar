@@ -70,9 +70,6 @@ protected:
         const Array<OneD, const NekDouble> &inarray,
         Array<OneD, NekDouble> &out_d0, Array<OneD, NekDouble> &out_d1,
         Array<OneD, NekDouble> &out_d2 = NullNekDouble1DArray) override;
-    STD_REGIONS_EXPORT void v_StdPhysDeriv(
-        const int dir, const Array<OneD, const NekDouble> &inarray,
-        Array<OneD, NekDouble> &outarray) override;
 
     //---------------------------------------
     // Transforms

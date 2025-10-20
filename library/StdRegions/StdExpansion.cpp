@@ -1252,14 +1252,6 @@ void StdExpansion::v_StdPhysDeriv(
     NEKERROR(ErrorUtil::efatal, "Method does not exist for this shape");
 }
 
-void StdExpansion::v_StdPhysDeriv(
-    [[maybe_unused]] const int dir,
-    [[maybe_unused]] const Array<OneD, const NekDouble> &inarray,
-    [[maybe_unused]] Array<OneD, NekDouble> &outarray)
-{
-    NEKERROR(ErrorUtil::efatal, "Method does not exist for this shape");
-}
-
 NekDouble StdExpansion::v_PhysEvaluateBasis(
     [[maybe_unused]] const Array<OneD, const NekDouble> &coords,
     [[maybe_unused]] int mode)

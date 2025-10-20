@@ -953,10 +953,10 @@ void AdvectionFR::v_Advect(
                 {
                     phys_offset = fields[0]->GetPhys_Offset(n);
                     fields[0]->GetExp(n)->StdPhysDeriv(
-                        0, auxArray1 = f_hat + phys_offset,
+                        auxArray1 = f_hat + phys_offset,
                         auxArray2 = DfluxvectorX1 + phys_offset);
                     fields[0]->GetExp(n)->StdPhysDeriv(
-                        1, auxArray1 = g_hat + phys_offset,
+                        auxArray1 = g_hat + phys_offset, NullNekDouble1DArray,
                         auxArray2 = DfluxvectorX2 + phys_offset);
                 }
 
