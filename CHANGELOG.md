@@ -21,6 +21,7 @@ v5.9.0
 - Use MPI_Comm_split instead of MPI_Cart_create and MPI_Cart_sub (!2250)
 - Fix handling of PointGeom and PointExp for Collections and Fields (!2252)
 - Tidy-up GMRES verbose output (!1804)
+- Remove duplicate StdPhysDeriv overload function (!2254)
 
 **ADRSolver**
 - Add implicit UnsteadyAdvection for continuous Galerkin (!2231)

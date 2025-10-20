@@ -198,13 +198,6 @@ void StdTriExp::v_StdPhysDeriv(const Array<OneD, const NekDouble> &inarray,
     StdTriExp::v_PhysDeriv(inarray, out_d0, out_d1);
 }
 
-void StdTriExp::v_StdPhysDeriv(const int dir,
-                               const Array<OneD, const NekDouble> &inarray,
-                               Array<OneD, NekDouble> &outarray)
-{
-    StdTriExp::v_PhysDeriv(dir, inarray, outarray);
-}
-
 //---------------------------------------
 // Transforms
 //---------------------------------------

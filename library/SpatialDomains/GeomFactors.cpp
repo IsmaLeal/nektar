@@ -189,7 +189,20 @@ DerivStorage GeomFactors::ComputeDeriv(
         {
             d_map[j][i] = Array<OneD, NekDouble>(nqtot_map);
             deriv[j][i] = Array<OneD, NekDouble>(nqtot_tbasis);
-            m_xmap->StdPhysDeriv(j, tmp, d_map[j][i]);
+        }
+
+        switch (m_expDim)
+        {
+            case 1:
+                m_xmap->StdPhysDeriv(tmp, d_map[0][i]);
+                break;
+            case 2:
+                m_xmap->StdPhysDeriv(tmp, d_map[0][i], d_map[1][i]);
+                break;
+            case 3:
+                m_xmap->StdPhysDeriv(tmp, d_map[0][i], d_map[1][i],
+                                     d_map[2][i]);
+                break;
         }
     }
 

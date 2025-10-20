@@ -896,13 +896,6 @@ public:
         v_StdPhysDeriv(inarray, out_d0, out_d1, out_d2);
     }
 
-    void StdPhysDeriv(const int dir,
-                      const Array<OneD, const NekDouble> &inarray,
-                      Array<OneD, NekDouble> &outarray)
-    {
-        v_StdPhysDeriv(dir, inarray, outarray);
-    }
-
     /** \brief This function evaluates the expansion at a single
      *  (arbitrary) point of the domain
      *
@@ -1612,10 +1605,6 @@ private:
         const Array<OneD, const NekDouble> &inarray,
         Array<OneD, NekDouble> &out_d1, Array<OneD, NekDouble> &out_d2,
         Array<OneD, NekDouble> &out_d3);
-
-    STD_REGIONS_EXPORT virtual void v_StdPhysDeriv(
-        const int dir, const Array<OneD, const NekDouble> &inarray,
-        Array<OneD, NekDouble> &outarray);
 
     STD_REGIONS_EXPORT virtual NekDouble v_PhysEvaluate(
         const Array<OneD, const NekDouble> &coords,

@@ -1065,11 +1065,12 @@ void DiffusionLFRNS::v_Diffuse(
                         phys_offset = fields[0]->GetPhys_Offset(n);
 
                         fields[i]->GetExp(n)->StdPhysDeriv(
-                            0, auxArray1 = u1_hat + phys_offset,
+                            auxArray1 = u1_hat + phys_offset,
                             auxArray2 = m_tmp1[i][j] + phys_offset);
 
                         fields[i]->GetExp(n)->StdPhysDeriv(
-                            1, auxArray1 = u2_hat + phys_offset,
+                            auxArray1 = u2_hat + phys_offset,
+                            NullNekDouble1DArray,
                             auxArray2 = m_tmp2[i][j] + phys_offset);
                     }
 
@@ -1168,11 +1169,11 @@ void DiffusionLFRNS::v_Diffuse(
                     phys_offset = fields[0]->GetPhys_Offset(n);
 
                     fields[0]->GetExp(n)->StdPhysDeriv(
-                        0, auxArray1 = f_hat + phys_offset,
+                        auxArray1 = f_hat + phys_offset,
                         auxArray2 = m_DD1[i][0] + phys_offset);
 
                     fields[0]->GetExp(n)->StdPhysDeriv(
-                        1, auxArray1 = g_hat + phys_offset,
+                        auxArray1 = g_hat + phys_offset, NullNekDouble1DArray,
                         auxArray2 = m_DD1[i][1] + phys_offset);
                 }
 

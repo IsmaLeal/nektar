@@ -180,13 +180,6 @@ void StdPrismExp::v_StdPhysDeriv(const Array<OneD, const NekDouble> &inarray,
     StdPrismExp::v_PhysDeriv(inarray, out_d0, out_d1, out_d2);
 }
 
-void StdPrismExp::v_StdPhysDeriv(const int dir,
-                                 const Array<OneD, const NekDouble> &inarray,
-                                 Array<OneD, NekDouble> &outarray)
-{
-    StdPrismExp::v_PhysDeriv(dir, inarray, outarray);
-}
-
 //---------------------------------------
 // Transforms
 //---------------------------------------
