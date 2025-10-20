@@ -80,6 +80,8 @@ public:
                                             NekDouble z = 0,
                                             NekDouble t = 0) const;
 
+    LIB_UTILITIES_EXPORT NekDouble Evaluate(std::vector<NekDouble> point) const;
+
     LIB_UTILITIES_EXPORT void Evaluate(const Array<OneD, const NekDouble> &x,
                                        const Array<OneD, const NekDouble> &y,
                                        const Array<OneD, const NekDouble> &z,
