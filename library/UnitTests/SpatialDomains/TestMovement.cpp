@@ -50,8 +50,8 @@ LibUtilities::SessionReaderSharedPtr CreateSession()
     return LibUtilities::SessionReader::CreateInstance(1, args);
 }
 
-const std::string angVelStr = "0.1*t", xEqnStr = "0.1*x - 0.1*t",
-                  yEqnStr = "0.1*y^2 - x", zEqnStr = "sqrt(t)";
+const std::string angVelStr = "0.1*t";
+
 std::vector<std::string> velocityStr     = {"1.0", "2.0", "3.0"};
 std::vector<std::string> displacementStr = {"1.0", "2.0", "3.0"};
 const NekPoint<NekDouble> origin         = {1., 2., 3.};

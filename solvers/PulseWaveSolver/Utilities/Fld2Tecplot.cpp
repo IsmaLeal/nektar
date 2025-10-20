@@ -45,7 +45,7 @@ using namespace std;
 using namespace Nektar;
 using namespace Nektar::SolverUtils;
 
-static std::string SetToOneD =
+[[maybe_unused]] static std::string SetToOneD =
     LibUtilities::SessionReader::RegisterCmdLineArgument(
         "SetToOneSpaceDimension", "1", "Redefine mesh to be aligned to x-axis");
 

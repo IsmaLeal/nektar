@@ -75,9 +75,9 @@ void InputNekpp::Process()
     LibUtilities::CommSharedPtr pComm =
         m_mesh->m_comm ? m_mesh->m_comm : LibUtilities::CommSharedPtr();
 
-    char *prgname = const_cast<char *>("NekMesh");
+    char *prgname[] = {(char *)"NekMesh", nullptr};
     LibUtilities::SessionReaderSharedPtr pSession =
-        LibUtilities::SessionReader::CreateInstance(1, &prgname, filename);
+        LibUtilities::SessionReader::CreateInstance(1, prgname, filename);
     SpatialDomains::MeshGraphSharedPtr graph =
         SpatialDomains::MeshGraphIO::Read(pSession);
 
