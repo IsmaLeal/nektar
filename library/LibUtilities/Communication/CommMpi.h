@@ -118,50 +118,51 @@ protected:
     void v_Block() final;
     double v_Wtime() final;
 
-    void v_Send(void *buf, int count, CommDataType dt, int dest) final;
+    void v_Send(const void *buf, int count, CommDataType dt, int dest) final;
     void v_Recv(void *buf, int count, CommDataType dt, int source) final;
-    void v_SendRecv(void *sendbuf, int sendcount, CommDataType sendtype,
+    void v_SendRecv(const void *sendbuf, int sendcount, CommDataType sendtype,
                     int dest, void *recvbuf, int recvcount,
                     CommDataType recvtype, int source) final;
 
     void v_AllReduce(void *buf, int count, CommDataType dt,
                      enum ReduceOperator pOp) final;
 
-    void v_AlltoAll(void *sendbuf, int sendcount, CommDataType sendtype,
+    void v_AlltoAll(const void *sendbuf, int sendcount, CommDataType sendtype,
                     void *recvbuf, int recvcount, CommDataType recvtype) final;
-    void v_AlltoAllv(void *sendbuf, int sendcounts[], int sensdispls[],
-                     CommDataType sendtype, void *recvbuf, int recvcounts[],
-                     int rdispls[], CommDataType recvtype) final;
+    void v_AlltoAllv(const void *sendbuf, const int *sendcounts,
+                     const int *senddispls, CommDataType sendtype,
+                     void *recvbuf, const int *recvcounts,
+                     const int *recvdispls, CommDataType recvtype) final;
 
-    void v_AllGather(void *sendbuf, int sendcount, CommDataType sendtype,
+    void v_AllGather(const void *sendbuf, int sendcount, CommDataType sendtype,
                      void *recvbuf, int recvcount, CommDataType recvtype) final;
-    void v_AllGatherv(void *sendbuf, int sendcount, CommDataType sendtype,
-                      void *recvbuf, int recvcounts[], int rdispls[],
-                      CommDataType recvtype) final;
-    void v_AllGatherv(void *recvbuf, int recvcounts[], int rdispls[],
-                      CommDataType recvtype) final;
+    void v_AllGatherv(const void *sendbuf, int sendcount, CommDataType sendtype,
+                      void *recvbuf, const int *recvcounts,
+                      const int *recvdispls, CommDataType recvtype) final;
+    void v_AllGatherv(void *recvbuf, const int *recvcounts,
+                      const int *recvdispls, CommDataType recvtype) final;
 
     void v_Bcast(void *buffer, int count, CommDataType dt, int root) final;
-    void v_Gather(void *sendbuf, int sendcount, CommDataType sendtype,
+    void v_Gather(const void *sendbuf, int sendcount, CommDataType sendtype,
                   void *recvbuf, int recvcount, CommDataType recvtype,
                   int root) final;
-    void v_Scatter(void *sendbuf, int sendcount, CommDataType sendtype,
+    void v_Scatter(const void *sendbuf, int sendcount, CommDataType sendtype,
                    void *recvbuf, int recvcount, CommDataType recvtype,
                    int root) final;
 
-    void v_DistGraphCreateAdjacent(int indegree, const int sources[],
-                                   const int sourceweights[],
-                                   int reorder) final;
-    void v_NeighborAlltoAllv(void *sendbuf, int sendcounts[], int sensdispls[],
-                             CommDataType sendtype, void *recvbuf,
-                             int recvcounts[], int rdispls[],
+    void v_DistGraphCreateAdjacent(int indegree, const int *sources,
+                                   const int *sourceweights, int reorder) final;
+    void v_NeighborAlltoAllv(const void *sendbuf, const int *sendcounts,
+                             const int *senddispls, CommDataType sendtype,
+                             void *recvbuf, const int *recvcounts,
+                             const int *recvdispls,
                              CommDataType recvtype) final;
 
-    void v_Irsend(void *buf, int count, CommDataType dt, int dest,
+    void v_Irsend(const void *buf, int count, CommDataType dt, int dest,
                   CommRequestSharedPtr request, int loc) final;
-    void v_Isend(void *buf, int count, CommDataType dt, int dest,
+    void v_Isend(const void *buf, int count, CommDataType dt, int dest,
                  CommRequestSharedPtr request, int loc) final;
-    void v_SendInit(void *buf, int count, CommDataType dt, int dest,
+    void v_SendInit(const void *buf, int count, CommDataType dt, int dest,
                     CommRequestSharedPtr request, int loc) final;
     void v_Irecv(void *buf, int count, CommDataType dt, int source,
                  CommRequestSharedPtr request, int loc) final;

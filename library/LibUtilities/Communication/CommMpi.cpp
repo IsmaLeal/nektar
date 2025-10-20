@@ -191,7 +191,7 @@ double CommMpi::v_Wtime()
 /**
  *
  */
-void CommMpi::v_Send(void *buf, int count, CommDataType dt, int dest)
+void CommMpi::v_Send(const void *buf, int count, CommDataType dt, int dest)
 {
     if (MPISYNC)
     {
@@ -214,9 +214,9 @@ void CommMpi::v_Recv(void *buf, int count, CommDataType dt, int source)
 /**
  *
  */
-void CommMpi::v_SendRecv(void *sendbuf, int sendcount, CommDataType sendtype,
-                         int dest, void *recvbuf, int recvcount,
-                         CommDataType recvtype, int source)
+void CommMpi::v_SendRecv(const void *sendbuf, int sendcount,
+                         CommDataType sendtype, int dest, void *recvbuf,
+                         int recvcount, CommDataType recvtype, int source)
 {
     MPI_Status status;
     int retval = MPI_Sendrecv(sendbuf, sendcount, sendtype, dest, 0, recvbuf,
@@ -259,8 +259,9 @@ void CommMpi::v_AllReduce(void *buf, int count, CommDataType dt,
 /**
  *
  */
-void CommMpi::v_AlltoAll(void *sendbuf, int sendcount, CommDataType sendtype,
-                         void *recvbuf, int recvcount, CommDataType recvtype)
+void CommMpi::v_AlltoAll(const void *sendbuf, int sendcount,
+                         CommDataType sendtype, void *recvbuf, int recvcount,
+                         CommDataType recvtype)
 {
     int retval = MPI_Alltoall(sendbuf, sendcount, sendtype, recvbuf, recvcount,
                               recvtype, m_comm);
@@ -271,13 +272,14 @@ void CommMpi::v_AlltoAll(void *sendbuf, int sendcount, CommDataType sendtype,
 /**
  *
  */
-void CommMpi::v_AlltoAllv(void *sendbuf, int sendcounts[], int sdispls[],
-                          CommDataType sendtype, void *recvbuf,
-                          int recvcounts[], int rdispls[],
-                          CommDataType recvtype)
+void CommMpi::v_AlltoAllv(const void *sendbuf, const int *sendcounts,
+                          const int *senddispls, CommDataType sendtype,
+                          void *recvbuf, const int *recvcounts,
+                          const int *recvdispls, CommDataType recvtype)
 {
-    int retval = MPI_Alltoallv(sendbuf, sendcounts, sdispls, sendtype, recvbuf,
-                               recvcounts, rdispls, recvtype, m_comm);
+    int retval =
+        MPI_Alltoallv(sendbuf, sendcounts, senddispls, sendtype, recvbuf,
+                      recvcounts, recvdispls, recvtype, m_comm);
 
     ASSERTL0(retval == MPI_SUCCESS, "MPI error performing All-to-All-v.");
 }
@@ -285,8 +287,9 @@ void CommMpi::v_AlltoAllv(void *sendbuf, int sendcounts[], int sdispls[],
 /**
  *
  */
-void CommMpi::v_AllGather(void *sendbuf, int sendcount, CommDataType sendtype,
-                          void *recvbuf, int recvcount, CommDataType recvtype)
+void CommMpi::v_AllGather(const void *sendbuf, int sendcount,
+                          CommDataType sendtype, void *recvbuf, int recvcount,
+                          CommDataType recvtype)
 {
     int retval = MPI_Allgather(sendbuf, sendcount, sendtype, recvbuf, recvcount,
                                recvtype, m_comm);
@@ -297,12 +300,13 @@ void CommMpi::v_AllGather(void *sendbuf, int sendcount, CommDataType sendtype,
 /**
  *
  */
-void CommMpi::v_AllGatherv(void *sendbuf, int sendcount, CommDataType sendtype,
-                           void *recvbuf, int recvcounts[], int rdispls[],
+void CommMpi::v_AllGatherv(const void *sendbuf, int sendcount,
+                           CommDataType sendtype, void *recvbuf,
+                           const int *recvcounts, const int *recvdispls,
                            CommDataType recvtype)
 {
     int retval = MPI_Allgatherv(sendbuf, sendcount, sendtype, recvbuf,
-                                recvcounts, rdispls, recvtype, m_comm);
+                                recvcounts, recvdispls, recvtype, m_comm);
 
     ASSERTL0(retval == MPI_SUCCESS, "MPI error performing Allgatherv.");
 }
@@ -310,11 +314,11 @@ void CommMpi::v_AllGatherv(void *sendbuf, int sendcount, CommDataType sendtype,
 /**
  *
  */
-void CommMpi::v_AllGatherv(void *recvbuf, int recvcounts[], int rdispls[],
-                           CommDataType recvtype)
+void CommMpi::v_AllGatherv(void *recvbuf, const int *recvcounts,
+                           const int *recvdispls, CommDataType recvtype)
 {
     int retval = MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, recvbuf,
-                                recvcounts, rdispls, recvtype, m_comm);
+                                recvcounts, recvdispls, recvtype, m_comm);
 
     ASSERTL0(retval == MPI_SUCCESS, "MPI error performing Allgatherv.");
 }
@@ -332,9 +336,9 @@ void CommMpi::v_Bcast(void *buffer, int count, CommDataType dt, int root)
 /**
  *
  */
-void CommMpi::v_Gather(void *sendbuf, int sendcount, CommDataType sendtype,
-                       void *recvbuf, int recvcount, CommDataType recvtype,
-                       int root)
+void CommMpi::v_Gather(const void *sendbuf, int sendcount,
+                       CommDataType sendtype, void *recvbuf, int recvcount,
+                       CommDataType recvtype, int root)
 {
     int retval = MPI_Gather(sendbuf, sendcount, sendtype, recvbuf, recvcount,
                             recvtype, root, m_comm);
@@ -345,9 +349,9 @@ void CommMpi::v_Gather(void *sendbuf, int sendcount, CommDataType sendtype,
 /**
  *
  */
-void CommMpi::v_Scatter(void *sendbuf, int sendcount, CommDataType sendtype,
-                        void *recvbuf, int recvcount, CommDataType recvtype,
-                        int root)
+void CommMpi::v_Scatter(const void *sendbuf, int sendcount,
+                        CommDataType sendtype, void *recvbuf, int recvcount,
+                        CommDataType recvtype, int root)
 {
     int retval = MPI_Scatter(sendbuf, sendcount, sendtype, recvbuf, recvcount,
                              recvtype, root, m_comm);
@@ -359,8 +363,8 @@ void CommMpi::v_Scatter(void *sendbuf, int sendcount, CommDataType sendtype,
  *
  */
 void CommMpi::v_DistGraphCreateAdjacent(
-    [[maybe_unused]] int indegree, [[maybe_unused]] const int sources[],
-    [[maybe_unused]] const int sourceweights[], [[maybe_unused]] int reorder)
+    [[maybe_unused]] int indegree, [[maybe_unused]] const int *sources,
+    [[maybe_unused]] const int *sourceweights, [[maybe_unused]] int reorder)
 {
 #if MPI_VERSION < 3
     ASSERTL0(false, "MPI_Dist_graph_create_adjacent is not supported in your "
@@ -378,19 +382,22 @@ void CommMpi::v_DistGraphCreateAdjacent(
 /**
  *
  */
-void CommMpi::v_NeighborAlltoAllv(
-    [[maybe_unused]] void *sendbuf, [[maybe_unused]] int sendcounts[],
-    [[maybe_unused]] int sdispls[], [[maybe_unused]] CommDataType sendtype,
-    [[maybe_unused]] void *recvbuf, [[maybe_unused]] int recvcounts[],
-    [[maybe_unused]] int rdispls[], [[maybe_unused]] CommDataType recvtype)
+void CommMpi::v_NeighborAlltoAllv([[maybe_unused]] const void *sendbuf,
+                                  [[maybe_unused]] const int *sendcounts,
+                                  [[maybe_unused]] const int *senddispls,
+                                  [[maybe_unused]] CommDataType sendtype,
+                                  [[maybe_unused]] void *recvbuf,
+                                  [[maybe_unused]] const int *recvcounts,
+                                  [[maybe_unused]] const int *recvdispls,
+                                  [[maybe_unused]] CommDataType recvtype)
 {
 #if MPI_VERSION < 3
     ASSERTL0(false, "MPI_Neighbor_alltoallv is not supported in your "
                     "installed MPI version.");
 #else
-    int retval =
-        MPI_Neighbor_alltoallv(sendbuf, sendcounts, sdispls, sendtype, recvbuf,
-                               recvcounts, rdispls, recvtype, m_comm);
+    int retval = MPI_Neighbor_alltoallv(sendbuf, sendcounts, senddispls,
+                                        sendtype, recvbuf, recvcounts,
+                                        recvdispls, recvtype, m_comm);
 
     ASSERTL0(retval == MPI_SUCCESS, "MPI error performing NeighborAllToAllV.");
 #endif
@@ -399,7 +406,7 @@ void CommMpi::v_NeighborAlltoAllv(
 /**
  *
  */
-void CommMpi::v_Irsend(void *buf, int count, CommDataType dt, int dest,
+void CommMpi::v_Irsend(const void *buf, int count, CommDataType dt, int dest,
                        CommRequestSharedPtr request, int loc)
 {
     CommRequestMpiSharedPtr req =
@@ -410,7 +417,7 @@ void CommMpi::v_Irsend(void *buf, int count, CommDataType dt, int dest,
 /**
  *
  */
-void CommMpi::v_Isend(void *buf, int count, CommDataType dt, int dest,
+void CommMpi::v_Isend(const void *buf, int count, CommDataType dt, int dest,
                       CommRequestSharedPtr request, int loc)
 {
     CommRequestMpiSharedPtr req =
@@ -421,7 +428,7 @@ void CommMpi::v_Isend(void *buf, int count, CommDataType dt, int dest,
 /**
  *
  */
-void CommMpi::v_SendInit(void *buf, int count, CommDataType dt, int dest,
+void CommMpi::v_SendInit(const void *buf, int count, CommDataType dt, int dest,
                          CommRequestSharedPtr request, int loc)
 {
     CommRequestMpiSharedPtr req =
