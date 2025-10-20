@@ -114,7 +114,8 @@ NekDouble CommSerial::v_Wtime()
 /**
  *
  */
-void CommSerial::v_Send([[maybe_unused]] void *buf, [[maybe_unused]] int count,
+void CommSerial::v_Send([[maybe_unused]] const void *buf,
+                        [[maybe_unused]] int count,
                         [[maybe_unused]] CommDataType dt,
                         [[maybe_unused]] int dest)
 {
@@ -133,7 +134,7 @@ void CommSerial::v_Recv([[maybe_unused]] void *buf, [[maybe_unused]] int count,
  *
  */
 void CommSerial::v_SendRecv(
-    [[maybe_unused]] void *sendbuf, [[maybe_unused]] int sendcount,
+    [[maybe_unused]] const void *sendbuf, [[maybe_unused]] int sendcount,
     [[maybe_unused]] CommDataType sendtype, [[maybe_unused]] int dest,
     [[maybe_unused]] void *recvbuf, [[maybe_unused]] int recvcount,
     [[maybe_unused]] CommDataType recvtype, [[maybe_unused]] int source)
@@ -153,7 +154,7 @@ void CommSerial::v_AllReduce([[maybe_unused]] void *buf,
 /**
  *
  */
-void CommSerial::v_AlltoAll([[maybe_unused]] void *sendbuf,
+void CommSerial::v_AlltoAll([[maybe_unused]] const void *sendbuf,
                             [[maybe_unused]] int sendcount,
                             [[maybe_unused]] CommDataType sendtype,
                             [[maybe_unused]] void *recvbuf,
@@ -165,18 +166,21 @@ void CommSerial::v_AlltoAll([[maybe_unused]] void *sendbuf,
 /**
  *
  */
-void CommSerial::v_AlltoAllv(
-    [[maybe_unused]] void *sendbuf, [[maybe_unused]] int sendcounts[],
-    [[maybe_unused]] int sdispls[], [[maybe_unused]] CommDataType sendtype,
-    [[maybe_unused]] void *recvbuf, [[maybe_unused]] int recvcounts[],
-    [[maybe_unused]] int rdispls[], [[maybe_unused]] CommDataType recvtype)
+void CommSerial::v_AlltoAllv([[maybe_unused]] const void *sendbuf,
+                             [[maybe_unused]] const int *sendcounts,
+                             [[maybe_unused]] const int *senddispls,
+                             [[maybe_unused]] CommDataType sendtype,
+                             [[maybe_unused]] void *recvbuf,
+                             [[maybe_unused]] const int *recvcounts,
+                             [[maybe_unused]] const int *recvdispls,
+                             [[maybe_unused]] CommDataType recvtype)
 {
 }
 
 /**
  *
  */
-void CommSerial::v_AllGather([[maybe_unused]] void *sendbuf,
+void CommSerial::v_AllGather([[maybe_unused]] const void *sendbuf,
                              [[maybe_unused]] int sendcount,
                              [[maybe_unused]] CommDataType sendtype,
                              [[maybe_unused]] void *recvbuf,
@@ -188,12 +192,12 @@ void CommSerial::v_AllGather([[maybe_unused]] void *sendbuf,
 /**
  *
  */
-void CommSerial::v_AllGatherv([[maybe_unused]] void *sendbuf,
+void CommSerial::v_AllGatherv([[maybe_unused]] const void *sendbuf,
                               [[maybe_unused]] int sendcount,
                               [[maybe_unused]] CommDataType sendtype,
                               [[maybe_unused]] void *recvbuf,
-                              [[maybe_unused]] int recvcounts[],
-                              [[maybe_unused]] int rdispls[],
+                              [[maybe_unused]] const int *recvcounts,
+                              [[maybe_unused]] const int *recvdispls,
                               [[maybe_unused]] CommDataType recvtype)
 {
 }
@@ -202,8 +206,8 @@ void CommSerial::v_AllGatherv([[maybe_unused]] void *sendbuf,
  *
  */
 void CommSerial::v_AllGatherv([[maybe_unused]] void *recvbuf,
-                              [[maybe_unused]] int recvcounts[],
-                              [[maybe_unused]] int rdispls[],
+                              [[maybe_unused]] const int *recvcounts,
+                              [[maybe_unused]] const int *recvdispls,
                               [[maybe_unused]] CommDataType recvtype)
 {
 }
@@ -221,8 +225,9 @@ void CommSerial::v_Bcast([[maybe_unused]] void *buffer,
 /**
  *
  */
-void CommSerial::v_Gather(void *sendbuf, int sendcount, CommDataType sendtype,
-                          void *recvbuf, [[maybe_unused]] int recvcount,
+void CommSerial::v_Gather(const void *sendbuf, int sendcount,
+                          CommDataType sendtype, void *recvbuf,
+                          [[maybe_unused]] int recvcount,
                           [[maybe_unused]] CommDataType recvtype,
                           [[maybe_unused]] int root)
 {
@@ -232,8 +237,9 @@ void CommSerial::v_Gather(void *sendbuf, int sendcount, CommDataType sendtype,
 /**
  *
  */
-void CommSerial::v_Scatter(void *sendbuf, int sendcount, CommDataType sendtype,
-                           void *recvbuf, [[maybe_unused]] int recvcount,
+void CommSerial::v_Scatter(const void *sendbuf, int sendcount,
+                           CommDataType sendtype, void *recvbuf,
+                           [[maybe_unused]] int recvcount,
                            [[maybe_unused]] CommDataType recvtype,
                            [[maybe_unused]] int root)
 {
@@ -244,26 +250,29 @@ void CommSerial::v_Scatter(void *sendbuf, int sendcount, CommDataType sendtype,
  *
  */
 void CommSerial::v_DistGraphCreateAdjacent(
-    [[maybe_unused]] int indegree, [[maybe_unused]] const int sources[],
-    [[maybe_unused]] const int sourceweights[], [[maybe_unused]] int reorder)
+    [[maybe_unused]] int indegree, [[maybe_unused]] const int *sources,
+    [[maybe_unused]] const int *sourceweights, [[maybe_unused]] int reorder)
 {
 }
 
 /**
  *
  */
-void CommSerial::v_NeighborAlltoAllv(
-    [[maybe_unused]] void *sendbuf, [[maybe_unused]] int sendcounts[],
-    [[maybe_unused]] int senddispls[], [[maybe_unused]] CommDataType sendtype,
-    [[maybe_unused]] void *recvbuf, [[maybe_unused]] int recvcounts[],
-    [[maybe_unused]] int rdispls[], [[maybe_unused]] CommDataType recvtype)
+void CommSerial::v_NeighborAlltoAllv([[maybe_unused]] const void *sendbuf,
+                                     [[maybe_unused]] const int *sendcounts,
+                                     [[maybe_unused]] const int *senddispls,
+                                     [[maybe_unused]] CommDataType sendtype,
+                                     [[maybe_unused]] void *recvbuf,
+                                     [[maybe_unused]] const int *recvcounts,
+                                     [[maybe_unused]] const int *recvdispls,
+                                     [[maybe_unused]] CommDataType recvtype)
 {
 }
 
 /**
  *
  */
-void CommSerial::v_Irsend([[maybe_unused]] void *buf,
+void CommSerial::v_Irsend([[maybe_unused]] const void *buf,
                           [[maybe_unused]] int count,
                           [[maybe_unused]] CommDataType dt,
                           [[maybe_unused]] int dest,
@@ -275,7 +284,8 @@ void CommSerial::v_Irsend([[maybe_unused]] void *buf,
 /**
  *
  */
-void CommSerial::v_Isend([[maybe_unused]] void *buf, [[maybe_unused]] int count,
+void CommSerial::v_Isend([[maybe_unused]] const void *buf,
+                         [[maybe_unused]] int count,
                          [[maybe_unused]] CommDataType dt,
                          [[maybe_unused]] int dest,
                          [[maybe_unused]] CommRequestSharedPtr request,
@@ -286,7 +296,7 @@ void CommSerial::v_Isend([[maybe_unused]] void *buf, [[maybe_unused]] int count,
 /**
  *
  */
-void CommSerial::v_SendInit([[maybe_unused]] void *buf,
+void CommSerial::v_SendInit([[maybe_unused]] const void *buf,
                             [[maybe_unused]] int count,
                             [[maybe_unused]] CommDataType dt,
                             [[maybe_unused]] int dest,

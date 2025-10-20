@@ -181,60 +181,65 @@ protected:
 
     Comm();
 
-    virtual void v_Finalise()                                              = 0;
-    virtual int v_GetRank()                                                = 0;
-    virtual bool v_TreatAsRankZero()                                       = 0;
-    virtual bool v_IsSerial()                                              = 0;
-    virtual std::tuple<int, int, int> v_GetVersion()                       = 0;
-    virtual void v_Block()                                                 = 0;
-    virtual NekDouble v_Wtime()                                            = 0;
-    virtual void v_Send(void *buf, int count, CommDataType dt, int dest)   = 0;
-    virtual void v_Recv(void *buf, int count, CommDataType dt, int source) = 0;
-    virtual void v_SendRecv(void *sendbuf, int sendcount, CommDataType sendtype,
-                            int dest, void *recvbuf, int recvcount,
-                            CommDataType recvtype, int source)             = 0;
+    virtual void v_Finalise()                                               = 0;
+    virtual int v_GetRank()                                                 = 0;
+    virtual bool v_TreatAsRankZero()                                        = 0;
+    virtual bool v_IsSerial()                                               = 0;
+    virtual std::tuple<int, int, int> v_GetVersion()                        = 0;
+    virtual void v_Block()                                                  = 0;
+    virtual NekDouble v_Wtime()                                             = 0;
+    virtual void v_Send(const void *buf, int count, CommDataType dt,
+                        int dest)                                           = 0;
+    virtual void v_Recv(void *buf, int count, CommDataType dt, int source)  = 0;
+    virtual void v_SendRecv(const void *sendbuf, int sendcount,
+                            CommDataType sendtype, int dest, void *recvbuf,
+                            int recvcount, CommDataType recvtype,
+                            int source)                                     = 0;
     virtual void v_AllReduce(void *buf, int count, CommDataType dt,
-                             enum ReduceOperator pOp)                      = 0;
-    virtual void v_AlltoAll(void *sendbuf, int sendcount, CommDataType sendtype,
-                            void *recvbuf, int recvcount,
-                            CommDataType recvtype)                         = 0;
-    virtual void v_AlltoAllv(void *sendbuf, int sendcounts[], int sensdispls[],
+                             enum ReduceOperator pOp)                       = 0;
+    virtual void v_AlltoAll(const void *sendbuf, int sendcount,
+                            CommDataType sendtype, void *recvbuf, int recvcount,
+                            CommDataType recvtype)                          = 0;
+    virtual void v_AlltoAllv(const void *sendbuf, const int *sendcounts,
+                             const int *senddispls, CommDataType sendtype,
+                             void *recvbuf, const int *recvcounts,
+                             const int *recvdispls, CommDataType recvtype)  = 0;
+    virtual void v_AllGather(const void *sendbuf, int sendcount,
                              CommDataType sendtype, void *recvbuf,
-                             int recvcounts[], int rdispls[],
-                             CommDataType recvtype)                        = 0;
-    virtual void v_AllGather(void *sendbuf, int sendcount,
-                             CommDataType sendtype, void *recvbuf,
-                             int recvcount, CommDataType recvtype)         = 0;
-    virtual void v_AllGatherv(void *sendbuf, int sendcount,
+                             int recvcount, CommDataType recvtype)          = 0;
+    virtual void v_AllGatherv(const void *sendbuf, int sendcount,
                               CommDataType sendtype, void *recvbuf,
-                              int recvcounts[], int rdispls[],
-                              CommDataType recvtype)                       = 0;
-    virtual void v_AllGatherv(void *recvbuf, int recvcounts[], int rdispls[],
-                              CommDataType recvtype)                       = 0;
+                              const int *recvcounts, const int *recvdispls,
+                              CommDataType recvtype)                        = 0;
+    virtual void v_AllGatherv(void *recvbuf, const int *recvcounts,
+                              const int *recvdispls, CommDataType recvtype) = 0;
     virtual void v_Bcast(void *buffer, int count, CommDataType dt,
-                         int root)                                         = 0;
-    virtual void v_Gather(void *sendbuf, int sendcount, CommDataType sendtype,
-                          void *recvbuf, int recvcount, CommDataType recvtype,
-                          int root)                                        = 0;
-    virtual void v_Scatter(void *sendbuf, int sendcount, CommDataType sendtype,
-                           void *recvbuf, int recvcount, CommDataType recvtype,
-                           int root)                                       = 0;
+                         int root)                                          = 0;
+    virtual void v_Gather(const void *sendbuf, int sendcount,
+                          CommDataType sendtype, void *recvbuf, int recvcount,
+                          CommDataType recvtype, int root)                  = 0;
+    virtual void v_Scatter(const void *sendbuf, int sendcount,
+                           CommDataType sendtype, void *recvbuf, int recvcount,
+                           CommDataType recvtype, int root)                 = 0;
 
-    virtual void v_DistGraphCreateAdjacent(int indegree, const int sources[],
-                                           const int sourceweights[],
+    virtual void v_DistGraphCreateAdjacent(int indegree, const int *sources,
+                                           const int *sourceweights,
                                            int reorder) = 0;
 
-    virtual void v_NeighborAlltoAllv(void *sendbuf, int sendcounts[],
-                                     int sdispls[], CommDataType sendtype,
-                                     void *recvbuf, int recvcounts[],
-                                     int rdispls[], CommDataType recvtype) = 0;
+    virtual void v_NeighborAlltoAllv(const void *sendbuf, const int *sendcounts,
+                                     const int *senddispls,
+                                     CommDataType sendtype, void *recvbuf,
+                                     const int *recvcounts,
+                                     const int *recvdispls,
+                                     CommDataType recvtype) = 0;
 
-    virtual void v_Irsend(void *buf, int count, CommDataType dt, int dest,
+    virtual void v_Irsend(const void *buf, int count, CommDataType dt, int dest,
                           CommRequestSharedPtr request, int loc)   = 0;
-    virtual void v_Isend(void *buf, int count, CommDataType dt, int dest,
+    virtual void v_Isend(const void *buf, int count, CommDataType dt, int dest,
                          CommRequestSharedPtr request, int loc)    = 0;
-    virtual void v_SendInit(void *buf, int count, CommDataType dt, int dest,
-                            CommRequestSharedPtr request, int loc) = 0;
+    virtual void v_SendInit(const void *buf, int count, CommDataType dt,
+                            int dest, CommRequestSharedPtr request,
+                            int loc)                               = 0;
     virtual void v_Irecv(void *buf, int count, CommDataType dt, int source,
                          CommRequestSharedPtr request, int loc)    = 0;
     virtual void v_RecvInit(void *buf, int count, CommDataType dt, int source,
@@ -518,7 +523,8 @@ template <class T> T Comm::Scatter(const int rootProc, T &pData)
     bool amRoot  = (GetRank() == rootProc);
     unsigned nEl = CommDataTypeTraits<T>::GetCount(pData) / GetSize();
 
-    void *sendbuf = amRoot ? CommDataTypeTraits<T>::GetPointer(pData) : nullptr;
+    const void *sendbuf =
+        amRoot ? CommDataTypeTraits<T>::GetPointer(pData) : nullptr;
     T ans(nEl);
 
     v_Scatter(sendbuf, nEl, CommDataTypeTraits<T>::GetDataType(),
