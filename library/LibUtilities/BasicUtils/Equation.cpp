@@ -142,6 +142,31 @@ NekDouble Equation::Evaluate(NekDouble x, NekDouble y, NekDouble z,
     return 0;
 }
 
+NekDouble Equation::Evaluate(std::vector<NekDouble> point) const
+{
+    try
+    {
+        if (m_expr_id != -1)
+        {
+            return m_evaluator->EvaluateAtPoint(m_expr_id, point);
+        }
+    }
+    catch (const std::runtime_error &e)
+    {
+        std::string msg =
+            "Equation::Evaluate fails on expression [" + m_expr + "]\n";
+        NEKERROR(ErrorUtil::efatal, msg + std::string("ERROR: ") + e.what());
+    }
+    catch (const std::string &e)
+    {
+        std::string msg =
+            "Equation::Evaluate fails on expression [" + m_expr + "]\n";
+        NEKERROR(ErrorUtil::efatal, msg + std::string("ERROR: ") + e);
+    }
+
+    return 0;
+}
+
 void Equation::Evaluate(const Array<OneD, const NekDouble> &x,
                         const Array<OneD, const NekDouble> &y,
                         const Array<OneD, const NekDouble> &z,
