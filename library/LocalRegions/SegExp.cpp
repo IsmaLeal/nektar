@@ -1443,8 +1443,13 @@ DNekScalMatSharedPtr SegExp::CreateMatrix(const MatrixKey &mkey)
         }
         break;
         default:
-            NEKERROR(ErrorUtil::efatal, "Matrix creation not defined");
-            break;
+        {
+            NekDouble one        = 1.0;
+            DNekMatSharedPtr mat = GenMatrix(mkey);
+
+            returnval = MemoryManager<DNekScalMat>::AllocateSharedPtr(one, mat);
+        }
+        break;
     }
 
     return returnval;

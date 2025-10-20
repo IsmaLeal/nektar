@@ -23,6 +23,7 @@ v5.9.0
 - Tidy-up GMRES verbose output (!1804)
 - Remove duplicate StdPhysDeriv overload function (!2254)
 - Add EvaluateAtPoint interface in Equation (!2255)
+- Enable GenMatrix routine for SegExp (!2260)
 
 **ADRSolver**
 - Add implicit UnsteadyAdvection for continuous Galerkin (!2231)
