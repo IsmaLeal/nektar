@@ -68,6 +68,10 @@ class Equation
 {
 public:
     LIB_UTILITIES_EXPORT Equation(const Equation &) = default;
+
+    // Null Constructor
+    LIB_UTILITIES_EXPORT Equation();
+
     LIB_UTILITIES_EXPORT Equation(InterpreterSharedPtr evaluator,
                                   const std::string &expr  = "",
                                   const std::string &vlist = "");

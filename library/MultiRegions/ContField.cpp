@@ -1130,4 +1130,78 @@ void ContField::v_UnsetGlobalLinSys(GlobalLinSysKey key,
     m_globalLinSysManager.DeleteObject(key);
 }
 
+void ContField::v_ImposeNeumannConditions(Array<OneD, NekDouble> &outarray)
+{
+    int i, j;
+    int bndcnt = 0;
+    Array<OneD, NekDouble> sign =
+        m_locToGloMap->GetBndCondCoeffsToLocalCoeffsSign();
+    const Array<OneD, const int> map =
+        m_locToGloMap->GetBndCondCoeffsToLocalCoeffsMap();
+    // Add weak boundary conditions to forcing
+    for (i = 0; i < m_bndCondExpansions.size(); ++i)
+    {
+        if (m_bndConditions[i]->GetBoundaryConditionType() ==
+            SpatialDomains::eNeumann)
+        {
+
+            const Array<OneD, const NekDouble> bndcoeff =
+                (m_bndCondExpansions[i])->GetCoeffs();
+
+            if (m_locToGloMap->GetSignChange())
+            {
+                for (j = 0; j < (m_bndCondExpansions[i])->GetNcoeffs(); j++)
+                {
+                    outarray[map[bndcnt + j]] += sign[bndcnt + j] * bndcoeff[j];
+                }
+            }
+            else
+            {
+                for (j = 0; j < (m_bndCondExpansions[i])->GetNcoeffs(); j++)
+                {
+                    outarray[map[bndcnt + j]] += bndcoeff[j];
+                }
+            }
+        }
+        bndcnt += m_bndCondExpansions[i]->GetNcoeffs();
+    }
+}
+
+void ContField::v_ImposeRobinConditions(Array<OneD, NekDouble> &outarray)
+{
+    int i, j;
+    int bndcnt = 0;
+    Array<OneD, NekDouble> sign =
+        m_locToGloMap->GetBndCondCoeffsToLocalCoeffsSign();
+    const Array<OneD, const int> map =
+        m_locToGloMap->GetBndCondCoeffsToLocalCoeffsMap();
+    // Add weak boundary conditions to forcing
+    for (i = 0; i < m_bndCondExpansions.size(); ++i)
+    {
+        if (m_bndConditions[i]->GetBoundaryConditionType() ==
+            SpatialDomains::eRobin)
+        {
+
+            const Array<OneD, const NekDouble> bndcoeff =
+                (m_bndCondExpansions[i])->GetCoeffs();
+
+            if (m_locToGloMap->GetSignChange())
+            {
+                for (j = 0; j < (m_bndCondExpansions[i])->GetNcoeffs(); j++)
+                {
+                    outarray[map[bndcnt + j]] += sign[bndcnt + j] * bndcoeff[j];
+                }
+            }
+            else
+            {
+                for (j = 0; j < (m_bndCondExpansions[i])->GetNcoeffs(); j++)
+                {
+                    outarray[map[bndcnt + j]] += bndcoeff[j];
+                }
+            }
+        }
+        bndcnt += m_bndCondExpansions[i]->GetNcoeffs();
+    }
+}
+
 } // namespace Nektar::MultiRegions

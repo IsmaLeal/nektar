@@ -67,7 +67,7 @@ public:
     static std::string className;
 
 protected:
-    std::vector<LibUtilities::Equation> m_definedVels;
+    std::vector<LibUtilities::EquationSharedPtr> m_definedVels;
 
     MovingFrameFar(const LibUtilities::SessionReaderSharedPtr pSession,
                    Array<OneD, MultiRegions::ExpListSharedPtr> pFields,

@@ -3692,35 +3692,43 @@ void DisContField::v_EvaluateBoundaryConditions(const NekDouble time,
                 if (m_bndConditions[i]->GetBoundaryConditionType() ==
                     SpatialDomains::eDirichlet)
                 {
-
-                    m_bndCondExpansions[i]->SetCoeff(
-                        0, (std::static_pointer_cast<
-                                SpatialDomains::DirichletBoundaryCondition>(
-                                m_bndConditions[i])
-                                ->m_dirichletCondition)
-                               .Evaluate(x0[0], x1[0], x2[0], time));
-                    m_bndCondExpansions[i]->SetPhys(
-                        0, m_bndCondExpansions[i]->GetCoeff(0));
+                    for (int n = 0; n < npoints; ++n)
+                    {
+                        m_bndCondExpansions[i]->SetCoeff(
+                            n, (std::static_pointer_cast<
+                                    SpatialDomains::DirichletBoundaryCondition>(
+                                    m_bndConditions[i])
+                                    ->m_dirichletCondition)
+                                   ->Evaluate(x0[n], x1[n], x2[n], time));
+                        m_bndCondExpansions[i]->SetPhys(
+                            n, m_bndCondExpansions[i]->GetCoeff(n));
+                    }
                 }
                 else if (m_bndConditions[i]->GetBoundaryConditionType() ==
                          SpatialDomains::eNeumann)
                 {
-                    m_bndCondExpansions[i]->SetCoeff(
-                        0, (std::static_pointer_cast<
-                                SpatialDomains::NeumannBoundaryCondition>(
-                                m_bndConditions[i])
-                                ->m_neumannCondition)
-                               .Evaluate(x0[0], x1[0], x2[0], time));
+                    for (int n = 0; n < npoints; ++n)
+                    {
+                        m_bndCondExpansions[i]->SetCoeff(
+                            n, (std::static_pointer_cast<
+                                    SpatialDomains::NeumannBoundaryCondition>(
+                                    m_bndConditions[i])
+                                    ->m_neumannCondition)
+                                   ->Evaluate(x0[n], x1[n], x2[n], time));
+                    }
                 }
                 else if (m_bndConditions[i]->GetBoundaryConditionType() ==
                          SpatialDomains::eRobin)
                 {
-                    m_bndCondExpansions[i]->SetCoeff(
-                        0, (std::static_pointer_cast<
-                                SpatialDomains::RobinBoundaryCondition>(
-                                m_bndConditions[i])
-                                ->m_robinFunction)
-                               .Evaluate(x0[0], x1[0], x2[0], time));
+                    for (int n = 0; n < npoints; ++n)
+                    {
+                        m_bndCondExpansions[i]->SetCoeff(
+                            n, (std::static_pointer_cast<
+                                    SpatialDomains::RobinBoundaryCondition>(
+                                    m_bndConditions[i])
+                                    ->m_robinFunction)
+                                   ->Evaluate(x0[n], x1[n], x2[n], time));
+                    }
                 }
                 else if (m_bndConditions[i]->GetBoundaryConditionType() ==
                          SpatialDomains::ePeriodic)
@@ -3765,13 +3773,13 @@ void DisContField::v_EvaluateBoundaryConditions(const NekDouble time,
 
                     if (exprbcs != "")
                     {
-                        LibUtilities::Equation condition =
+                        LibUtilities::EquationSharedPtr condition =
                             std::static_pointer_cast<
                                 SpatialDomains::DirichletBoundaryCondition>(
                                 m_bndConditions[i])
                                 ->m_dirichletCondition;
 
-                        condition.Evaluate(x0, x1, x2, time, valuesExp);
+                        condition->Evaluate(x0, x1, x2, time, valuesExp);
                     }
 
                     Vmath::Vmul(npoints, valuesExp, 1, valuesFile, 1,
@@ -3798,13 +3806,13 @@ void DisContField::v_EvaluateBoundaryConditions(const NekDouble time,
                     }
                     else
                     {
-                        LibUtilities::Equation condition =
+                        LibUtilities::EquationSharedPtr condition =
                             std::static_pointer_cast<
                                 SpatialDomains::NeumannBoundaryCondition>(
                                 m_bndConditions[i])
                                 ->m_neumannCondition;
-                        condition.Evaluate(x0, x1, x2, time,
-                                           locExpList->UpdatePhys());
+                        condition->Evaluate(x0, x1, x2, time,
+                                            locExpList->UpdatePhys());
                     }
 
                     locExpList->IProductWRTBase(locExpList->GetPhys(),
@@ -3830,13 +3838,13 @@ void DisContField::v_EvaluateBoundaryConditions(const NekDouble time,
                     }
                     else
                     {
-                        LibUtilities::Equation condition =
+                        LibUtilities::EquationSharedPtr condition =
                             std::static_pointer_cast<
                                 SpatialDomains::RobinBoundaryCondition>(
                                 m_bndConditions[i])
                                 ->m_robinFunction;
-                        condition.Evaluate(x0, x1, x2, time,
-                                           locExpList->UpdatePhys());
+                        condition->Evaluate(x0, x1, x2, time,
+                                            locExpList->UpdatePhys());
                     }
 
                     locExpList->IProductWRTBase(locExpList->GetPhys(),
@@ -4178,13 +4186,13 @@ map<int, RobinBCInfoSharedPtr> DisContField::v_GetRobinBCInfo(void)
 
             locExpList->GetCoords(x0, x1, x2);
 
-            LibUtilities::Equation coeffeqn =
+            LibUtilities::EquationSharedPtr coeffeqn =
                 std::static_pointer_cast<
                     SpatialDomains::RobinBoundaryCondition>(m_bndConditions[i])
                     ->m_robinPrimitiveCoeff;
 
             // evalaute coefficient
-            coeffeqn.Evaluate(x0, x1, x2, 0.0, coeffphys);
+            coeffeqn->Evaluate(x0, x1, x2, 0.0, coeffphys);
 
             for (e = 0; e < locExpList->GetExpSize(); ++e)
             {

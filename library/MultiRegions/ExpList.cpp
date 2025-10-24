@@ -5272,6 +5272,20 @@ void ExpList::v_ImposeDirichletConditions(
              "This method is not defined or valid for this class type");
 }
 
+void ExpList::v_ImposeNeumannConditions(
+    [[maybe_unused]] Array<OneD, NekDouble> &outarray)
+{
+    NEKERROR(ErrorUtil::efatal,
+             "This method is not defined or valid for this class type");
+}
+
+void ExpList::v_ImposeRobinConditions(
+    [[maybe_unused]] Array<OneD, NekDouble> &outarray)
+{
+    NEKERROR(ErrorUtil::efatal,
+             "This method is not defined or valid for this class type");
+}
+
 /**
  */
 void ExpList::v_FillBndCondFromField(

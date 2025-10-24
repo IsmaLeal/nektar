@@ -96,7 +96,7 @@ void MovingFrameFar::v_Update(
     Array<OneD, NekDouble> vels(m_spacedim, 0.0);
     for (int i = 0; i < m_spacedim; ++i)
     {
-        vels[i] = m_definedVels[i].Evaluate(0., 0., 0., time);
+        vels[i] = m_definedVels[i]->Evaluate(0., 0., 0., time);
     }
     if (params.find("Theta_z") != params.end())
     {

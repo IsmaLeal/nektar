@@ -1118,13 +1118,13 @@ void Mapping::v_UpdateBCs(const NekDouble time)
                          "supported with mapping yet.");
 
                 // Get boundary condition
-                LibUtilities::Equation condition =
+                LibUtilities::EquationSharedPtr condition =
                     std::static_pointer_cast<
                         SpatialDomains::DirichletBoundaryCondition>(BndConds[n])
                         ->m_dirichletCondition;
                 // Evaluate
-                condition.Evaluate(coords[0], coords[1], coords[2], time,
-                                   values[i]);
+                condition->Evaluate(coords[0], coords[1], coords[2], time,
+                                    values[i]);
             }
             else
             {

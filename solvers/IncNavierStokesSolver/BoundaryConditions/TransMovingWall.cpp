@@ -124,13 +124,13 @@ void TransMovingWall::v_Update(
         if (m_BndConds.find(i) != m_BndConds.end() && nptsPlane0)
         {
             NekDouble dudt = 0.;
-            LibUtilities::Equation equ =
+            LibUtilities::EquationSharedPtr equ =
                 std::static_pointer_cast<
                     SpatialDomains::DirichletBoundaryCondition>(m_BndConds[i])
                     ->m_dirichletCondition;
             for (int j = 0; j < times.size(); ++j)
             {
-                dudt += Fourth_Coeffs[j] * equ.Evaluate(0, 0., 0., times[j]);
+                dudt += Fourth_Coeffs[j] * equ->Evaluate(0, 0., 0., times[j]);
             }
             transParams[accStr[i]] = dudt;
         }

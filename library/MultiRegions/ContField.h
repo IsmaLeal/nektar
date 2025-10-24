@@ -178,6 +178,14 @@ protected:
     MULTI_REGIONS_EXPORT void v_ImposeDirichletConditions(
         Array<OneD, NekDouble> &outarray) override;
 
+    /// Add Neumann Boundary Conditions forcing to outarray
+    MULTI_REGIONS_EXPORT void v_ImposeNeumannConditions(
+        Array<OneD, NekDouble> &outarray) override;
+
+    /// Add Robin Boundary Conditions forcing to outarray
+    MULTI_REGIONS_EXPORT void v_ImposeRobinConditions(
+        Array<OneD, NekDouble> &outarray) override;
+
     MULTI_REGIONS_EXPORT void v_FillBndCondFromField(
         const Array<OneD, NekDouble> coeffs) override;
 
