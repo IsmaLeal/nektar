@@ -43,7 +43,44 @@
 namespace Nektar::SolverUtils
 {
 
-struct ALEBase;
+struct ALEBase
+{
+    virtual ~ALEBase() = default;
+
+    inline void UpdateGridVel(
+        const NekDouble time,
+        Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
+        Array<OneD, Array<OneD, NekDouble>> &gridVelocity)
+    {
+        v_UpdateGridVel(time, fields, gridVelocity);
+    }
+
+    inline void ResetMatricesNormal(
+        Array<OneD, Array<OneD, NekDouble>> &traceNormals,
+        Array<OneD, MultiRegions::ExpListSharedPtr> &fields)
+    {
+        v_ResetMatricesNormal(traceNormals, fields);
+    }
+
+    inline bool UpdateNormalsFlag()
+    {
+        return v_UpdateNormalsFlag();
+    }
+
+    bool m_meshDistorted = false;
+
+private:
+    virtual void v_UpdateGridVel(
+        const NekDouble time,
+        Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
+        Array<OneD, Array<OneD, NekDouble>> &gridVelocity) = 0;
+
+    virtual void v_ResetMatricesNormal(
+        Array<OneD, Array<OneD, NekDouble>> &traceNormals,
+        Array<OneD, MultiRegions::ExpListSharedPtr> &fields) = 0;
+
+    virtual bool v_UpdateNormalsFlag() = 0;
+};
 typedef std::shared_ptr<ALEBase> ALEBaseShPtr;
 
 class ALEHelper
@@ -73,9 +110,20 @@ public:
         const NekDouble &time,
         Array<OneD, Array<OneD, NekDouble>> &traceNormals);
 
+    SOLVER_UTILS_EXPORT void ResetMatricesNormal(
+        Array<OneD, Array<OneD, NekDouble>> &traceNormals);
+
+    // check all update nromal definitions and return true if any are true
+    SOLVER_UTILS_EXPORT void UpdateNormalsFlag();
+
     inline const Array<OneD, const Array<OneD, NekDouble>> &GetGridVelocity()
     {
         return m_gridVelocity;
+    }
+
+    inline bool &GetUpdateNormalsFlag()
+    {
+        return m_updateNormals;
     }
 
     SOLVER_UTILS_EXPORT const Array<OneD, const Array<OneD, NekDouble>> &
@@ -84,34 +132,27 @@ public:
         std::vector<Array<OneD, NekDouble>> &fieldcoeffs,
         std::vector<std::string> &variables);
 
+    SOLVER_UTILS_EXPORT void ExtraFldOutputGrid(
+        std::vector<Array<OneD, NekDouble>> &fieldcoeffs,
+        std::vector<std::string> &variables);
+
 protected:
     Array<OneD, MultiRegions::ExpListSharedPtr> m_fieldsALE;
     Array<OneD, Array<OneD, NekDouble>> m_gridVelocity;
     Array<OneD, Array<OneD, NekDouble>> m_gridVelocityTrace;
     std::vector<ALEBaseShPtr> m_ALEs;
-    bool m_ALESolver          = false;
-    bool m_ImplicitALESolver  = false;
+
+    // Flag if using the ALE formulation
+    bool m_ALESolver = false;
+    // Mesh distorted is not implemented yet, use to avoid update mass matrix
+    bool m_meshDistorted = false;
+    // Flag if using implicit ALE solver
+    bool m_implicitALESolver = false;
+    // Flag to indicate whether normals need to be updated for reimann solver
+    bool m_updateNormals = false;
+    // Previous time used to aviod multiple mesh movements
     NekDouble m_prevStageTime = 0.0;
     int m_spaceDim;
-};
-
-struct ALEBase
-{
-    virtual ~ALEBase() = default;
-
-    inline void UpdateGridVel(
-        const NekDouble time,
-        Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
-        Array<OneD, Array<OneD, NekDouble>> &gridVelocity)
-    {
-        v_UpdateGridVel(time, fields, gridVelocity);
-    }
-
-private:
-    virtual void v_UpdateGridVel(
-        const NekDouble time,
-        Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
-        Array<OneD, Array<OneD, NekDouble>> &gridVelocity) = 0;
 };
 
 struct ALEFixed final : public ALEBase
@@ -122,6 +163,15 @@ struct ALEFixed final : public ALEBase
         const NekDouble time,
         Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
         Array<OneD, Array<OneD, NekDouble>> &gridVelocity) final;
+
+    bool v_UpdateNormalsFlag() final
+    {
+        return false;
+    }
+
+    void v_ResetMatricesNormal(
+        Array<OneD, Array<OneD, NekDouble>> &traceNormals,
+        Array<OneD, MultiRegions::ExpListSharedPtr> &fields) final;
 
 private:
     SpatialDomains::ZoneFixedShPtr m_zone;
@@ -136,6 +186,15 @@ struct ALETranslate final : public ALEBase
         Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
         Array<OneD, Array<OneD, NekDouble>> &gridVelocity) final;
 
+    bool v_UpdateNormalsFlag() final
+    {
+        return false;
+    }
+
+    void v_ResetMatricesNormal(
+        Array<OneD, Array<OneD, NekDouble>> &traceNormals,
+        Array<OneD, MultiRegions::ExpListSharedPtr> &fields) final;
+
 private:
     SpatialDomains::ZoneTranslateShPtr m_zone;
 };
@@ -148,6 +207,15 @@ struct ALERotate final : public ALEBase
         const NekDouble time,
         Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
         Array<OneD, Array<OneD, NekDouble>> &gridVelocity) final;
+
+    bool v_UpdateNormalsFlag() final
+    {
+        return true;
+    }
+
+    void v_ResetMatricesNormal(
+        Array<OneD, Array<OneD, NekDouble>> &traceNormals,
+        Array<OneD, MultiRegions::ExpListSharedPtr> &fields) final;
 
 private:
     SpatialDomains::ZoneRotateShPtr m_zone;

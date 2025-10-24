@@ -2915,6 +2915,119 @@ void DisContField::v_PeriodicBwdCopy(const Array<OneD, const NekDouble> &Fwd,
     }
 }
 
+void DisContField::v_PeriodicBwdRot(Array<OneD, Array<OneD, NekDouble>> &Bwd)
+{
+    int cnt = 0;
+    for (int n = 0; n < m_bndConditions.size(); ++n)
+    {
+        // check to see if boundary is rotationally aligned
+        if (boost::icontains(m_bndConditions[n]->GetUserDefined(), "Rotated"))
+        {
+            vector<string> tmpstr;
+
+            boost::split(tmpstr, m_bndConditions[n]->GetUserDefined(),
+                         boost::is_any_of(":"));
+
+            ASSERTL1(tmpstr.size() > 2,
+                     "Expected Rotated user defined string to "
+                     "contain direction and rotation angle "
+                     "and optionally a tolerance, "
+                     "i.e. Rotated:dir:PI/2:1e-6");
+
+            ASSERTL1((tmpstr[1] == "x") || (tmpstr[1] == "y") ||
+                         (tmpstr[1] == "z"),
+                     "Rotated Dir is "
+                     "not specified as x,y or z");
+
+            RotPeriodicInfo RotInfo;
+            RotInfo.m_dir = (tmpstr[1] == "x") ? 0 : (tmpstr[1] == "y") ? 1 : 2;
+
+            LibUtilities::Interpreter strEval;
+            int ExprId      = strEval.DefineFunction("", tmpstr[2]);
+            RotInfo.m_angle = strEval.Evaluate(ExprId);
+
+            auto ne = m_bndCondExpansions[n]->GetExpSize();
+
+            // Loop over each element in the boundary condition and rotate
+            // velocity
+            for (int e = 0; e < ne; ++e)
+            {
+                auto id2 = m_trace->GetPhys_Offset(
+                    m_traceMap->GetPerBndCondIDToGlobalTraceID(e + cnt));
+                int npts = m_bndCondExpansions[n]->GetExp(e)->GetTotPoints();
+                Rotate(Bwd, RotInfo.m_dir, -RotInfo.m_angle, id2, npts);
+            }
+            cnt += ne;
+        }
+    }
+}
+
+void DisContField::v_PeriodicDeriveBwdRot(TensorOfArray3D<NekDouble> &Bwd)
+{
+    int cnt = 0;
+    for (int n = 0; n < m_bndConditions.size(); ++n)
+    {
+        // check to see if boundary is rotationally aligned
+        if (boost::icontains(m_bndConditions[n]->GetUserDefined(), "Rotated"))
+        {
+            vector<string> tmpstr;
+
+            boost::split(tmpstr, m_bndConditions[n]->GetUserDefined(),
+                         boost::is_any_of(":"));
+
+            ASSERTL1(tmpstr.size() > 2,
+                     "Expected Rotated user defined string to "
+                     "contain direction and rotation angle "
+                     "and optionally a tolerance, "
+                     "i.e. Rotated:dir:PI/2:1e-6");
+
+            ASSERTL1((tmpstr[1] == "x") || (tmpstr[1] == "y") ||
+                         (tmpstr[1] == "z"),
+                     "Rotated Dir is "
+                     "not specified as x,y or z");
+
+            RotPeriodicInfo RotInfo;
+            RotInfo.m_dir = (tmpstr[1] == "x") ? 0 : (tmpstr[1] == "y") ? 1 : 2;
+
+            LibUtilities::Interpreter strEval;
+            int ExprId      = strEval.DefineFunction("", tmpstr[2]);
+            RotInfo.m_angle = strEval.Evaluate(ExprId);
+
+            auto ne = m_bndCondExpansions[n]->GetExpSize();
+            // Loop over each element in the boundary condition and rotate
+            // velocity
+            for (int e = 0; e < ne; ++e)
+            {
+                auto id2 = m_trace->GetPhys_Offset(
+                    m_traceMap->GetPerBndCondIDToGlobalTraceID(e + cnt));
+                int npts = m_bndCondExpansions[n]->GetExp(e)->GetTotPoints();
+                DeriveRotate(Bwd, RotInfo.m_dir, -RotInfo.m_angle, id2, npts);
+            }
+            cnt += ne;
+        }
+    }
+}
+
+void DisContField::v_RotLocalBwdTrace(Array<OneD, Array<OneD, NekDouble>> &Bwd)
+{
+    int nDim = GetCoordim(0);
+    for (auto &interfaceTrace : m_interfaceMap->GetLocalInterface())
+    {
+
+        interfaceTrace->RotLocalBwdTrace(Bwd, nDim);
+    }
+}
+
+void DisContField::v_RotLocalBwdDeriveTrace(TensorOfArray3D<NekDouble> &Bwd)
+{
+    int nDim = GetCoordim(0);
+    for (auto &interfaceTrace : m_interfaceMap->GetLocalInterface())
+    {
+
+        interfaceTrace->RotLocalBwdDeriveTrace(Bwd, nDim);
+    }
+}
+
 void DisContField::v_GetFwdBwdTracePhys(Array<OneD, NekDouble> &Fwd,
                                         Array<OneD, NekDouble> &Bwd)
 {
@@ -3238,11 +3351,13 @@ void DisContField::v_ExtractTracePhys(Array<OneD, NekDouble> &outarray)
  *                  to extract the edge data.
  * @param outarray  The resulting edge information.
  *
+ * @param gridVelocity Avoid performing parallel exchanges of the grid velocity
+ *
  * This will not work for non-boundary expansions
  */
 void DisContField::v_ExtractTracePhys(
     const Array<OneD, const NekDouble> &inarray,
-    Array<OneD, NekDouble> &outarray)
+    Array<OneD, NekDouble> &outarray, bool gridVelocity)
 {
     LibUtilities::BasisSharedPtr basis = (*m_exp)[0]->GetBasis(0);
     if ((basis->GetBasisType() != LibUtilities::eGauss_Lagrange))
@@ -3252,7 +3367,11 @@ void DisContField::v_ExtractTracePhys(
             m_locTraceToTraceMap->GetNFwdLocTracePts());
         m_locTraceToTraceMap->FwdLocTracesFromField(inarray, tracevals);
         m_locTraceToTraceMap->InterpLocTracesToTrace(0, tracevals, outarray);
-        m_traceMap->GetAssemblyCommDG()->PerformExchange(outarray, outarray);
+        if (!gridVelocity)
+        {
+            m_traceMap->GetAssemblyCommDG()->PerformExchange(outarray,
+                                                             outarray);
+        }
     }
     else
     {
@@ -4511,4 +4630,197 @@ void DisContField::v_AddTraceIntegralToOffDiag(
     m_trace->IProductWRTBase(BwdFlux, FCoeffs);
     m_locTraceToTraceMap->AddTraceCoeffsToFieldCoeffs(0, FCoeffs, outarray);
 }
+
+/// \brief Rotate the slice [offset, offset + npts) of the
+/// 3D vector field in Bwd around the axis 'dir' by 'angle'.
+void DisContField::Rotate(Array<OneD, Array<OneD, NekDouble>> &Bwd,
+                          const int dir, const NekDouble angle,
+                          const int offset, const int npts)
+{
+    // Precompute trigonometric values for improved precision
+    const NekDouble cosA = cos(angle);
+    const NekDouble sinA = sin(angle);
+
+    switch (dir)
+    {
+        // ----------------------------------------------------------
+        // Rotate around the x-axis by 'angle':
+        //  y' =  y*cos(angle) - z*sin(angle)
+        //  z' =  y*sin(angle) + z*cos(angle)
+        //  x' =  x (unchanged)
+        // ----------------------------------------------------------
+        case 0:
+        {
+            for (int i = offset; i < offset + npts; ++i)
+            {
+                NekDouble tmpY = Bwd[2][i];
+                NekDouble tmpZ = Bwd[3][i];
+
+                NekDouble yrot = cosA * tmpY - sinA * tmpZ;
+                NekDouble zrot = sinA * tmpY + cosA * tmpZ;
+
+                Bwd[2][i] = yrot;
+                Bwd[3][i] = zrot;
+            }
+        }
+        break;
+
+        // ----------------------------------------------------------
+        // Rotate around the y-axis by 'angle':
+        //  z' =  z*cos(angle) - x*sin(angle)
+        //  x' =  z*sin(angle) + x*cos(angle)
+        //  y' =  y (unchanged)
+        // ----------------------------------------------------------
+        case 1:
+        {
+            for (int i = offset; i < offset + npts; ++i)
+            {
+                NekDouble tmpX = Bwd[1][i];
+                NekDouble tmpZ = Bwd[3][i];
+
+                NekDouble zrot = cosA * tmpZ - sinA * tmpX;
+                NekDouble xrot = sinA * tmpZ + cosA * tmpX;
+
+                Bwd[1][i] = xrot;
+                Bwd[3][i] = zrot;
+            }
+        }
+        break;
+
+        // ----------------------------------------------------------
+        // Rotate around the z-axis by 'angle':
+        //  x' =  x*cos(angle) - y*sin(angle)
+        //  y' =  x*sin(angle) + y*cos(angle)
+        //  z' =  z (unchanged)
+        // ----------------------------------------------------------
+        case 2:
+        {
+            for (int i = offset; i < offset + npts; ++i)
+            {
+                NekDouble tmpX = Bwd[1][i];
+                NekDouble tmpY = Bwd[2][i];
+
+                NekDouble xrot = cosA * tmpX - sinA * tmpY;
+                NekDouble yrot = sinA * tmpX + cosA * tmpY;
+
+                Bwd[1][i] = xrot;
+                Bwd[2][i] = yrot;
+            }
+        }
+        break;
+
+        default:
+            NEKERROR(ErrorUtil::efatal,
+                     "Rotate() axis must be 0 (x), 1 (y), or 2 (z).");
+            break;
+    }
+}
+
+/// \brief Rotate the slice [offset, offset + npts) of the
+/// 3D vector field in Bwd around the axis 'dir' by 'angle'.
+void DisContField::DeriveRotate(TensorOfArray3D<NekDouble> &Bwd, const int dir,
+                                const NekDouble angle, const int offset,
+                                const int npts)
+{
+    // Precompute trigonometric values using correct angle input
+    const NekDouble cosA = cos(angle);
+    const NekDouble sinA = sin(angle);
+
+    // Define rotation matrix R (3x3) using Array<OneD, NekDouble> in
+    // **column-major order**
+    Array<OneD, NekDouble> R(9, 0.0);
+
+    if (dir == 0) // Rotation around X-axis
+    {
+        R[0] = 1.0;
+        R[3] = 0.0;
+        R[6] = 0.0;
+        R[1] = 0.0;
+        R[4] = cosA;
+        R[7] = -sinA;
+        R[2] = 0.0;
+        R[5] = sinA;
+        R[8] = cosA;
+    }
+    else if (dir == 1) // Rotation around Y-axis
+    {
+        R[0] = cosA;
+        R[3] = 0.0;
+        R[6] = sinA;
+        R[1] = 0.0;
+        R[4] = 1.0;
+        R[7] = 0.0;
+        R[2] = -sinA;
+        R[5] = 0.0;
+        R[8] = cosA;
+    }
+    else if (dir == 2) // Rotation around Z-axis
+    {
+        R[0] = cosA;
+        R[3] = -sinA;
+        R[6] = 0.0;
+        R[1] = sinA;
+        R[4] = cosA;
+        R[7] = 0.0;
+        R[2] = 0.0;
+        R[5] = 0.0;
+        R[8] = 1.0;
+    }
+    else
+    {
+        NEKERROR(
+            ErrorUtil::efatal,
+            "Invalid rotation axis for first-order derivative transformation.");
+    }
+
+    for (int p = offset; p < offset + npts; ++p)
+    {
+        // Allocate gradient tensor (3x3) in **column-major order**
+        Array<OneD, NekDouble> gradU(9, 0.0);
+
+        // Load original velocity gradient tensor into **column-major** format
+        gradU[0] = Bwd[0][1][p]; // ∂u_x/∂x
+        gradU[3] = Bwd[1][1][p]; // ∂u_x/∂y
+        gradU[6] = Bwd[2][1][p]; // ∂u_x/∂z
+
+        gradU[1] = Bwd[0][2][p]; // ∂u_y/∂x
+        gradU[4] = Bwd[1][2][p]; // ∂u_y/∂y
+        gradU[7] = Bwd[2][2][p]; // ∂u_y/∂z
+
+        gradU[2] = Bwd[0][3][p]; // ∂u_z/∂x
+        gradU[5] = Bwd[1][3][p]; // ∂u_z/∂y
+        gradU[8] = Bwd[2][3][p]; // ∂u_z/∂z
+
+        // Allocate intermediate matrix R * gradU in **column-major order**
+        Array<OneD, NekDouble> R_gradU(9, 0.0);
+
+        // Perform matrix multiplication R * gradU using Blas::Dgemm in
+        // **column-major order**
+        Blas::Dgemm('N', 'N', 3, 3, 3, 1.0, R.data(), 3, gradU.data(), 3, 0.0,
+                    R_gradU.data(), 3);
+
+        // Allocate final rotated gradient (R * gradU) * R^T in **column-major
+        // order**
+        Array<OneD, NekDouble> gradU_rotated(9, 0.0);
+
+        // Perform matrix multiplication (R * gradU) * R^T using Blas::Dgemm in
+        // **column-major order**
+        Blas::Dgemm('N', 'T', 3, 3, 3, 1.0, R_gradU.data(), 3, R.data(), 3, 0.0,
+                    gradU_rotated.data(), 3);
+
+        // Store rotated gradients back in Bwd in **column-major order**
+        Bwd[0][1][p] = gradU_rotated[0]; // ∂u_x'/∂x'
+        Bwd[1][1][p] = gradU_rotated[3]; // ∂u_x'/∂y'
+        Bwd[2][1][p] = gradU_rotated[6]; // ∂u_x'/∂z'
+
+        Bwd[0][2][p] = gradU_rotated[1]; // ∂u_y'/∂x'
+        Bwd[1][2][p] = gradU_rotated[4]; // ∂u_y'/∂y'
+        Bwd[2][2][p] = gradU_rotated[7]; // ∂u_y'/∂z'
+
+        Bwd[0][3][p] = gradU_rotated[2]; // ∂u_z'/∂x'
+        Bwd[1][3][p] = gradU_rotated[5]; // ∂u_z'/∂y'
+        Bwd[2][3][p] = gradU_rotated[8]; // ∂u_z'/∂z'
+    }
+}
+
 } // namespace Nektar::MultiRegions

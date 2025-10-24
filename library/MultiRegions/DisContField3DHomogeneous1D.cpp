@@ -326,7 +326,7 @@ void DisContField3DHomogeneous1D::v_ExtractTracePhys(
  */
 void DisContField3DHomogeneous1D::v_ExtractTracePhys(
     const Array<OneD, const NekDouble> &inarray,
-    Array<OneD, NekDouble> &outarray)
+    Array<OneD, NekDouble> &outarray, [[maybe_unused]] bool gridVelocity)
 {
     int nPoints_plane = m_planes[0]->GetTotPoints();
     int nTracePts     = m_planes[0]->GetTrace()->GetTotPoints();

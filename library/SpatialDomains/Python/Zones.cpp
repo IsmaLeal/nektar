@@ -41,14 +41,16 @@
 using namespace Nektar;
 using namespace Nektar::SpatialDomains;
 
-ZoneRotateShPtr ZoneRotate_Init(int id, int domainID,
-                                const CompositeMap &domain, const int coordDim,
-                                const NekPoint<NekDouble> &origin,
-                                const DNekVec &axis,
-                                LibUtilities::EquationSharedPtr &angularVelEqn)
+ZoneRotateShPtr ZoneRotate_Init(
+    int id, int domainID, const CompositeMap &domain, const int coordDim,
+    const NekPoint<NekDouble> &origin, const DNekVec &axis,
+    const LibUtilities::EquationSharedPtr &angularVelEqn,
+    const NekDouble rampTime, const NekDouble sector,
+    const Array<OneD, NekDouble> &base)
 {
     return std::make_shared<ZoneRotate>(id, domainID, domain, coordDim, origin,
-                                        axis, angularVelEqn);
+                                        axis, angularVelEqn, rampTime, sector,
+                                        base);
 }
 
 ZoneTranslateShPtr ZoneTranslate_Init(

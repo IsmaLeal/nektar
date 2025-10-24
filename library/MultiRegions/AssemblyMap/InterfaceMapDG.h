@@ -52,7 +52,8 @@ public:
     /// Constructor
     MULTI_REGIONS_EXPORT InterfaceTrace(
         const ExpListSharedPtr &trace,
-        const SpatialDomains::InterfaceShPtr &interfaceShPtr);
+        const SpatialDomains::InterfaceShPtr &interfaceShPtr,
+        SpatialDomains::MovementSharedPtr movementShPtr);
 
     /// Default destructor
     MULTI_REGIONS_EXPORT virtual ~InterfaceTrace() = default;
@@ -68,35 +69,58 @@ public:
         return m_missingCoords;
     }
 
+    MULTI_REGIONS_EXPORT std::map<int, std::pair<int, Array<OneD, NekDouble>>>
+    GetLocalCoords()
+    {
+        return m_foundLocalCoords;
+    }
+
+    MULTI_REGIONS_EXPORT std::map<int, std::pair<int, NekDouble>> GetRotAngle()
+    {
+        return m_phyRotAngle;
+    }
+
     /// Returns the interface object
-    SpatialDomains::InterfaceShPtr GetInterface()
+    MULTI_REGIONS_EXPORT SpatialDomains::InterfaceShPtr GetInterface()
     {
         return m_interface;
     }
 
     /// Calculates what coordinates on the interface are missing locally
-    void CalcLocalMissing(SpatialDomains::MovementSharedPtr movement);
+    void CalcLocalMissing();
     /// Fills the Bwd trace by interpolating from the Fwd for local interfaces
     void FillLocalBwdTrace(Array<OneD, NekDouble> &Fwd,
                            Array<OneD, NekDouble> &Bwd);
+    /// Rotates the interface velocity for sector rotation
+    void RotLocalBwdTrace(Array<OneD, Array<OneD, NekDouble>> &Bwd,
+                          const int &dim);
+    /// Rotates the interface derivative velocity for sector rotation
+    void RotLocalBwdDeriveTrace(TensorOfArray3D<NekDouble> &Bwd,
+                                const int &dim);
+    /// Rotate the 3D vector field in Bwd around the axis 'dir' by 'angle'.
+    void DeriveRotate(TensorOfArray3D<NekDouble> &Bwd, const int dir,
+                      const NekDouble angle);
     /// Fills the Bwd trace from partitioned trace
     void FillRankBwdTrace(Array<OneD, NekDouble> &trace,
                           Array<OneD, NekDouble> &Bwd);
-    /// Check whether the coordiniates in the original domain
-    void DomainCheck(Array<OneD, NekDouble> &gloCoord,
-                     SpatialDomains::MovementSharedPtr movement);
+    /// Update the coordiniates after movement
+    void DomainCheck(Array<OneD, NekDouble> &gloCoord, NekDouble &angle);
 
 private:
     /// Trace expansion list
     ExpListSharedPtr m_trace;
     /// Local interface object
     SpatialDomains::InterfaceShPtr m_interface;
+    /// Movement object associated with the non-conformal interfaces
+    SpatialDomains::MovementSharedPtr m_movement;
     /// Flag whether the opposite side of the interface is present locally
     bool m_checkLocal = false;
     /// Vector of coordinates on interface missing from the other side locally
     std::vector<Array<OneD, NekDouble>> m_missingCoords;
     /// Map of found coordinates present locally
     std::map<int, std::pair<int, Array<OneD, NekDouble>>> m_foundLocalCoords;
+    /// Map of phy rotate angle for sector rotate interfaces
+    std::map<int, std::pair<int, NekDouble>> m_phyRotAngle;
     /// Vector of indices corresponding to m_missingCoord locations in trace
     std::vector<int> m_mapMissingCoordToTrace;
 };
@@ -255,6 +279,12 @@ public:
      * be found.
      */
     MULTI_REGIONS_EXPORT void ExchangeCoords();
+
+    /// Returns the interface object
+    MULTI_REGIONS_EXPORT std::vector<InterfaceTraceSharedPtr> GetLocalInterface()
+    {
+        return m_localInterfaces;
+    }
 
 private:
     /// Mesh associated with this expansion list.

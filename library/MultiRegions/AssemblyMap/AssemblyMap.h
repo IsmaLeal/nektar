@@ -169,6 +169,12 @@ public:
     MULTI_REGIONS_EXPORT const Array<OneD, const int> &
     GetBndCondIDToGlobalTraceID();
 
+    /// Returns the global index of the rotational periodic boundary trace
+    /// giving the index on the rotational periodic boundary condition
+    MULTI_REGIONS_EXPORT int GetPerBndCondIDToGlobalTraceID(const int i);
+    MULTI_REGIONS_EXPORT const Array<OneD, const int> &
+    GetPerBndCondIDToGlobalTraceID();
+
     /// Returns the number of global Dirichlet boundary coefficients.
     MULTI_REGIONS_EXPORT int GetNumGlobalDirBndCoeffs() const;
     /// Returns the number of local Dirichlet boundary coefficients.
@@ -390,6 +396,9 @@ protected:
     Array<OneD, int> m_bndCondCoeffsToLocalTraceMap;
     /// Integer map of bnd cond trace number to global trace number
     Array<OneD, int> m_bndCondIDToGlobalTraceID;
+    /// Integer map of rotational periodic bnd cond trace number to global trace
+    /// number
+    Array<OneD, int> m_perbndCondIDToGlobalTraceID;
     /// Integer map of process coeffs to universal space
     Array<OneD, int> m_globalToUniversalBndMap;
     /// Integer map of unique process coeffs to universal space (signed)

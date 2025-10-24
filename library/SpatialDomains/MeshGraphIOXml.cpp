@@ -563,6 +563,20 @@ void MeshGraphIOXml::v_ReadVertices()
         zmove               = expEvaluator.Evaluate(expr_id);
     }
 
+    NekDouble zrotate;
+
+    const char *zrot = element->Attribute("ZROT");
+    if (!zrot)
+    {
+        zrotate = 0.0;
+    }
+    else
+    {
+        std::string zrotstr = zrot;
+        int expr_id         = expEvaluator.DefineFunction("", zrotstr);
+        zrotate             = expEvaluator.Evaluate(expr_id);
+    }
+
     TiXmlElement *vertex = element->FirstChildElement("V");
 
     int indx;
@@ -611,6 +625,14 @@ void MeshGraphIOXml::v_ReadVertices()
                 xval = xval * xscale + xmove;
                 yval = yval * yscale + ymove;
                 zval = zval * zscale + zmove;
+
+                if (zrotate != 0.0)
+                {
+                    NekDouble xval_tmp =
+                        xval * cos(zrotate) - yval * sin(zrotate);
+                    yval = xval * sin(zrotate) + yval * cos(zrotate);
+                    xval = xval_tmp;
+                }
 
                 // Need to check it here because we may not be
                 // good after the read indicating that there
@@ -724,6 +746,20 @@ void MeshGraphIOXml::v_ReadCurves()
         zmove               = expEvaluator.Evaluate(expr_id);
     }
 
+    NekDouble zrotate;
+
+    const char *zrot = element->Attribute("ZROT");
+    if (!zrot)
+    {
+        zrotate = 0.0;
+    }
+    else
+    {
+        std::string zrotstr = zrot;
+        int expr_id         = expEvaluator.DefineFunction("", zrotstr);
+        zrotate             = expEvaluator.Evaluate(expr_id);
+    }
+
     int err;
 
     /// Look for elements in CURVE block.
@@ -813,6 +849,13 @@ void MeshGraphIOXml::v_ReadCurves()
                     yval = yval * yscale + ymove;
                     zval = zval * zscale + zmove;
 
+                    if (zrotate != 0.0)
+                    {
+                        NekDouble xval_tmp =
+                            xval * cos(zrotate) - yval * sin(zrotate);
+                        yval = xval * sin(zrotate) + yval * cos(zrotate);
+                        xval = xval_tmp;
+                    }
                     // Need to check it here because we may not be
                     // good after the read indicating that there
                     // was nothing to read.

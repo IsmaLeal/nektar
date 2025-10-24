@@ -68,8 +68,7 @@ Movement Info:
 ALE method is implemented through \inltt{MOVEMENT} and \inltt{ALEHELPER} for sliding 
 mesh with rotating and sliding motion. Zones type can be specified by `ROTATE' and 
 'TRANSLATE' interface. Recently, the ALE method is implemented in \inltt{ADRSolver} 
-and \inltt{CompressibleFlowSolver}, but only support explicit time integration shceme 
-and \inltt{LDG} for diffusion.
+and \inltt{CompressibleFlowSolver}.
 
 An example for the rotationg movement is shown below:
 
@@ -89,7 +88,44 @@ An example for the rotationg movement is shown below:
 \end{lstlisting}
 
 Here \inltt{ORIGIN} and \inltt{AXIS} are the origin and axis that the zone rotates about, 
-respectively. \inltt{ANGVEL} is the the angular velocity of rotation with degree unit. 
+respectively. \inltt{ANGVEL} is the the angular velocity of rotation with radians unit. 
+
+The sector rotation can be defined using the following configuration:
+\begin{lstlisting}[style=XMLStyle]
+<MOVEMENT>
+<ZONES>
+    <ROTATE ID="0" DOMAIN="D[0]" ORIGIN="0,0,0" AXIS="0,0,1" ANGVEL="1" SECTOR="PI/15" BASE="0,1.1,0"/>
+    <ROTATE ID="1" DOMAIN="D[1]" ORIGIN="0,0,0" AXIS="0,0,1" ANGVEL="0"  SECTOR="PI/15" BASE="0,1.1,0"/>
+</ZONES>
+<INTERFACES>
+    <INTERFACE NAME="Sector">
+        <RIGHT ID="0" BOUNDARY="C[501]"  />
+        <LEFT  ID="1" BOUNDARY="C[502]" />
+    </INTERFACE>
+    </INTERFACES>
+</MOVEMENT>
+\end{lstlisting}
+
+Compared to full rotation, sector rotation applies rotational motion to only a specific portion of the mesh, 
+making it especially useful for simulating periodic slices of rotationally symmetric domains, thereby reducing computational cost.
+Here, \inltt{SECTOR} specifies the angular span of the rotating sector, in radians. For example, PI/15 defines a 12° slice. 
+\inltt{BASE} defines the reference line where the sector starts its rotation. 
+\inltt{AXIS} is the axis about which the rotation occurs (commonly the z-axis: (0,0,1)).
+\inltt{ANGVEL} sets the angular velocity (e.g., 1 for the rotating domain, 0 for stationary).
+
+Figure~\ref{fig:xml:move:sector_rotation} shows a schematic of sector rotation, with the base line indicated.
+\begin{figure}[h]
+    \begin{center}
+        \includegraphics[width=0.4\textwidth]{img/Sector_rotate.png}
+    \end{center}
+    \caption{Illustration of sector rotation and base line}\label{fig:xml:move:sector_rotation}
+\end{figure}
+
+To correctly apply rotational periodic boundary conditions along the sides of the sector, please refer to Section~\ref{sec:periodicBC}. 
+In addition, the mesh must be pre-aligned to ensure proper periodic matching, as detailed in Section~\ref{s:utilities:nekmesh:sub:peralign}.
+Note that, current sector rotation is supported only with the Interior Penalty method for the diffusion term.
+Additionally, the rotation axis must coincide with one of the global Cartesian axes—x, y, or z. 
+Rotation about an arbitrary axis is not yet supported.
 
 Another example for the translating movement is shown below:
 
@@ -116,3 +152,4 @@ Another example for the translating movement is shown below:
 Here \inltt{VELOCITY} and \inltt{DISPLACEMENT} are the translation velocity and 
 displacement in x,y,z direction. \inltt{SKIPCHECK} is defined to ignore the missing 
 coordinates found check for specific interface.
+

@@ -984,6 +984,17 @@ const Array<OneD, const int> &AssemblyMap::GetBndCondIDToGlobalTraceID()
     return m_bndCondIDToGlobalTraceID;
 }
 
+int AssemblyMap::GetPerBndCondIDToGlobalTraceID(const int i)
+{
+    ASSERTL1(i < m_perbndCondIDToGlobalTraceID.size(), "Index out of range.");
+    return m_perbndCondIDToGlobalTraceID[i];
+}
+
+const Array<OneD, const int> &AssemblyMap::GetPerBndCondIDToGlobalTraceID()
+{
+    return m_perbndCondIDToGlobalTraceID;
+}
+
 int AssemblyMap::GetNumGlobalDirBndCoeffs() const
 {
     return m_numGlobalDirBndCoeffs;

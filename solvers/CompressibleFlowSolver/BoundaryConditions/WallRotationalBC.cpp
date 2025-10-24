@@ -68,8 +68,9 @@ WallRotationalBC::WallRotationalBC(
 
         Array<OneD, NekDouble> x(nBCEdgePts, 0.0);
         Array<OneD, NekDouble> y(nBCEdgePts, 0.0);
+        Array<OneD, NekDouble> z(nBCEdgePts, 0.0);
         m_fields[0]->GetBndCondExpansions()[m_bcRegion]->GetExp(e)->GetCoords(
-            x, y);
+            x, y, z);
         for (int j = 0; j < nBCEdgePts; ++j)
         {
             m_gridVelocityTrace[0][id2 + j] = m_angVel * -y[j];

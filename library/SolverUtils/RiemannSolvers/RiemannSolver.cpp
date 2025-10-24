@@ -224,10 +224,21 @@ void RiemannSolver::rotateToNormal(
                 const int vy = (int)vecLocs[i][1];
                 const int vz = (int)vecLocs[i][2];
 
-                // Generate matrices if they don't already exist.
-                if (m_rotMat.size() == 0)
+                if (m_ALESolver)
                 {
-                    GenerateRotationMatrices(normals);
+                    // Generate matrices if they don't already exist.
+                    if (m_rotMat.size() == 0 || m_updateNormals())
+                    {
+                        GenerateRotationMatrices(normals);
+                    }
+                }
+                else
+                {
+                    // Generate matrices if they don't already exist.
+                    if (m_rotMat.size() == 0)
+                    {
+                        GenerateRotationMatrices(normals);
+                    }
                 }
 
                 // Apply rotation matrices.

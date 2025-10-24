@@ -88,16 +88,6 @@ public:
         return m_coordExchangeFlag;
     }
 
-    inline const Array<OneD, NekDouble> &GetDomainBox() const
-    {
-        return m_DomainBox;
-    }
-
-    inline const Array<OneD, NekDouble> &GetDomainLength() const
-    {
-        return m_DomainLength;
-    }
-
     inline const bool &GetMovedFlag() const
     {
         return m_moved;
@@ -108,14 +98,34 @@ public:
         return m_translate;
     }
 
+    inline const bool &GetRotateFlag() const
+    {
+        return m_rotate;
+    }
+
+    inline const bool &GetSectorRotateFlag() const
+    {
+        return m_sectorRotate;
+    }
+
     inline const bool &GetImplicitALESolverFlag() const
     {
-        return m_ImplicitALESolver;
+        return m_implicitALESolver;
+    }
+
+    inline const bool &GetMeshDistortedFlag() const
+    {
+        return m_meshDistorted;
     }
 
     void SetImplicitALEFlag(bool &ImplicitALE)
     {
-        m_ImplicitALESolver = ImplicitALE;
+        m_implicitALESolver = ImplicitALE;
+    }
+
+    void SetMeshDistortedFlag(bool &meshDistorted)
+    {
+        m_moved = meshDistorted;
     }
 
     // Methods for manipulating the MOVEMENT data programatically
@@ -131,13 +141,14 @@ protected:
     InterfaceCollection m_interfaces;
     std::map<int, ZoneBaseShPtr> m_zones;
     bool m_moveFlag          = false; // Flags presence of moving zones
-    bool m_translate         = false; // Flags for translate
+    bool m_translate         = false; // Flags for translation
+    bool m_rotate            = false; // Flags for rotation
+    bool m_sectorRotate      = false; // Flags for sector rotation
     bool m_moved             = false; // Flags to check if domain moved
-    bool m_ImplicitALESolver = false;
+    bool m_implicitALESolver = false; // Flags for implicit ALE solver
+    bool m_meshDistorted     = false; // Flags to check if mesh is distorted
     bool m_coordExchangeFlag =
         true; // Flags if missing coordinates need to be calculated
-    Array<OneD, NekDouble> m_DomainBox;    // Domain box
-    Array<OneD, NekDouble> m_DomainLength; // Lenghth of domain
 
 private:
     /// Read zones given TiXmlDocument
@@ -145,8 +156,9 @@ private:
                    const LibUtilities::SessionReaderSharedPtr &pSession);
     /// Read interfaces given TiXmlDocument
     void ReadInterfaces(TiXmlElement *interfacesTag, MeshGraph *meshGraph);
-    /// Calculate length of the domain
-    void DomainBox();
+    /// Update the box of translate zones
+    void UpdateTransZoneBox(
+        const LibUtilities::SessionReaderSharedPtr &pSession);
 };
 
 typedef std::shared_ptr<Movement> MovementSharedPtr;

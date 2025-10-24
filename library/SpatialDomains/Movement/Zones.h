@@ -136,6 +136,12 @@ struct ZoneBase
         return disp;
     }
 
+    /// Returns zone rotate angle
+    SPATIAL_DOMAINS_EXPORT virtual NekDouble v_GetAngle() const
+    {
+        return 0.0;
+    }
+
 protected:
     /// Type of zone movement
     MovementType m_type = MovementType::eNone;
@@ -188,13 +194,22 @@ struct ZoneRotate final : public ZoneBase
     SPATIAL_DOMAINS_EXPORT ZoneRotate(
         int id, int domainID, const CompositeMap &domain, const int coordDim,
         const NekPoint<NekDouble> &origin, const DNekVec &axis,
-        const LibUtilities::EquationSharedPtr &angularVelEqn);
+        const LibUtilities::EquationSharedPtr &angularVelEqn,
+        const NekDouble rampTime, const NekDouble sector,
+        const Array<OneD, NekDouble> &base);
 
     /// Default destructor
     ~ZoneRotate() override = default;
 
     /// Return the angular velocity of the zone at @param time
-    SPATIAL_DOMAINS_EXPORT NekDouble GetAngularVel(NekDouble &time) const;
+    SPATIAL_DOMAINS_EXPORT NekDouble GetAngularVel(const NekDouble &time) const;
+
+    /// Returns the rotation angle of the zone
+    SPATIAL_DOMAINS_EXPORT NekDouble GetAngle(const NekDouble &time);
+
+    /// Rotates the given global coordinate by the given angle
+    SPATIAL_DOMAINS_EXPORT void Rotate(Array<OneD, NekDouble> &gloCoord,
+                                       const NekDouble &angle);
 
     /// Returns the origin the zone rotates about
     inline const NekPoint<NekDouble> &GetOrigin() const
@@ -214,6 +229,24 @@ struct ZoneRotate final : public ZoneBase
         return m_angularVelEqn;
     }
 
+    /// Returns zone rotate angle
+    NekDouble v_GetAngle() const override
+    {
+        return m_angle;
+    }
+
+    /// Returns the angle of rotating sector.
+    inline const NekDouble &GetSectorAngle() const
+    {
+        return m_sector;
+    }
+
+    /// Returns the angle of rotating sector.
+    inline const Array<OneD, NekDouble> &GetSectorBase() const
+    {
+        return m_base;
+    }
+
 protected:
     ///  Origin point rotation is performed around
     NekPoint<NekDouble> m_origin;
@@ -221,6 +254,14 @@ protected:
     DNekVec m_axis;
     /// Equation defining angular velocity as a function of time
     LibUtilities::EquationSharedPtr m_angularVelEqn;
+    /// Rotate angle
+    NekDouble m_angle;
+    /// Ramp time
+    NekDouble m_rampTime;
+    /// Sector angle
+    NekDouble m_sector;
+    /// Base axis of sector
+    Array<OneD, NekDouble> m_base;
     /// W matrix Rodrigues' rotation formula, cross product of axis
     DNekMat m_W = DNekMat(3, 3, 0.0);
     /// W^2 matrix Rodrigues' rotation formula, cross product of axis squared
@@ -243,14 +284,10 @@ struct ZoneTranslate final : public ZoneBase
      * @param coordDim Coordinate dimension
      * @param velocity Vector of translation velocity in x,y,z direction
      */
-    ZoneTranslate(
+    SPATIAL_DOMAINS_EXPORT ZoneTranslate(
         int id, int domainID, const CompositeMap &domain, const int coordDim,
         const Array<OneD, LibUtilities::EquationSharedPtr> &velocityEqns,
-        const Array<OneD, LibUtilities::EquationSharedPtr> &displacementEqns)
-        : ZoneBase(MovementType::eTranslate, id, domainID, domain, coordDim),
-          m_velocityEqns(velocityEqns), m_displacementEqns(displacementEqns)
-    {
-    }
+        const Array<OneD, LibUtilities::EquationSharedPtr> &displacementEqns);
 
     /// Default destructor
     ~ZoneTranslate() override = default;
@@ -280,10 +317,32 @@ struct ZoneTranslate final : public ZoneBase
         return m_displacementEqns;
     }
 
+    SPATIAL_DOMAINS_EXPORT inline const Array<OneD, NekDouble> &GetZoneBox()
+        const
+    {
+        return m_ZoneBox;
+    }
+
+    SPATIAL_DOMAINS_EXPORT inline const Array<OneD, NekDouble> &GetZoneLength()
+        const
+    {
+        return m_ZoneLength;
+    }
+
+    SPATIAL_DOMAINS_EXPORT void UpdateZoneBox(
+        const Array<OneD, NekDouble> &ZoneBox,
+        const Array<OneD, NekDouble> &ZoneLength)
+    {
+        m_ZoneBox    = ZoneBox;
+        m_ZoneLength = ZoneLength;
+    }
+
 protected:
     Array<OneD, LibUtilities::EquationSharedPtr> m_velocityEqns;
     Array<OneD, LibUtilities::EquationSharedPtr> m_displacementEqns;
     std::vector<NekDouble> m_disp;
+    Array<OneD, NekDouble> m_ZoneBox;    // Domain box
+    Array<OneD, NekDouble> m_ZoneLength; // Lenghth of domain
 
     /// Virtual function for movement of the zone at @param time
     SPATIAL_DOMAINS_EXPORT bool v_Move(NekDouble time) final;
@@ -308,6 +367,9 @@ protected:
 
     /// Returns the displacement of the zone
     SPATIAL_DOMAINS_EXPORT std::vector<NekDouble> v_GetDisp() const override;
+
+    /// Returns the displacement of the zone
+    SPATIAL_DOMAINS_EXPORT NekDouble v_GetAngle() const override;
 };
 
 typedef std::shared_ptr<ZoneRotate> ZoneRotateShPtr;

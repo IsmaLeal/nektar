@@ -39,6 +39,7 @@
 #include <string>
 
 #include <LibUtilities/BasicUtils/ParseUtils.h>
+#include <LibUtilities/Interpreter/Interpreter.h>
 #include <SpatialDomains/MeshGraph.h>
 #include <SpatialDomains/Movement/Movement.h>
 #include <tinyxml.h>
@@ -95,23 +96,9 @@ Movement::Movement(const LibUtilities::SessionReaderSharedPtr &pSession,
             ReadInterfaces(interfacesTag, meshGraph);
         }
 
-        ASSERTL0(zones == interfaces,
-                 "Only one of ZONES or INTERFACES present in the MOVEMENT "
-                 "block.")
-        // Generate domain box
-        DomainBox();
-        // Get DomainBox from all processes
         if (m_translate)
         {
-            auto comm = pSession->GetComm();
-            for (int i = 0; i < 3; ++i)
-            {
-                auto &min = m_DomainBox[i];
-                auto &max = m_DomainBox[i + 3];
-                comm->GetSpaceComm()->AllReduce(min, LibUtilities::ReduceMin);
-                comm->GetSpaceComm()->AllReduce(max, LibUtilities::ReduceMax);
-                m_DomainLength[i] = max - min;
-            }
+            UpdateTransZoneBox(pSession);
         }
     }
 
@@ -263,10 +250,48 @@ void Movement::ReadZones(TiXmlElement *zonesTag, MeshGraph *meshGraph,
                 MemoryManager<LibUtilities::Equation>::AllocateSharedPtr(
                     pSession->GetInterpreter(), angularVelStr);
 
+            std::string rampTimeStr;
+            err = zonesElement->QueryStringAttribute("RAMPTIME", &rampTimeStr);
+            NekDouble rampTime = 0.0;
+            if (err == TIXML_SUCCESS)
+            {
+                LibUtilities::Interpreter expEvaluator;
+                int expr_id = expEvaluator.DefineFunction("", rampTimeStr);
+                rampTime    = expEvaluator.Evaluate(expr_id);
+            }
+
+            std::string sectorStr;
+            err = zonesElement->QueryStringAttribute("SECTOR", &sectorStr);
+            NekDouble sector = 0.0;
+            Array<OneD, NekDouble> base(3);
+            if (err == TIXML_SUCCESS)
+            {
+
+                LibUtilities::Interpreter expEvaluator;
+                int expr_id = expEvaluator.DefineFunction("", sectorStr);
+                sector      = expEvaluator.Evaluate(expr_id);
+
+                std::string baseStr;
+                err = zonesElement->QueryStringAttribute("BASE", &baseStr);
+                ASSERTL0(err == TIXML_SUCCESS, "Unable to read base.");
+                std::vector<NekDouble> baseVec;
+                ParseUtils::GenerateVector(baseStr, baseVec);
+                // Ensure the vector has exactly 3 elements before assignment
+                ASSERTL0(baseVec.size() == 3,
+                         "BASE attribute must have exactly 3 elements.");
+                for (int i = 0; i < 3; ++i)
+                {
+                    base[i] = baseVec[i];
+                }
+                m_sectorRotate = true;
+            }
+
             zone = ZoneRotateShPtr(MemoryManager<ZoneRotate>::AllocateSharedPtr(
-                indx, domFind, domain, coordDim, origin, axis, angularVelEqn));
+                indx, domFind, domain, coordDim, origin, axis, angularVelEqn,
+                rampTime, sector, base));
 
             m_moveFlag = true;
+            m_rotate   = true;
         }
         else if (zoneType == "T" || zoneType == "TRANSLATE" ||
                  zoneType == "TRANSLATING")
@@ -573,54 +598,30 @@ void Movement::AddInterface(std::string name, InterfaceShPtr left,
 }
 
 /// Generate domain box for translation mesh
-void Movement::DomainBox()
+void Movement::UpdateTransZoneBox(
+    const LibUtilities::SessionReaderSharedPtr &pSession)
 {
-    if (m_translate)
+    // Loop over all translate zones to get the box of the whole zone
+    for (auto &zones : m_zones)
     {
-        // NekDouble minx, miny, minz, maxx, maxy, maxz;
-        Array<OneD, NekDouble> min(3, 0.0), max(3, 0.0);
-        Array<OneD, NekDouble> x(3, 0.0);
-
-        // Find a point in the domian for parallel
-        for (auto &zones : m_zones)
+        if (zones.second->GetMovementType() == eTranslate)
         {
-            int NumVerts = zones.second->GetOriginalVertex().size();
-            if (NumVerts != 0)
+            auto zone = std::static_pointer_cast<ZoneTranslate>(zones.second);
+            Array<OneD, NekDouble> ZoneBox(6);
+            Array<OneD, NekDouble> ZoneLength(3);
+            ZoneBox    = zone->GetZoneBox();
+            ZoneLength = zone->GetZoneLength();
+            auto comm  = pSession->GetComm();
+            for (int i = 0; i < 3; ++i)
             {
-                PointGeom p = zones.second->GetOriginalVertex()[0];
-                p.GetCoords(x[0], x[1], x[2]);
-                for (int j = 0; j < 3; ++j)
-                {
-                    min[j] = x[j];
-                    max[j] = x[j];
-                }
-                break;
+                auto &min = ZoneBox[i];
+                auto &max = ZoneBox[i + 3];
+                comm->GetSpaceComm()->AllReduce(min, LibUtilities::ReduceMin);
+                comm->GetSpaceComm()->AllReduce(max, LibUtilities::ReduceMax);
+                ZoneLength[i] = max - min;
             }
-        }
-
-        // loop over all zones and original vertexes
-        for (auto &zones : m_zones)
-        {
-            int NumVerts = zones.second->GetOriginalVertex().size();
-            for (int i = 0; i < NumVerts; ++i)
-            {
-                PointGeom p = zones.second->GetOriginalVertex()[i];
-                p.GetCoords(x[0], x[1], x[2]);
-                for (int j = 0; j < 3; ++j)
-                {
-                    min[j] = (x[j] < min[j] ? x[j] : min[j]);
-                    max[j] = (x[j] > max[j] ? x[j] : max[j]);
-                }
-            }
-        }
-        // save bounding length
-        m_DomainLength = Array<OneD, NekDouble>(3, 0.0);
-        // save bounding box
-        m_DomainBox = Array<OneD, NekDouble>(6, 0.0);
-        for (int j = 0; j < 3; ++j)
-        {
-            m_DomainBox[j]     = min[j];
-            m_DomainBox[j + 3] = max[j];
+            // Update the zone box for all translate zones
+            zone->UpdateZoneBox(ZoneBox, ZoneLength);
         }
     }
 }

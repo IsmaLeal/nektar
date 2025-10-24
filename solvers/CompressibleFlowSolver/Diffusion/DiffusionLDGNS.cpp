@@ -303,7 +303,9 @@ void DiffusionLDGNS::v_DiffuseCoeffs(
         Vmath::Neg(nCoeffs, tmpOut, 1);
         fields[i]->AddTraceIntegral(viscousFlux[i], tmpOut);
         fields[i]->SetPhysState(false);
-        if (!fields[0]->GetGraph()->GetMovement()->GetMoveFlag())
+
+        // If mesh is not distorted
+        if (!fields[0]->GetGraph()->GetMovement()->GetMeshDistortedFlag())
         {
             fields[i]->MultiplyByElmtInvMass(tmpOut, outarray[i]);
         }
@@ -492,9 +494,10 @@ void DiffusionLDGNS::ApplyBCsO1(
                     // Reinforcing bcs for velocity in case of Wall bcs
                     for (int pt = 0; pt < nBndEdgePts; ++pt)
                     {
-                        scalarVariables[i][id2 + pt] = m_gridVelocityTrace
-                            [i][id2 + pt]; // If movement this equals trace grid
-                                           // velocity otherwise 0
+                        scalarVariables[i][id2 + pt] =
+                            m_gridVelocityTrace[i][id2 + pt];
+                        // If movement this equals trace grid
+                        // velocity otherwise 0
                     }
                 }
                 else if (boost::iequals(

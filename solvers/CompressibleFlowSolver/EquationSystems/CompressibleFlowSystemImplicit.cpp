@@ -310,9 +310,13 @@ void CFSImplicit::DoOdeRhsCoeff(
             Bwd[i] = Array<OneD, NekDouble>(nTracePts, 0.0);
             m_fields[i]->GetFwdBwdTracePhys(inarray[i], Fwd[i], Bwd[i]);
         }
+        m_fields[0]->PeriodicBwdRot(Bwd);
+        if (m_fields[0]->GetGraph()->GetMovement()->GetSectorRotateFlag())
+        {
+            m_fields[0]->RotLocalBwdTrace(Bwd);
+        }
     }
 
-    // Calculate advection
     timer.Start();
     DoAdvectionCoeff(inarray, outarray, time, Fwd, Bwd);
     timer.Stop();
@@ -385,9 +389,11 @@ void CFSImplicit::DoImplicitSolve(
     Array<OneD, Array<OneD, NekDouble>> tmpIn(nvariables);
     Array<OneD, Array<OneD, NekDouble>> tmpOut(nvariables);
     Array<OneD, Array<OneD, NekDouble>> tmpoutarray(nvariables);
+
     // Switch flag to make sure the physical shock capturing AV is updated
     m_updateShockCaptPhys = true;
-    if (m_ALESolver)
+
+    if (m_meshDistorted)
     {
         ALEHelper::ALEDoElmtInvMassBwdTrans(inpnts, tmpIn);
     }
@@ -395,6 +401,7 @@ void CFSImplicit::DoImplicitSolve(
     {
         tmpIn = inpnts;
     }
+
     for (int i = 0; i < nvariables; ++i)
     {
         int noffset = i * ncoeffs;
@@ -404,7 +411,7 @@ void CFSImplicit::DoImplicitSolve(
 
     DoImplicitSolveCoeff(tmpIn, inarray, outarray, time, lambda);
 
-    if (m_ALESolver)
+    if (m_meshDistorted)
     {
 
         for (int i = 0; i < nvariables; ++i)
@@ -1278,6 +1285,8 @@ void CFSImplicit::NumCalcRiemFluxJac(
 
     const MultiRegions::AssemblyMapDGSharedPtr TraceMap =
         fields[0]->GetTraceMap();
+    const MultiRegions::InterfaceMapDGSharedPtr InterfaceMap =
+        fields[0]->GetInterfaceMap();
     TensorOfArray3D<NekDouble> qBwd(nDim);
     TensorOfArray3D<NekDouble> qFwd(nDim);
     if (m_viscousJacFlag)
@@ -1295,6 +1304,7 @@ void CFSImplicit::NumCalcRiemFluxJac(
                                               qBwd[nd][i], true, true, false);
                 TraceMap->GetAssemblyCommDG()->PerformExchange(qFwd[nd][i],
                                                                qBwd[nd][i]);
+                InterfaceMap->ExchangeTrace(qFwd[nd][i], qBwd[nd][i]);
             }
         }
     }
@@ -2020,9 +2030,16 @@ bool CFSImplicit::v_UpdateTimeStepCheck()
 void CFSImplicit::v_ALEInitObject(
     int spaceDim, Array<OneD, MultiRegions::ExpListSharedPtr> &fields)
 {
-    m_ImplicitALESolver = true;
-    fields[0]->GetGraph()->GetMovement()->SetImplicitALEFlag(
-        m_ImplicitALESolver);
+    m_implicitALESolver = true;
+
+    if (fields[0]->GetGraph() != nullptr)
+    {
+        fields[0]->GetGraph()->GetMovement()->SetImplicitALEFlag(
+            m_implicitALESolver);
+        fields[0]->GetGraph()->GetMovement()->SetMeshDistortedFlag(
+            m_meshDistorted);
+    }
+
     m_spaceDim  = spaceDim;
     m_fieldsALE = fields;
 

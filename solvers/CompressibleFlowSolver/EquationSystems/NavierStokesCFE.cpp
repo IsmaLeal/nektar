@@ -152,9 +152,10 @@ void NavierStokesCFE::v_DoDiffusion(
 {
     size_t nvariables = inarray.size();
     size_t npointsIn  = GetNpoints();
-    size_t npointsOut =
-        m_ALESolver ? GetNcoeffs()
-                    : npointsIn; // If ALE then outarray is in coefficient space
+    size_t npointsOut = m_meshDistorted
+                            ? GetNcoeffs()
+                            : npointsIn; // If mesh is distorted then outarray
+                                         // is in coefficient space
     size_t nTracePts = GetTraceTotPoints();
 
     // this should be preallocated
@@ -189,7 +190,7 @@ void NavierStokesCFE::v_DoDiffusion(
         }
 
         // Diffusion term in physical rhs form
-        if (m_ALESolver)
+        if (m_meshDistorted)
         {
             m_diffusion->DiffuseCoeffs(nvariables, m_fields, inarray,
                                        outarrayDiff, m_bndEvaluateTime, pFwd,
@@ -243,7 +244,7 @@ void NavierStokesCFE::v_DoDiffusion(
         }
 
         // Diffusion term in physical rhs form
-        if (m_ALESolver)
+        if (m_meshDistorted)
         {
             m_diffusion->DiffuseCoeffs(nvariables, m_fields, inarrayDiff,
                                        outarrayDiff, inFwd, inBwd);
@@ -971,6 +972,12 @@ void NavierStokesCFE::v_ExtraFldOutput(
             m_fields[0]->FwdTransLocalElmt(m_varConv->GetAv(), muavFwd);
             variables.push_back("ArtificialVisc");
             fieldcoeffs.push_back(muavFwd);
+        }
+
+        if (m_ALESolver)
+        {
+            ExtraFldOutputGrid(fieldcoeffs, variables);
+            ExtraFldOutputGridVelocity(fieldcoeffs, variables);
         }
     }
 }

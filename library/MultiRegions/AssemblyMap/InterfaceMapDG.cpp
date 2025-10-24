@@ -40,8 +40,9 @@ namespace Nektar::MultiRegions
 
 InterfaceTrace::InterfaceTrace(
     const ExpListSharedPtr &trace,
-    const SpatialDomains::InterfaceShPtr &interfaceShPtr)
-    : m_trace(trace), m_interface(interfaceShPtr)
+    const SpatialDomains::InterfaceShPtr &interfaceShPtr,
+    SpatialDomains::MovementSharedPtr movementShPtr)
+    : m_trace(trace), m_interface(interfaceShPtr), m_movement(movementShPtr)
 {
 }
 
@@ -88,7 +89,7 @@ InterfaceMapDG::InterfaceMapDG(
 
             localInterfaces[interface.first.first].first =
                 MemoryManager<InterfaceTrace>::AllocateSharedPtr(
-                    trace, interface.second->GetLeftInterface());
+                    trace, interface.second->GetLeftInterface(), m_movement);
             m_localInterfaces.emplace_back(
                 localInterfaces[interface.first.first].first);
         }
@@ -99,7 +100,7 @@ InterfaceMapDG::InterfaceMapDG(
 
             localInterfaces[interface.first.first].second =
                 MemoryManager<InterfaceTrace>::AllocateSharedPtr(
-                    trace, interface.second->GetRightInterface());
+                    trace, interface.second->GetRightInterface(), m_movement);
             m_localInterfaces.emplace_back(
                 localInterfaces[interface.first.first].second);
         }
@@ -206,7 +207,7 @@ void InterfaceMapDG::ExchangeCoords()
     timer2.Start();
     for (auto &interfaceTrace : m_localInterfaces)
     {
-        interfaceTrace->CalcLocalMissing(m_movement);
+        interfaceTrace->CalcLocalMissing();
     }
     timer2.Stop();
     timer2.AccumulateRegion("InterfaceMapDG::ExchangeCoords local", 1);
@@ -259,8 +260,7 @@ void InterfaceMapDG::ExchangeCoords()
  * all coordinates are missing. If local then the same structure as
  * CalcRankDistances is used to minimise computational cost.
  */
-void InterfaceTrace::CalcLocalMissing(
-    SpatialDomains::MovementSharedPtr movement)
+void InterfaceTrace::CalcLocalMissing()
 {
     // Nuke old missing/found
     m_missingCoords.clear();
@@ -269,6 +269,9 @@ void InterfaceTrace::CalcLocalMissing(
     // Store copy of found coords to optimise search before clearing
     auto foundLocalCoordsCopy = m_foundLocalCoords;
     m_foundLocalCoords.clear();
+    // Zone id
+    int id          = m_interface->GetId();
+    NekDouble angle = 0.0;
 
     auto childEdge = m_interface->GetEdge();
     // If not flagged 'check local' then all points are missing
@@ -283,7 +286,6 @@ void InterfaceTrace::CalcLocalMissing(
             childElmt->GetCoords(xc, yc, zc);
             int offset =
                 m_trace->GetPhys_Offset(m_trace->GetElmtToExpId(childId.first));
-
             for (int i = 0; i < nq; ++i, ++cnt)
             {
                 Array<OneD, NekDouble> xs(3);
@@ -291,9 +293,17 @@ void InterfaceTrace::CalcLocalMissing(
                 xs[1] = yc[i];
                 xs[2] = zc[i];
 
-                if (movement->GetMovedFlag() && movement->GetTranslateFlag())
+                // If mesh has moved, need to update corresponding points on
+                // interface
+                if (m_movement->GetMovedFlag())
                 {
-                    DomainCheck(xs, movement);
+                    DomainCheck(xs, angle);
+
+                    // Record the rotation angle for sector rotation
+                    if (m_movement->GetSectorRotateFlag())
+                    {
+                        m_phyRotAngle[offset + i] = std::make_pair(id, angle);
+                    }
                 }
 
                 m_missingCoords.emplace_back(xs);
@@ -321,7 +331,6 @@ void InterfaceTrace::CalcLocalMissing(
             childElmt->GetCoords(xc, yc, zc);
             int offset =
                 m_trace->GetPhys_Offset(m_trace->GetElmtToExpId(childId.first));
-
             for (int i = 0; i < nq; ++i)
             {
                 bool found = false;
@@ -331,9 +340,17 @@ void InterfaceTrace::CalcLocalMissing(
                 xs[1] = yc[i];
                 xs[2] = zc[i];
 
-                if (movement->GetMovedFlag() && movement->GetTranslateFlag())
+                // If mesh has moved, need to update corresponding points on
+                // interface
+                if (m_movement->GetMovedFlag())
                 {
-                    DomainCheck(xs, movement);
+                    DomainCheck(xs, angle);
+
+                    // Record the rotation angle for sector rotation
+                    if (m_movement->GetSectorRotateFlag())
+                    {
+                        m_phyRotAngle[offset + i] = std::make_pair(id, angle);
+                    }
                 }
 
                 // First search the edge the point was found in last timestep
@@ -343,7 +360,6 @@ void InterfaceTrace::CalcLocalMissing(
                     auto edge = m_interface->GetOppInterface()->GetEdge(
                         foundLocalCoordsCopy[offset + i].first);
                     NekDouble dist = edge->FindDistance(xs, foundLocCoord);
-
                     if (dist < NekConstants::kFindDistanceMin)
                     {
                         m_foundLocalCoords[offset + i] =
@@ -548,6 +564,110 @@ void InterfaceTrace::FillLocalBwdTrace(Array<OneD, NekDouble> &Fwd,
     }
 }
 
+void InterfaceTrace::RotLocalBwdTrace(Array<OneD, Array<OneD, NekDouble>> &Bwd,
+                                      const int &dim)
+{
+
+    Array<OneD, Array<OneD, NekDouble>> vecLocs(1);
+    vecLocs[0] = Array<OneD, NekDouble>(dim);
+    for (int i = 0; i < dim; ++i)
+    {
+        vecLocs[0][i] = 1 + i;
+    }
+    int id     = m_interface->GetId();
+    auto zones = m_movement->GetZones();
+    auto zone = std::static_pointer_cast<SpatialDomains::ZoneRotate>(zones[id]);
+    Array<OneD, NekDouble> tmpVelocity(dim);
+
+    // Rotates the interface velocity for sector rotation
+    // Loop over rotated search coordinates
+    for (auto &phyRotAngle : m_phyRotAngle)
+    {
+        int traceId     = phyRotAngle.first;
+        NekDouble angle = m_phyRotAngle[traceId].second;
+        if (angle != 0)
+        {
+            for (int i = 0; i < dim; ++i)
+            {
+                tmpVelocity[i] = Bwd[vecLocs[0][i]][traceId];
+            }
+            zone->Rotate(tmpVelocity, -angle);
+            for (int i = 0; i < dim; ++i)
+            {
+                Bwd[vecLocs[0][i]][traceId] = tmpVelocity[i];
+            }
+        }
+    }
+}
+
+void InterfaceTrace::RotLocalBwdDeriveTrace(TensorOfArray3D<NekDouble> &Bwd,
+                                            const int &dim)
+{
+
+    // Get rotating information from zones
+    size_t nVariables = Bwd[0].size();
+    int id            = m_interface->GetId();
+    auto zones        = m_movement->GetZones();
+    auto zone = std::static_pointer_cast<SpatialDomains::ZoneRotate>(zones[id]);
+    Array<OneD, NekDouble> tmpVelocity(dim);
+    auto axis = zone->GetAxis();
+    int dir   = 0;
+    if (axis[0] == 0 && axis[1] == 0 && axis[2] == 1)
+    {
+        dir = 2;
+    }
+    else if (axis[0] == 1 && axis[1] == 0 && axis[2] == 0)
+    {
+        dir = 0;
+    }
+    else if (axis[0] == 0 && axis[1] == 1 && axis[2] == 0)
+    {
+        dir = 1;
+    }
+    else
+    {
+        NEKERROR(ErrorUtil::efatal, "Invalid rotation axis.");
+    }
+
+    // Rotates the derivative velocity for sector rotation
+    for (auto &phyRotAngle : m_phyRotAngle)
+    {
+        int traceId     = phyRotAngle.first;
+        NekDouble angle = m_phyRotAngle[traceId].second;
+        if (angle != 0)
+        {
+            TensorOfArray3D<NekDouble> tmpBwd(dim);
+
+            for (int j = 0; j < dim; ++j)
+            {
+                tmpBwd[j] = Array<OneD, Array<OneD, NekDouble>>{nVariables};
+                for (int i = 0; i < nVariables; ++i)
+                {
+                    tmpBwd[j][i] = Array<OneD, NekDouble>{1, 0.0};
+                }
+            }
+
+            for (int j = 0; j < dim; ++j)
+            {
+                for (int i = 0; i < nVariables; ++i)
+                {
+                    tmpBwd[j][i][0] = Bwd[j][i][traceId];
+                }
+            }
+
+            DeriveRotate(tmpBwd, dir, -angle);
+
+            for (int j = 0; j < dim; ++j)
+            {
+                for (int i = 0; i < dim; ++i)
+                {
+                    Bwd[j][i][traceId] = tmpBwd[j][i][0];
+                }
+            }
+        }
+    }
+}
+
 void InterfaceExchange::FillRankBwdTraceExchange(Array<OneD, NekDouble> &Bwd)
 {
     int cnt = 0;
@@ -688,58 +808,287 @@ void InterfaceExchange::CalcRankDistances()
 }
 
 void InterfaceTrace::DomainCheck(Array<OneD, NekDouble> &gloCoord,
-                                 SpatialDomains::MovementSharedPtr movement)
+                                 NekDouble &RotateAngle)
 {
     // Get current interface id and opposite interface id
     int id    = m_interface->GetId();
     int oppid = m_interface->GetOppInterface()->GetId();
 
     // Get displacement of the current interface and the opposite interface
-    auto zones   = movement->GetZones();
-    auto disp    = zones[id]->v_GetDisp();
-    auto oppdisp = zones[oppid]->v_GetDisp();
+    auto zones = m_movement->GetZones();
 
-    // Get domain length and domian box
-    auto box    = movement->GetDomainBox();
-    auto length = movement->GetDomainLength();
-
-    NekDouble ExactMove    = 0.0;
-    NekDouble ExactOppMove = 0.0;
-    int tmp                = 0;
-
-    // update coordinates by add or minus domian length
-    for (int i = 0; i < disp.size(); ++i)
+    if (m_movement->GetTranslateFlag())
     {
-        // map coordinate back to the original mesh
-        ExactMove    = std::fmod(disp[i], length[i]);
-        ExactOppMove = std::fmod(oppdisp[i], length[i]);
-        tmp          = oppdisp[i] / length[i];
-        gloCoord[i]  = gloCoord[i] - disp[i] + ExactMove;
+        auto disp    = zones[id]->v_GetDisp();
+        auto oppdisp = zones[oppid]->v_GetDisp();
+        Array<OneD, NekDouble> box(6);
+        Array<OneD, NekDouble> length(3);
 
-        // update coordinates for perioidic interface
-        if (oppdisp[i] - disp[i] < 0)
+        // Get zone length and domian box from the translate zone
+        if (zones[id]->GetMovementType() ==
+            SpatialDomains::MovementType::eTranslate)
         {
-            if (gloCoord[i] > box[i + 3] + ExactOppMove)
+            auto zone = std::static_pointer_cast<SpatialDomains::ZoneTranslate>(
+                zones[id]);
+            box    = zone->GetZoneBox();
+            length = zone->GetZoneLength();
+        }
+        else if (zones[oppid]->GetMovementType() ==
+                 SpatialDomains::MovementType::eTranslate)
+        {
+            auto zone = std::static_pointer_cast<SpatialDomains::ZoneTranslate>(
+                zones[oppid]);
+            box    = zone->GetZoneBox();
+            length = zone->GetZoneLength();
+        }
+
+        NekDouble ExactMove    = 0.0;
+        NekDouble ExactOppMove = 0.0;
+        int tmp                = 0;
+
+        // update coordinates by add or minus domian length
+        for (int i = 0; i < disp.size(); ++i)
+        {
+
+            // map coordinate back to the original mesh
+            ExactMove    = std::fmod(disp[i], length[i]);
+            ExactOppMove = std::fmod(oppdisp[i], length[i]);
+            tmp          = oppdisp[i] / length[i];
+            gloCoord[i]  = gloCoord[i] - disp[i] + ExactMove;
+
+            // update coordinates for perioidic interface
+            if (oppdisp[i] - disp[i] < 0)
             {
-                gloCoord[i] = gloCoord[i] - length[i] + tmp * length[i];
+                if (gloCoord[i] > box[i + 3] + ExactOppMove + 1e-8)
+                {
+                    gloCoord[i] = gloCoord[i] - length[i] + tmp * length[i];
+                }
+                else
+                {
+                    gloCoord[i] = gloCoord[i] + tmp * length[i];
+                }
             }
             else
             {
-                gloCoord[i] = gloCoord[i] + tmp * length[i];
+                if (gloCoord[i] < box[i] + ExactOppMove - 1e-8)
+                {
+                    gloCoord[i] = gloCoord[i] + length[i] + tmp * length[i];
+                }
+                else
+                {
+                    gloCoord[i] = gloCoord[i] + tmp * length[i];
+                }
+            }
+        }
+    }
+
+    if (m_movement->GetSectorRotateFlag())
+    {
+        // Using rotation zone information to update the coordinates
+        auto zone =
+            std::static_pointer_cast<SpatialDomains::ZoneRotate>(zones[id]);
+        auto zone2 =
+            std::static_pointer_cast<SpatialDomains::ZoneRotate>(zones[oppid]);
+
+        // Get the rotation angle of the current interface and the opposite
+        // interface
+        auto angle    = zone->v_GetAngle();
+        auto oppAngle = zone2->v_GetAngle();
+
+        // Get the sector angle
+        NekDouble SectorAngle = zone->GetSectorAngle();
+
+        NekDouble ExactOppMove = 0.0;
+        RotateAngle            = 0.0;
+
+        int tmp1 = 0;
+        int tmp2 = 0;
+        int tmp3 = 0;
+
+        // Get the base coordinate of the sector
+        Array<OneD, NekDouble> base = zone->GetSectorBase();
+
+        // Normalize angles to [0, 2*PI)
+        angle = std::fmod(angle, 2 * M_PI);
+        if (angle < 0)
+        {
+            angle += 2 * M_PI;
+        }
+        oppAngle = std::fmod(oppAngle, 2 * M_PI);
+        if (oppAngle < 0)
+        {
+            oppAngle += 2 * M_PI;
+        }
+
+        // Map coordinate back to the original mesh
+        ExactOppMove = std::fmod(oppAngle, SectorAngle);
+        tmp1         = static_cast<int>(std::floor(angle / SectorAngle));
+        tmp2         = static_cast<int>(std::floor(oppAngle / SectorAngle));
+
+        // Compute the angle between the current coordinate and the base
+        // coordinate
+        auto axis      = zone->GetAxis();
+        NekDouble diff = 0.0;
+        if (axis[0] == 0 && axis[1] == 0 && axis[2] == 1)
+        {
+            diff = atan2(gloCoord[1], gloCoord[0]) - atan2(base[1], base[0]);
+        }
+        else if (axis[0] == 1 && axis[1] == 0 && axis[2] == 0)
+        {
+            diff = atan2(gloCoord[2], gloCoord[1]) - atan2(base[2], base[1]);
+        }
+        else if (axis[0] == 0 && axis[1] == 1 && axis[2] == 0)
+        {
+            diff = atan2(gloCoord[0], gloCoord[2]) - atan2(base[0], base[2]);
+        }
+        else
+        {
+            NEKERROR(ErrorUtil::efatal, "Invalid rotation axis.");
+        }
+
+        // Normalize angles to [0, 2*PI)
+        if (diff < 0)
+        {
+            diff += 2 * M_PI;
+        }
+        tmp3 = static_cast<int>(std::floor(diff / SectorAngle));
+
+        // Compute the exact difference after mapping the angle back to the
+        // original mesh
+        NekDouble Exactdiff = std::fmod(diff, SectorAngle);
+
+        // update coordinates for perioidic interface
+        if (oppAngle - angle < 0)
+        {
+            if (ExactOppMove < Exactdiff && tmp3 != tmp1)
+            {
+                RotateAngle =
+                    -SectorAngle + tmp2 * SectorAngle - tmp1 * SectorAngle;
+
+                zone->Rotate(gloCoord, RotateAngle);
+            }
+            else
+            {
+                RotateAngle = -tmp1 * SectorAngle + tmp2 * SectorAngle;
+                zone->Rotate(gloCoord, RotateAngle);
             }
         }
         else
         {
-            if (gloCoord[i] < box[i] + ExactOppMove)
+            if (Exactdiff < ExactOppMove && tmp3 == tmp1)
             {
-                gloCoord[i] = gloCoord[i] + length[i] + tmp * length[i];
+                RotateAngle =
+                    SectorAngle + tmp2 * SectorAngle - tmp1 * SectorAngle;
+                zone->Rotate(gloCoord, RotateAngle);
             }
             else
             {
-                gloCoord[i] = gloCoord[i] + tmp * length[i];
+                RotateAngle = -tmp1 * SectorAngle + tmp2 * SectorAngle;
+                zone->Rotate(gloCoord, RotateAngle);
             }
         }
     }
+}
+
+void InterfaceTrace::DeriveRotate(TensorOfArray3D<NekDouble> &Bwd,
+                                  const int dir, const NekDouble angle)
+{
+    // Precompute trigonometric values using correct angle input
+    const NekDouble cosA = cos(angle);
+    const NekDouble sinA = sin(angle);
+
+    // Define rotation matrix R (3x3) using Array<OneD, NekDouble> in
+    // **column-major order**
+    Array<OneD, NekDouble> R(9, 0.0);
+
+    if (dir == 0) // Rotation around X-axis
+    {
+        R[0] = 1.0;
+        R[3] = 0.0;
+        R[6] = 0.0;
+        R[1] = 0.0;
+        R[4] = cosA;
+        R[7] = -sinA;
+        R[2] = 0.0;
+        R[5] = sinA;
+        R[8] = cosA;
+    }
+    else if (dir == 1) // Rotation around Y-axis
+    {
+        R[0] = cosA;
+        R[3] = 0.0;
+        R[6] = sinA;
+        R[1] = 0.0;
+        R[4] = 1.0;
+        R[7] = 0.0;
+        R[2] = -sinA;
+        R[5] = 0.0;
+        R[8] = cosA;
+    }
+    else if (dir == 2) // Rotation around Z-axis
+    {
+        R[0] = cosA;
+        R[3] = -sinA;
+        R[6] = 0.0;
+        R[1] = sinA;
+        R[4] = cosA;
+        R[7] = 0.0;
+        R[2] = 0.0;
+        R[5] = 0.0;
+        R[8] = 1.0;
+    }
+    else
+    {
+        NEKERROR(
+            ErrorUtil::efatal,
+            "Invalid rotation axis for first-order derivative transformation.");
+    }
+
+    // Allocate gradient tensor (3x3) in **column-major order**
+    Array<OneD, NekDouble> gradU(9, 0.0);
+
+    // Load original velocity gradient tensor into **column-major** format
+    gradU[0] = Bwd[0][1][0]; // ∂u_x/∂x
+    gradU[3] = Bwd[1][1][0]; // ∂u_x/∂y
+    gradU[6] = Bwd[2][1][0]; // ∂u_x/∂z
+
+    gradU[1] = Bwd[0][2][0]; // ∂u_y/∂x
+    gradU[4] = Bwd[1][2][0]; // ∂u_y/∂y
+    gradU[7] = Bwd[2][2][0]; // ∂u_y/∂z
+
+    gradU[2] = Bwd[0][3][0]; // ∂u_z/∂x
+    gradU[5] = Bwd[1][3][0]; // ∂u_z/∂y
+    gradU[8] = Bwd[2][3][0]; // ∂u_z/∂z
+
+    // Allocate intermediate matrix R * gradU in **column-major order**
+    Array<OneD, NekDouble> R_gradU(9, 0.0);
+
+    // Perform matrix multiplication R * gradU using Blas::Dgemm in
+    // **column-major order**
+    Blas::Dgemm('N', 'N', 3, 3, 3, 1.0, R.data(), 3, gradU.data(), 3, 0.0,
+                R_gradU.data(), 3);
+
+    // Allocate final rotated gradient (R * gradU) * R^T in **column-major
+    // order**
+    Array<OneD, NekDouble> gradU_rotated(9, 0.0);
+
+    // Perform matrix multiplication (R * gradU) * R^T using Blas::Dgemm in
+    // **column-major order**
+    Blas::Dgemm('N', 'T', 3, 3, 3, 1.0, R_gradU.data(), 3, R.data(), 3, 0.0,
+                gradU_rotated.data(), 3);
+
+    // Store rotated gradients back in Bwd in **column-major order**
+    Bwd[0][1][0] = gradU_rotated[0]; // ∂u_x'/∂x'
+    Bwd[1][1][0] = gradU_rotated[3]; // ∂u_x'/∂y'
+    Bwd[2][1][0] = gradU_rotated[6]; // ∂u_x'/∂z'
+
+    Bwd[0][2][0] = gradU_rotated[1]; // ∂u_y'/∂x'
+    Bwd[1][2][0] = gradU_rotated[4]; // ∂u_y'/∂y'
+    Bwd[2][2][0] = gradU_rotated[7]; // ∂u_y'/∂z'
+
+    Bwd[0][3][0] = gradU_rotated[2]; // ∂u_z'/∂x'
+    Bwd[1][3][0] = gradU_rotated[5]; // ∂u_z'/∂y'
+    Bwd[2][3][0] = gradU_rotated[8]; // ∂u_z'/∂z'
 }
 
 } // namespace Nektar::MultiRegions

@@ -80,7 +80,7 @@ void ProcessPhiFromFile::v_Process([[maybe_unused]] po::variables_map &vm)
     // Check if required params are defined
     ASSERTL0(m_f->m_graph, "A session file file must be provided before the "
                            "STL file.")
-
+    m_f->SetUpExp(vm);
     // Skip in case of empty partition
     if (m_f->m_exp[0]->GetNumElmts() == 0)
     {
