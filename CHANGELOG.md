@@ -9,6 +9,7 @@ v5.9.0
 - Fix bug in ExpList (!2182)
 - Remove deprecated TimeIntegrationMethod in SolverInfo (!2061)
 - Some fix for PhysInterp1D (!2081)
+- Add 3D rotating mesh capability (!2184)
 - Use std::unordered_map instead of std::map for NekFactory (!2103)
 - Replace `std::shared_ptr` with `std::unique_ptr` inside SpatialDomains (!2112, !2222)
 - Fix output messages clobbering error info in Lagrangian filter (!2200, !2202)

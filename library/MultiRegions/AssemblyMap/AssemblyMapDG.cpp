@@ -41,6 +41,7 @@
 #include <MultiRegions/AssemblyMap/AssemblyMapDG.h>
 #include <MultiRegions/ExpList.h>
 
+#include <boost/algorithm/string.hpp>
 #include <boost/config.hpp>
 #include <boost/graph/adjacency_list.hpp>
 
@@ -444,8 +445,9 @@ AssemblyMapDG::AssemblyMapDG(
 
     // set up m_bndCondCoeffsToLocalTraceMap
     // Number of boundary expansions
-    int nbndexp  = 0;
-    int bndTotal = 0;
+    int nbndexp       = 0;
+    int nrotperbndexp = 0;
+    int bndTotal      = 0;
     int bndOffset;
     int traceOffset;
 
@@ -454,6 +456,11 @@ AssemblyMapDG::AssemblyMapDG(
     {
         if (bndCond[i]->GetBoundaryConditionType() == SpatialDomains::ePeriodic)
         {
+            if (boost::icontains(bndCond[i]->GetUserDefined(), "Rotated"))
+            {
+                nrotperbndexp += bndCondExp[i]->GetExpSize();
+            }
+
             continue;
         }
         cnt += bndCondExp[i]->GetNcoeffs();
@@ -462,12 +469,26 @@ AssemblyMapDG::AssemblyMapDG(
 
     m_bndCondCoeffsToLocalTraceMap = Array<OneD, int>(cnt);
     m_bndCondIDToGlobalTraceID     = Array<OneD, int>(nbndexp);
+    m_perbndCondIDToGlobalTraceID  = Array<OneD, int>(nrotperbndexp);
 
-    cnt = 0;
+    cnt        = 0;
+    int percnt = 0;
     for (i = 0; i < bndCondExp.size(); ++i)
     {
         if (bndCond[i]->GetBoundaryConditionType() == SpatialDomains::ePeriodic)
         {
+            if (boost::icontains(bndCond[i]->GetUserDefined(), "Rotated"))
+            {
+
+                for (j = 0; j < bndCondExp[i]->GetExpSize(); ++j)
+                {
+                    bndExp = bndCondExp[i]->GetExp(j);
+                    id     = bndExp->GetGeom()->GetGlobalID();
+
+                    int meshId = meshTraceId.find(id)->second;
+                    m_perbndCondIDToGlobalTraceID[percnt++] = meshId;
+                }
+            }
             continue;
         }
 

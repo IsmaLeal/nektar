@@ -159,9 +159,12 @@ ZoneBase::ZoneBase(MovementType type, int indx, int domainID,
 ZoneRotate::ZoneRotate(int id, int domainID, const CompositeMap &domain,
                        const int coordDim, const NekPoint<NekDouble> &origin,
                        const DNekVec &axis,
-                       const LibUtilities::EquationSharedPtr &angularVelEqn)
+                       const LibUtilities::EquationSharedPtr &angularVelEqn,
+                       const NekDouble rampTime, const NekDouble sector,
+                       const Array<OneD, NekDouble> &base)
     : ZoneBase(MovementType::eRotate, id, domainID, domain, coordDim),
-      m_origin(origin), m_axis(axis), m_angularVelEqn(angularVelEqn)
+      m_origin(origin), m_axis(axis), m_angularVelEqn(angularVelEqn),
+      m_rampTime(rampTime), m_sector(sector), m_base(base)
 {
     // Construct rotation matrix
     m_W(0, 1) = -m_axis[2];
@@ -196,12 +199,11 @@ void ZoneBase::ClearBoundingBoxes()
     }
 }
 
-NekDouble ZoneRotate::GetAngularVel(NekDouble &time) const
+NekDouble ZoneRotate::GetAngularVel(const NekDouble &time) const
 {
-    NekDouble rampTime = 1;
-    if (time < rampTime)
+    if (time < m_rampTime)
     {
-        return m_angularVelEqn->Evaluate(0, 0, 0, time) * time / rampTime;
+        return m_angularVelEqn->Evaluate(0, 0, 0, time) * time / m_rampTime;
     }
     else
     {
@@ -209,23 +211,31 @@ NekDouble ZoneRotate::GetAngularVel(NekDouble &time) const
     }
 }
 
-// Calculate new location of points using Rodrigues formula
-bool ZoneRotate::v_Move(NekDouble time)
+// Calculate angle rotated at given time
+NekDouble ZoneRotate::GetAngle(const NekDouble &time)
 {
     // This works for a linear ramp
-    NekDouble rampTime = 1;
-    NekDouble angle;
-    if (time < rampTime)
+    if (time < m_rampTime)
     {
-        angle = GetAngularVel(time) * (time / rampTime) / 2;
+        m_angle = GetAngularVel(time) * (time) / 2;
     }
     else
     {
-        angle = GetAngularVel(rampTime) * rampTime / 2 +
-                GetAngularVel(time) * (time - rampTime);
+        m_angle = GetAngularVel(m_rampTime) * m_rampTime / 2 +
+                  GetAngularVel(time) * (time - m_rampTime);
     }
+    return m_angle;
+}
 
-    // TODO: I want to integrate m_angularVelEqn up to current time
+// Calculate new location of points using Rodrigues formula
+bool ZoneRotate::v_Move(NekDouble time)
+{
+    NekDouble angle = GetAngle(time);
+
+    if (angle == 0.0)
+    {
+        return false;
+    }
 
     // Identity matrix
     DNekMat rot(3, 3, 0.0);
@@ -268,6 +278,68 @@ bool ZoneRotate::v_Move(NekDouble time)
     ClearBoundingBoxes();
 
     return true;
+}
+
+void ZoneRotate::Rotate(Array<OneD, NekDouble> &gloCoord,
+                        const NekDouble &angle)
+{
+    // Identity matrix
+    DNekMat rot(3, 3, 0.0);
+    rot(0, 0) = 1.0;
+    rot(1, 1) = 1.0;
+    rot(2, 2) = 1.0;
+
+    // Rodrigues' rotation formula in matrix form
+    rot = rot + sin(angle) * m_W + (1 - cos(angle)) * m_W2;
+
+    DNekVec pntVec = {gloCoord[0] - m_origin[0], gloCoord[1] - m_origin[1],
+                      gloCoord[2] - m_origin[2]};
+
+    DNekVec newLoc = rot * pntVec;
+
+    gloCoord[0] = newLoc(0) + m_origin[0];
+    gloCoord[1] = newLoc(1) + m_origin[1];
+    gloCoord[2] = newLoc(2) + m_origin[2];
+}
+
+ZoneTranslate::ZoneTranslate(
+    int id, int domainID, const CompositeMap &domain, const int coordDim,
+    const Array<OneD, LibUtilities::EquationSharedPtr> &velocityEqns,
+    const Array<OneD, LibUtilities::EquationSharedPtr> &displacementEqns)
+    : ZoneBase(MovementType::eTranslate, id, domainID, domain, coordDim),
+      m_velocityEqns(velocityEqns), m_displacementEqns(displacementEqns)
+{
+    int NumVerts = m_origVerts.size();
+    // Bounding length
+    m_ZoneLength = Array<OneD, NekDouble>(3);
+    // Bounding box
+    m_ZoneBox = Array<OneD, NekDouble>(6);
+    // NekDouble minx, miny, minz, maxx, maxy, maxz;
+    Array<OneD, NekDouble> min(3), max(3);
+    Array<OneD, NekDouble> x(3);
+    // Initialise max and min
+    for (int j = 0; j < 3; ++j)
+    {
+        min[j] = std::numeric_limits<double>::max();
+        max[j] = -std::numeric_limits<double>::max();
+    }
+    // Loop over all original vertexes to get the box and length
+    for (int i = 0; i < NumVerts; ++i)
+    {
+        PointGeom p = m_origVerts[i];
+        p.GetCoords(x[0], x[1], x[2]);
+        for (int j = 0; j < 3; ++j)
+        {
+            min[j] = (x[j] < min[j] ? x[j] : min[j]);
+            max[j] = (x[j] > max[j] ? x[j] : max[j]);
+        }
+    }
+    for (int j = 0; j < 3; ++j)
+    {
+        m_ZoneBox[j]     = min[j];
+        m_ZoneBox[j + 3] = max[j];
+        m_ZoneLength[j]  = max[j] - min[j];
+    }
 }
 
 std::vector<NekDouble> ZoneTranslate::GetVel(NekDouble &time) const
@@ -346,6 +418,10 @@ std::vector<NekDouble> ZoneFixed::v_GetDisp() const
     }
 
     return disp;
+}
+NekDouble ZoneFixed::v_GetAngle() const
+{
+    return 0.0;
 }
 
 } // namespace Nektar::SpatialDomains

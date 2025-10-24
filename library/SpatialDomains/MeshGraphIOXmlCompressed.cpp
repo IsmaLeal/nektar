@@ -149,6 +149,20 @@ void MeshGraphIOXmlCompressed::v_ReadVertices()
         zmove               = expEvaluator.Evaluate(expr_id);
     }
 
+    NekDouble zrotate;
+
+    const char *zrot = element->Attribute("ZROT");
+    if (!zrot)
+    {
+        zrotate = 0.0;
+    }
+    else
+    {
+        std::string zrotstr = zrot;
+        int expr_id         = expEvaluator.DefineFunction("", zrotstr);
+        zrotate             = expEvaluator.Evaluate(expr_id);
+    }
+
     std::string IsCompressed;
     element->QueryStringAttribute("COMPRESSED", &IsCompressed);
 
@@ -182,6 +196,13 @@ void MeshGraphIOXmlCompressed::v_ReadVertices()
             xval = xval * xscale + xmove;
             yval = yval * yscale + ymove;
             zval = zval * zscale + zmove;
+
+            if (zrotate != 0.0)
+            {
+                NekDouble xval_tmp = xval * cos(zrotate) - yval * sin(zrotate);
+                yval               = xval * sin(zrotate) + yval * cos(zrotate);
+                xval               = xval_tmp;
+            }
 
             m_meshGraph->CreatePointGeom(spaceDimension, indx, xval, yval,
                                          zval);
@@ -285,6 +306,20 @@ void MeshGraphIOXmlCompressed::v_ReadCurves()
         std::string zmovstr = zmov;
         int expr_id         = expEvaluator.DefineFunction("", zmovstr);
         zmove               = expEvaluator.Evaluate(expr_id);
+    }
+
+    NekDouble zrotate;
+
+    const char *zrot = element->Attribute("ZROT");
+    if (!zrot)
+    {
+        zrotate = 0.0;
+    }
+    else
+    {
+        std::string zrotstr = zrot;
+        int expr_id         = expEvaluator.DefineFunction("", zrotstr);
+        zrotate             = expEvaluator.Evaluate(expr_id);
     }
 
     /// Look for elements in CURVE block.
@@ -398,6 +433,15 @@ void MeshGraphIOXmlCompressed::v_ReadCurves()
         cpts.pts[i].x = xscale * cpts.pts[i].x + xmove;
         cpts.pts[i].y = yscale * cpts.pts[i].y + ymove;
         cpts.pts[i].z = zscale * cpts.pts[i].z + zmove;
+
+        if (zrotate != 0.0)
+        {
+            NekDouble xval_tmp =
+                cpts.pts[i].x * cos(zrotate) - cpts.pts[i].y * sin(zrotate);
+            cpts.pts[i].y =
+                cpts.pts[i].x * sin(zrotate) + cpts.pts[i].y * cos(zrotate);
+            cpts.pts[i].x = xval_tmp;
+        }
     }
 
     for (int i = 0; i < edginfo.size(); ++i)

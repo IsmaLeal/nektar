@@ -420,6 +420,13 @@ void PreconCfsBRJ::MinusOffDiag2Rhs(
         timer.AccumulateRegion("ExpList::GetFwdBwdTracePhys", 10);
     }
 
+    pFields[0]->PeriodicBwdRot(Bwd);
+
+    if (pFields[0]->GetGraph()->GetMovement()->GetSectorRotateFlag())
+    {
+        pFields[0]->RotLocalBwdTrace(Bwd);
+    }
+
     size_t indexwspTraceDataType = 0;
     Array<OneD, Array<OneD, DataType>> Fwdarray(nvariables);
     for (size_t m = 0; m < nvariables; ++m)

@@ -63,10 +63,11 @@ uncompressed form, they are defined within \inltt{VERTEX} subsection as follows:
 The \inltt{VERTEX} subsection has optional attributes which can be used to
 apply a transformation to the mesh:\\
 \inltt{XSCALE}, \inltt{YSCALE}, \inltt{ZSCALE},
-\inltt{XMOVE}, \inltt{YMOVE}, \inltt{ZMOVE}
+\inltt{XMOVE}, \inltt{YMOVE}, \inltt{ZMOVE}, \inltt{ZROT}
 
-They specify scaling factors (centred at the origin) and translations to the
-vertex coordinates. For example, the following snippet
+They specify scaling factors (centred at the origin), translations to
+the vertex coordinates as well as a rotational factor about the
+z-axis. For example, the following snippet
 \begin{lstlisting}[style=XMLStyle]
 <VERTEX XSCALE="5">
   <V ID="0"> 0.0  0.0  0.0 </V>
@@ -78,7 +79,7 @@ defines two vertices with coordinates $(0.0,0.0,0.0), (1.0,2.0,0.0)$.
 All of these attributes can be arbitrary analytic expressions depending on pre-
 defined constants and parameters defined in the XML file and
 mathematical operations/functions of the latter. If omitted, default scaling
-factors 1.0, and translations of 0.0, are assumed.
+factors 1.0, and translations of 0.0, and zero rotation,  are assumed.
 
 
 

@@ -199,7 +199,7 @@ void UnsteadyAdvection::DoOdeRhs(
     int nVariables = inarray.size();
 
     LibUtilities::Timer timer;
-    if (m_ALESolver)
+    if (m_meshDistorted)
     {
         timer.Start();
         Array<OneD, Array<OneD, NekDouble>> tmpIn(nVariables);

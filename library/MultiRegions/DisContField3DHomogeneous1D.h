@@ -133,7 +133,8 @@ protected:
     AssemblyMapDGSharedPtr &v_GetTraceMap() override;
 
     void v_ExtractTracePhys(const Array<OneD, const NekDouble> &inarray,
-                            Array<OneD, NekDouble> &outarray) override;
+                            Array<OneD, NekDouble> &outarray,
+                            bool gridVelocity = false) override;
 
     void v_ExtractTracePhys(Array<OneD, NekDouble> &outarray) override;
 

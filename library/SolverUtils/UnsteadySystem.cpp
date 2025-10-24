@@ -252,7 +252,10 @@ void UnsteadySystem::v_DoSolve()
     // @TODO: Specify what the fields variables are physical or coefficient,
     // boolean in UnsteadySystem class...
 
-    v_ALEPreMultiplyMass(fields);
+    if (m_meshDistorted)
+    {
+        v_ALEPreMultiplyMass(fields);
+    }
 
     // Initialise time integration scheme.
     m_intScheme->InitializeScheme(m_timestep, fields, m_time, m_ode);
@@ -360,10 +363,8 @@ void UnsteadySystem::v_DoSolve()
             cpuTime     = 0.0;
         }
 
-        // @TODO: Another virtual function with this in it based on if ALE or
-        // not.
-        if (m_ALESolver) // Change to advect coeffs, change flag to physical vs
-                         // coefficent space
+        // Change to advect coeffs
+        if (m_meshDistorted)
         {
             SetBoundaryConditions(m_time);
             ALEHelper::ALEDoElmtInvMass(m_traceNormals, fields, m_time);
@@ -488,7 +489,7 @@ void UnsteadySystem::v_DoSolve()
         // Write out checkpoint files.
         if ((m_checksteps && !((step + 1) % m_checksteps)) || doCheckTime)
         {
-            if (m_HomogeneousType != eNotHomogeneous && !m_ALESolver)
+            if (m_HomogeneousType != eNotHomogeneous && !m_meshDistorted)
             {
                 // Transform to physical space for output.
                 vector<bool> transformed(nfields, false);
@@ -535,7 +536,7 @@ void UnsteadySystem::v_DoSolve()
     v_PrintSummaryStatistics(intTime);
 
     // If homogeneous, transform back into physical space if necessary.
-    if (!m_ALESolver)
+    if (!m_meshDistorted)
     {
         if (m_HomogeneousType != eNotHomogeneous)
         {

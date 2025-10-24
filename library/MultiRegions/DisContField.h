@@ -251,7 +251,8 @@ protected:
                                    Array<OneD, NekDouble> &field) override;
 
     void v_ExtractTracePhys(const Array<OneD, const NekDouble> &inarray,
-                            Array<OneD, NekDouble> &outarray) override;
+                            Array<OneD, NekDouble> &outarray,
+                            bool gridVelocity = false) override;
 
     void v_ExtractTracePhys(Array<OneD, NekDouble> &outarray) override;
 
@@ -301,6 +302,12 @@ protected:
 
     void v_PeriodicBwdCopy(const Array<OneD, const NekDouble> &Fwd,
                            Array<OneD, NekDouble> &Bwd) override;
+    void v_PeriodicBwdRot(Array<OneD, Array<OneD, NekDouble>> &Bwd) override;
+
+    void v_PeriodicDeriveBwdRot(TensorOfArray3D<NekDouble> &Bwd) override;
+
+    void v_RotLocalBwdTrace(Array<OneD, Array<OneD, NekDouble>> &Bwd) override;
+    void v_RotLocalBwdDeriveTrace(TensorOfArray3D<NekDouble> &Bwd) override;
 
     void v_FillBwdWithBwdWeight(Array<OneD, NekDouble> &weightave,
                                 Array<OneD, NekDouble> &weightjmp) override;
@@ -337,6 +344,12 @@ protected:
         const Array<OneD, const NekDouble> &FwdFlux,
         const Array<OneD, const NekDouble> &BwdFlux,
         Array<OneD, NekDouble> &outarray) override;
+
+    void Rotate(Array<OneD, Array<OneD, NekDouble>> &Bwd, const int dir,
+                const NekDouble angle, const int offset, const int npts);
+
+    void DeriveRotate(TensorOfArray3D<NekDouble> &Bwd, const int dir,
+                      const NekDouble angle, const int offset, const int npts);
 
 private:
     std::vector<bool> m_negatedFluxNormal;

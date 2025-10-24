@@ -161,8 +161,8 @@ void DiffusionLDG::v_DiffuseCoeffs(
         fields[i]->SetPhysState(false);
     }
 
-    if (!fields[0]->GetGraph()->GetMovement()->GetMoveFlag()) // i.e. if
-                                                              // m_ALESolver
+    // If mesh is not distorted
+    if (!fields[0]->GetGraph()->GetMovement()->GetMeshDistortedFlag())
     {
         for (std::size_t i = 0; i < nConvectiveFields; ++i)
         {

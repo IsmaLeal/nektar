@@ -88,23 +88,6 @@ void WallBC::v_Apply(Array<OneD, Array<OneD, NekDouble>> &Fwd,
         // For 2D/3D, define: v* = v - 2(v.n)n
         Array<OneD, NekDouble> tmp(nBCEdgePts, 0.0);
 
-        //@TODO: v - vg here... check nguyen paper, only issue is getting the vg
-        // for the trace in here
-        //@TODO: Update m_traceNormals, might be fine though.
-
-        if (m_fields[0]->GetGraph()->GetMovement()->GetMoveFlag())
-        {
-            for (i = 0; i < m_spacedim; ++i)
-            {
-                // This now does Vg * rho + Vin
-                for (int j = 0; j < nBCEdgePts; ++j)
-                {
-                    Fwd[i + 1][id2 + j] +=
-                        m_gridVelocityTrace[i][id2 + j] * Fwd[0][id2 + j];
-                }
-            }
-        }
-
         // Calculate (v.n)
         for (i = 0; i < m_spacedim; ++i)
         {

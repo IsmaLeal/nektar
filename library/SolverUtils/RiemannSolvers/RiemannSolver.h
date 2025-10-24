@@ -53,6 +53,7 @@ typedef std::function<const Array<OneD, const NekDouble> &()> RSScalarFuncType;
 typedef std::function<const Array<OneD, const Array<OneD, NekDouble>> &()>
     RSVecFuncType;
 typedef std::function<NekDouble()> RSParamFuncType;
+typedef std::function<bool()> RSFlagype;
 
 class RiemannSolver
 {
@@ -88,6 +89,12 @@ public:
     void SetParam(std::string name, FuncPointerT func, ObjectPointerT obj)
     {
         m_params[name] = std::bind(func, obj);
+    }
+
+    template <typename FuncPointerT, typename ObjectPointerT>
+    void SetUpdateNormalsFlag(FuncPointerT func, ObjectPointerT obj)
+    {
+        m_updateNormals = std::bind(func, obj);
     }
 
     void SetALEFlag(bool &ALE)
@@ -139,6 +146,11 @@ public:
         const Array<OneD, const Array<OneD, NekDouble>> &Bwd,
         DNekBlkMatSharedPtr &FJac, DNekBlkMatSharedPtr &BJac);
 
+    SOLVER_UTILS_EXPORT void ResetRotMatrix(void)
+    {
+        m_rotMat = NullNekDoubleArrayOfArray;
+    }
+
 protected:
     /// Indicates whether the Riemann solver requires a rotation to be
     /// applied to the velocity fields.
@@ -153,6 +165,8 @@ protected:
     std::map<std::string, RSScalarFuncType> m_auxScal;
     /// Map of auxiliary vector function types.
     std::map<std::string, RSVecFuncType> m_auxVec;
+    /// Function of normals updated flag
+    std::function<bool()> m_updateNormals;
     /// Rotation matrices for each trace quadrature point.
     Array<OneD, Array<OneD, NekDouble>> m_rotMat;
     /// Rotation storage

@@ -56,7 +56,9 @@ std::vector<std::string> velocityStr     = {"1.0", "2.0", "3.0"};
 std::vector<std::string> displacementStr = {"1.0", "2.0", "3.0"};
 const NekPoint<NekDouble> origin         = {1., 2., 3.};
 const DNekVec axis                       = {1., 2., 3.};
-
+const NekDouble rampTime                 = 1.0;
+const NekDouble sector                   = 0.0;
+const Array<OneD, NekDouble> base(3, 0.0);
 /// Produce dummy Zone objects, containing empty domain pointers
 SpatialDomains::ZoneBaseShPtr CreateZone(
     SpatialDomains::MovementType type, int zoneID, int domainID,
@@ -79,7 +81,8 @@ SpatialDomains::ZoneBaseShPtr CreateZone(
                                                          angVelStr);
             return SpatialDomains::ZoneRotateShPtr(
                 MemoryManager<SpatialDomains::ZoneRotate>::AllocateSharedPtr(
-                    zoneID, domainID, domain, 3, origin, axis, angularVelEqn));
+                    zoneID, domainID, domain, 3, origin, axis, angularVelEqn,
+                    rampTime, sector, base));
         }
         break;
         case SpatialDomains::MovementType::eTranslate:

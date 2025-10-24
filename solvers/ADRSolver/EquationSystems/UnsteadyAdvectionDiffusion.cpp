@@ -178,7 +178,7 @@ void UnsteadyAdvectionDiffusion::DoOdeRhs(
             outarrayDiff[i] = Array<OneD, NekDouble>(outarray[i].size(), 0.0);
         }
 
-        if (m_ALESolver)
+        if (m_meshDistorted)
         {
             Array<OneD, Array<OneD, NekDouble>> tmpIn(nVariables);
             // If ALE we must take Mu coefficient space to u physical space

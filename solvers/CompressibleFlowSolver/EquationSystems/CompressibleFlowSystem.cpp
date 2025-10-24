@@ -193,6 +193,8 @@ void CompressibleFlowSystem::InitAdvection()
 
     // Tell Riemann Solver if doing ALE and provide trace grid velocity
     riemannSolver->SetALEFlag(m_ALESolver);
+    riemannSolver->SetUpdateNormalsFlag(&ALEHelper::GetUpdateNormalsFlag, this);
+
     riemannSolver->SetVector("vgt", &ALEHelper::GetGridVelocityTrace, this);
 
     // Setting up parameters for advection operator Riemann solver
@@ -220,7 +222,7 @@ void CompressibleFlowSystem::DoOdeRhs(
 
     // This converts our Mu in coefficient space to u in physical space for ALE
     Array<OneD, Array<OneD, NekDouble>> tmpIn(nvariables);
-    if (m_ALESolver)
+    if (m_meshDistorted)
     {
         ALEHelper::ALEDoElmtInvMassBwdTrans(inarray, tmpIn);
     }
@@ -247,6 +249,11 @@ void CompressibleFlowSystem::DoOdeRhs(
             Fwd[i] = Array<OneD, NekDouble>(nTracePts, 0.0);
             Bwd[i] = Array<OneD, NekDouble>(nTracePts, 0.0);
             m_fields[i]->GetFwdBwdTracePhys(tmpIn[i], Fwd[i], Bwd[i]);
+        }
+        m_fields[0]->PeriodicBwdRot(Bwd);
+        if (m_fields[0]->GetGraph()->GetMovement()->GetSectorRotateFlag())
+        {
+            m_fields[0]->RotLocalBwdTrace(Bwd);
         }
     }
 
@@ -359,7 +366,7 @@ void CompressibleFlowSystem::DoAdvection(
     int nvariables = inarray.size();
     Array<OneD, Array<OneD, NekDouble>> advVel(m_spacedim);
 
-    if (m_ALESolver)
+    if (m_meshDistorted)
     {
         auto advWeakDGObject =
             std::dynamic_pointer_cast<SolverUtils::AdvectionWeakDG>(
@@ -395,7 +402,7 @@ void CompressibleFlowSystem::SetBoundaryConditions(
     // This converts our Mu in coefficient space to u in physical space for ALE
     Array<OneD, Array<OneD, NekDouble>> tmpIn(nvariables);
 
-    if (m_ALESolver && !m_ImplicitALESolver)
+    if (m_meshDistorted)
     {
         ALEHelper::ALEDoElmtInvMassBwdTrans(physarray, tmpIn);
     }
@@ -1037,6 +1044,7 @@ void CompressibleFlowSystem::v_ExtraFldOutput(
 
         if (m_ALESolver)
         {
+            ExtraFldOutputGrid(fieldcoeffs, variables);
             ExtraFldOutputGridVelocity(fieldcoeffs, variables);
         }
     }
@@ -1325,6 +1333,12 @@ void CompressibleFlowSystem::v_ALEInitObject(
 {
     m_spaceDim  = spaceDim;
     m_fieldsALE = fields;
+
+    if (fields[0]->GetGraph() != nullptr)
+    {
+        fields[0]->GetGraph()->GetMovement()->SetMeshDistortedFlag(
+            m_meshDistorted);
+    }
 
     // Initialise grid velocities as 0s
     m_gridVelocity      = Array<OneD, Array<OneD, NekDouble>>(m_spaceDim);

@@ -249,6 +249,12 @@ void DiffusionIP::v_DiffuseCoeffs(
         {
             fields[i]->GetFwdBwdTracePhys(inarray[i], vFwd[i], vBwd[i]);
         }
+
+        fields[0]->PeriodicBwdRot(vBwd);
+        if (fields[0]->GetGraph()->GetMovement()->GetSectorRotateFlag())
+        {
+            fields[0]->RotLocalBwdTrace(vBwd);
+        }
     }
     else
     {
@@ -314,12 +320,8 @@ void DiffusionIP::v_DiffuseCoeffs(
 
     timer.Start();
 
-    if (!fields[0]->GetGraph()->GetMovement()->GetMoveFlag() ||
-        fields[0]
-            ->GetGraph()
-            ->GetMovement()
-            ->GetImplicitALESolverFlag()) // i.e. if
-                                          // m_ALESolver
+    // If mesh is not distorted
+    if (!fields[0]->GetGraph()->GetMovement()->GetMeshDistortedFlag())
     {
         for (int i = 0; i < nonZeroIndex.size(); ++i)
         {
@@ -696,7 +698,6 @@ void DiffusionIP::CalcTraceNumFlux(
 
     timer.Stop();
     timer.AccumulateRegion("DiffIP:_AddSecondDerivToTrace", 10);
-
     for (int nd = 0; nd < nDim; ++nd)
     {
         for (int i = 0; i < nConvectiveFields; ++i)
@@ -723,7 +724,22 @@ void DiffusionIP::CalcTraceNumFlux(
                                         m_wspNumDerivBwd[nd][i]);
             timer.Stop();
             timer.AccumulateRegion("DiffIP:_PerformExchange", 10);
+        }
+    }
 
+    // Rotate for rotated periodic boundary conditions
+    fields[0]->PeriodicDeriveBwdRot(m_wspNumDerivBwd);
+    // Rotate for sector rotation along interface
+    if (fields[0]->GetGraph()->GetMovement()->GetSectorRotateFlag())
+    {
+        fields[0]->RotLocalBwdDeriveTrace(m_wspNumDerivBwd);
+    }
+
+    for (int nd = 0; nd < nDim; ++nd)
+    {
+
+        for (int i = 0; i < nConvectiveFields; ++i)
+        {
             Vmath::Vadd(nTracePts, m_wspNumDerivFwd[nd][i], 1,
                         m_wspNumDerivBwd[nd][i], 1, m_wspNumDerivFwd[nd][i], 1);
         }

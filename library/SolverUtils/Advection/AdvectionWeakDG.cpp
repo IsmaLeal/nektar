@@ -176,8 +176,8 @@ void AdvectionWeakDG::AdvectCoeffs(
         timer.AccumulateRegion("AdvWeakDG:_AddTraceIntegral", 10);
     }
 
-    if (!fields[0]->GetGraph()->GetMovement()->GetMoveFlag() ||
-        fields[0]->GetGraph()->GetMovement()->GetImplicitALESolverFlag())
+    // If mesh is not distorted
+    if (!fields[0]->GetGraph()->GetMovement()->GetMeshDistortedFlag())
     {
         for (int i = 0; i < nConvectiveFields; ++i)
         {

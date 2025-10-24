@@ -114,7 +114,6 @@ void WallViscousBC::v_Apply(Array<OneD, Array<OneD, NekDouble>> &Fwd,
             Vmath::Zero(nBCEdgePts, &Fwd[nVariables - 1][id2], 1);
         }
 
-        // V = - Vin
         for (i = 0; i < m_spacedim; i++)
         {
             // V = -Vin
