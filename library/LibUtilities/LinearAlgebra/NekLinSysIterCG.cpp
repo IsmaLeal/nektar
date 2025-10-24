@@ -75,6 +75,16 @@ int NekLinSysIterCG::v_SolveSystem(const int nGlobal,
     return m_totalIterations;
 }
 
+void NekLinSysIterCG::v_DoIterate(const int nGlobal,
+                                  const Array<OneD, NekDouble> &rhs,
+                                  Array<OneD, NekDouble> &x, const int nDir,
+                                  NekDouble &err, int &iter)
+{
+    DoConjugateGradient(nGlobal, rhs, x, nDir);
+    iter = m_totalIterations;
+    err  = m_finalError;
+}
+
 /**  
  * Solve a global linear system using the conjugate gradient method.  
  * We solve only for the non-Dirichlet modes. The operator is evaluated  
@@ -136,11 +146,12 @@ void NekLinSysIterCG::DoConjugateGradient(
     // If input residual is less than tolerance skip solve.
     if (eps < m_NekLinSysTolerance * m_NekLinSysTolerance * m_rhs_magnitude)
     {
+        m_finalError = sqrt(eps / m_rhs_magnitude);
         if (m_verbose && m_root)
         {
             cout << "CG iterations made = " << m_totalIterations
                  << " using tolerance of " << m_NekLinSysTolerance
-                 << " (error = " << sqrt(eps / m_rhs_magnitude)
+                 << " (error = " << m_finalError
                  << ", rhs_mag = " << sqrt(m_rhs_magnitude) << ")" << endl;
         }
         return;
@@ -165,15 +176,16 @@ void NekLinSysIterCG::DoConjugateGradient(
     {
         if (m_totalIterations > m_NekLinSysMaxIterations)
         {
+            m_finalError = sqrt(eps / m_rhs_magnitude);
             if (m_root)
             {
                 cout << "CG iterations made = " << m_totalIterations
                      << " using tolerance of " << m_NekLinSysTolerance
-                     << " (error = " << sqrt(eps / m_rhs_magnitude)
-                     << ", rhs_mag = " << sqrt(m_rhs_magnitude) << ")" << endl;
+                     << " (error = " << m_finalError
+                     << ", rhs_mag = " << sqrt(m_rhs_magnitude) << ")"
+                     << " WARNING: Exceeded maxIt" << endl;
             }
-            ROOTONLY_NEKERROR(ErrorUtil::efatal,
-                              "Exceeded maximum number of iterations");
+            break;
         }
 
         // Compute new search direction p_k, q_k
@@ -193,16 +205,35 @@ void NekLinSysIterCG::DoConjugateGradient(
         // Perform the method-specific matrix-vector multiply operation.
         m_operator.DoNekSysLhsEval(w_A, s_A);
 
-        // <r_{k+1}, w_{k+1}>
-        vExchange[0] = Vmath::Dot2(nNonDir, r_A, w_A + nDir, m_map + nDir);
+        if (m_mapIsOnes)
+        {
+            // <r_{k+1}, w_{k+1}>
+            vExchange[0] = Vmath::Dot(nNonDir, r_A, w_A + nDir);
 
-        // <s_{k+1}, w_{k+1}>
-        vExchange[1] =
-            Vmath::Dot2(nNonDir, s_A + nDir, w_A + nDir, m_map + nDir);
+            // <s_{k+1}, w_{k+1}>
+            vExchange[1] = Vmath::Dot(nNonDir, s_A + nDir, w_A + nDir);
 
-        // <r_{k+1}, r_{k+1}>
-        vExchange[2] = Vmath::Dot2(nNonDir, r_A, r_A, m_map + nDir);
+            if (m_totalIterations % m_errorCheckInterval == 0)
+            {
+                // <r_{k+1}, r_{k+1}>
+                vExchange[2] = Vmath::Dot(nNonDir, r_A, r_A);
+            }
+        }
+        else
+        {
+            // <r_{k+1}, w_{k+1}>
+            vExchange[0] = Vmath::Dot2(nNonDir, r_A, w_A + nDir, m_map + nDir);
 
+            // <s_{k+1}, w_{k+1}>
+            vExchange[1] =
+                Vmath::Dot2(nNonDir, s_A + nDir, w_A + nDir, m_map + nDir);
+
+            if (m_totalIterations % m_errorCheckInterval == 0)
+            {
+                // <r_{k+1}, r_{k+1}>
+                vExchange[2] = Vmath::Dot2(nNonDir, r_A, r_A, m_map + nDir);
+            }
+        }
         // Perform inner-product exchanges
         m_rowComm->AllReduce(vExchange, Nektar::LibUtilities::ReduceSum);
 
@@ -215,11 +246,12 @@ void NekLinSysIterCG::DoConjugateGradient(
         // Test if norm is within tolerance
         if (eps < m_NekLinSysTolerance * m_NekLinSysTolerance * m_rhs_magnitude)
         {
+            m_finalError = sqrt(eps / m_rhs_magnitude);
             if (m_verbose && m_root)
             {
                 cout << "CG iterations made = " << m_totalIterations
                      << " using tolerance of " << m_NekLinSysTolerance
-                     << " (error = " << sqrt(eps / m_rhs_magnitude)
+                     << " (error = " << m_finalError
                      << ", rhs_mag = " << sqrt(m_rhs_magnitude) << ")" << endl;
             }
             break;

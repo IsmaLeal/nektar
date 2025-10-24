@@ -78,6 +78,10 @@ protected:
                       const Array<OneD, const NekDouble> &pInput,
                       Array<OneD, NekDouble> &pOutput, const int nDir) override;
 
+    void v_DoIterate(const int nGlobal, const Array<OneD, NekDouble> &rhs,
+                     Array<OneD, NekDouble> &x, const int nDir, NekDouble &err,
+                     int &iter) override;
+
 private:
 };
 } // namespace Nektar::LibUtilities

@@ -76,7 +76,7 @@ public:
     LIB_UTILITIES_EXPORT ~NekLinSysIter() override = default;
 
     LIB_UTILITIES_EXPORT void SetUniversalUniqueMap(
-        const Array<OneD, const int> &map);
+        const Array<OneD, const int> &map, const int nDir = 0);
 
     LIB_UTILITIES_EXPORT void SetNekLinSysTolerance(const NekDouble in)
     {
@@ -86,6 +86,11 @@ public:
     LIB_UTILITIES_EXPORT void SetNekLinSysMaxIterations(const unsigned int in)
     {
         m_NekLinSysMaxIterations = in;
+    }
+
+    LIB_UTILITIES_EXPORT void SetErrorCheckInterval(const unsigned int in)
+    {
+        m_errorCheckInterval = in;
     }
 
     LIB_UTILITIES_EXPORT int GetNekLinSysTolerance()
@@ -98,13 +103,35 @@ public:
         return m_isLocal;
     }
 
+    // This function is similar as solveSystem but provide extral infomation:
+    // the total number of iterations that the solver has performed, and the
+    // error after the last iteration.
+    LIB_UTILITIES_EXPORT void DoIterate(const int nGlobal,
+                                        const Array<OneD, NekDouble> &rhs,
+                                        Array<OneD, NekDouble> &x,
+                                        const int nDir, NekDouble &err,
+                                        int &iter)
+    {
+        v_DoIterate(nGlobal, rhs, x, nDir, err, iter);
+    }
+
 protected:
     /// Global to universal unique map
     Array<OneD, int> m_map;
 
     NekDouble m_NekLinSysTolerance;
     int m_NekLinSysMaxIterations;
-    int m_totalIterations = 0;
+    int m_totalIterations  = 0;
+    NekDouble m_finalError = 999.9;
+
+    // Error checking interval: useful for fixed point iterations
+    // as the convergence rate is slow and we don't want to
+    // waste time checking the error every iteration
+    int m_errorCheckInterval = 1;
+
+    // Flag indicate if the map is all ones
+    // which can simplify the calculation
+    bool m_mapIsOnes = false;
 
     // Boolean to identify if iteration acts on local storage
     bool m_isLocal;
@@ -116,6 +143,16 @@ protected:
     void Set_Rhs_Magnitude(const Array<OneD, NekDouble> &pIn);
 
     void ConvergenceCheck(const Array<OneD, const NekDouble> &Residual);
+
+    virtual void v_DoIterate([[maybe_unused]] const int nGlobal,
+                             [[maybe_unused]] const Array<OneD, NekDouble> &rhs,
+                             [[maybe_unused]] Array<OneD, NekDouble> &x,
+                             [[maybe_unused]] const int nDir,
+                             [[maybe_unused]] NekDouble &err,
+                             [[maybe_unused]] int &iter)
+    {
+        ASSERTL0(false, "v_DoIterate is NOT defined.");
+    }
 
 private:
 };
