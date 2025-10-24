@@ -57,7 +57,7 @@ public:
 
     typedef std::function<void(InArrayType &, OutArrayType &, const bool &)>
         FunctorType1;
-    typedef std::function<void(InArrayType &, InArrayType &, OutArrayType &,
+    typedef std::function<void(InArrayType &, OutArrayType &, OutArrayType &,
                                const bool &)>
         FunctorType2;
     typedef Array<OneD, FunctorType1> FunctorType1Array;
@@ -132,6 +132,12 @@ public:
                       std::placeholders::_3, std::placeholders::_4);
     }
 
+    // check if this operator is defined
+    bool CheckNekSysFixPointIte()
+    {
+        return m_functors2[0] ? true : false;
+    }
+
     inline void DoNekSysResEval(InArrayType &inarray, OutArrayType &outarray,
                                 const bool &flag = false) const
     {
@@ -166,7 +172,9 @@ public:
         m_functors1[3](xn, xn1, flag);
     }
 
-    inline void DoNekSysFixPointIte(InArrayType &rhs, InArrayType &xn,
+    // xn contains with initial guess and overwritten by solution on exit
+    // xn1 is filled by final residual for convergence check
+    inline void DoNekSysFixPointIte(InArrayType &rhs, OutArrayType &xn,
                                     OutArrayType &xn1,
                                     const bool &flag = false) const
     {

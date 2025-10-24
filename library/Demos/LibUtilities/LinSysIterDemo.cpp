@@ -143,22 +143,22 @@ public:
         m_SysRhs[3] = 15.0;
     }
 
-    void DoFixedPoint(InArrayType &rhs, InArrayType &inarray,
-                      OutArrayType &outarray,
+    void DoFixedPoint(InArrayType &rhs, OutArrayType &x, OutArrayType &r,
                       [[maybe_unused]] const bool &flag = false)
     {
-        ASSERTL1(m_matDim == inarray.size(),
+        ASSERTL1(m_matDim == x.size(),
                  "CoeffMat dim not equal to NekSys dim in DoFixedPoint");
-        NekVector<NekDouble> vecInn(m_matDim, inarray, eWrapper);
-        NekVector<NekDouble> vecOut(m_matDim, outarray, eWrapper);
+        NekVector<NekDouble> vecInn(m_matDim, x, eWrapper);
+        NekVector<NekDouble> vecOut(m_matDim, r, eWrapper);
+        // Ax
         vecOut = (*m_matrix) * vecInn;
-
-        Vmath::Vsub(m_matDim, rhs, 1, outarray, 1, outarray, 1);
+        // b - Ax
+        Vmath::Vsub(m_matDim, rhs, 1, r, 1, r, 1);
+        // x = x + (b - Ax)/Aii
         for (int i = 0; i < m_matDim; ++i)
         {
-            outarray[i] = outarray[i] / (*m_matrix)(i, i);
+            x[i] += r[i] / (*m_matrix)(i, i);
         }
-        Vmath::Vadd(m_matDim, inarray, 1, outarray, 1, outarray, 1);
     }
 
     void DoLhs(InArrayType &inarray, OutArrayType &outarray,

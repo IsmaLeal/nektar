@@ -69,27 +69,39 @@ void NekLinSysIterFixedpointJacobi::v_InitObject()
  *
  */
 int NekLinSysIterFixedpointJacobi::v_SolveSystem(
-    const int nGlobal, const Array<OneD, const NekDouble> &pRhs,
-    Array<OneD, NekDouble> &pSolution, [[maybe_unused]] const int nDir)
+    const int nGlobal, const Array<OneD, const NekDouble> &rhs,
+    Array<OneD, NekDouble> &x, [[maybe_unused]] const int nDir)
 {
+    // store the residual
+    Array<OneD, NekDouble> r(nGlobal);
 
-    int niterations = 0;
-
-    Array<OneD, NekDouble> pSol0(nGlobal);
-    Vmath::Vcopy(nGlobal, pSolution, 1, pSol0, 1);
+    int m_totalIterations = 0;
     for (int i = 0; i < m_NekLinSysMaxIterations; ++i)
     {
-        m_operator.DoNekSysFixPointIte(pRhs, pSol0, pSolution);
-        Vmath::Vsub(nGlobal, pSolution, 1, pSol0, 1, pSol0, 1);
-        ConvergenceCheck(pSol0);
-        Vmath::Vcopy(nGlobal, pSolution, 1, pSol0, 1);
-        niterations++;
-        if (m_converged)
+        m_operator.DoNekSysFixPointIte(rhs, x, r);
+        m_totalIterations++;
+        if (m_totalIterations % m_errorCheckInterval == 0)
         {
-            break;
+            ConvergenceCheck(r);
+            if (m_converged)
+            {
+                break;
+            }
         }
     }
 
-    return niterations;
+    return m_totalIterations;
 }
+
+void NekLinSysIterFixedpointJacobi::v_DoIterate(
+    const int nGlobal, const Array<OneD, NekDouble> &rhs,
+    Array<OneD, NekDouble> &x, [[maybe_unused]] const int nDir, NekDouble &err,
+    int &iter)
+{
+    v_SolveSystem(nGlobal, rhs, x, nDir);
+
+    iter = m_totalIterations;
+    err  = sqrt(m_finalError / m_rhs_magnitude);
+}
+
 } // namespace Nektar::LibUtilities

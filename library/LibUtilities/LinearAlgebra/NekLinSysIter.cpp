@@ -65,7 +65,8 @@ void NekLinSysIter::v_InitObject()
     SetUniversalUniqueMap();
 }
 
-void NekLinSysIter::SetUniversalUniqueMap(const Array<OneD, const int> &map)
+void NekLinSysIter::SetUniversalUniqueMap(const Array<OneD, const int> &map,
+                                          const int nDir)
 {
     int nmap = map.size();
     if (m_map.size() != nmap)
@@ -73,11 +74,22 @@ void NekLinSysIter::SetUniversalUniqueMap(const Array<OneD, const int> &map)
         m_map = Array<OneD, int>(nmap, 0);
     }
     Vmath::Vcopy(nmap, map, 1, m_map, 1);
+    // check if map is all ones, ignore Dirichlet BCs
+    m_mapIsOnes = true;
+    for (int i = nDir; i < nmap; ++i)
+    {
+        if (map[i] != 1)
+        {
+            m_mapIsOnes = false;
+            break;
+        }
+    }
 }
 
 void NekLinSysIter::SetUniversalUniqueMap()
 {
-    m_map = Array<OneD, int>(m_SysDimen, 1);
+    m_map       = Array<OneD, int>(m_SysDimen, 1);
+    m_mapIsOnes = true;
 }
 
 void NekLinSysIter::Set_Rhs_Magnitude(const Array<OneD, NekDouble> &pIn)
@@ -102,10 +114,10 @@ void NekLinSysIter::Set_Rhs_Magnitude(const Array<OneD, NekDouble> &pIn)
 void NekLinSysIter::ConvergenceCheck(
     const Array<OneD, const NekDouble> &Residual)
 {
-    NekDouble SysResNorm = Vmath::Dot(Residual.size(), Residual, Residual);
-    m_rowComm->AllReduce(SysResNorm, Nektar::LibUtilities::ReduceSum);
+    m_finalError = Vmath::Dot(Residual.size(), Residual, Residual);
+    m_rowComm->AllReduce(m_finalError, Nektar::LibUtilities::ReduceSum);
 
-    m_converged = SysResNorm <
+    m_converged = m_finalError <
                   m_NekLinSysTolerance * m_NekLinSysTolerance * m_rhs_magnitude;
 }
 

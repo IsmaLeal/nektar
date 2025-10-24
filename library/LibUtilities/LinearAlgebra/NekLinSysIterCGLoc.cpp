@@ -75,6 +75,17 @@ int NekLinSysIterCGLoc::v_SolveSystem(
     return m_totalIterations;
 }
 
+void NekLinSysIterCGLoc::v_DoIterate(const int nGlobal,
+                                     const Array<OneD, NekDouble> &rhs,
+                                     Array<OneD, NekDouble> &x,
+                                     [[maybe_unused]] const int nDir,
+                                     NekDouble &err, int &iter)
+{
+    DoConjugateGradient(nGlobal, rhs, x);
+    iter = m_totalIterations;
+    err  = m_finalError;
+}
+
 /**  
  * Solve a global linear system using the conjugate gradient method.  
  * We solve only for the non-Dirichlet modes. The operator is evaluated  
@@ -134,11 +145,12 @@ void NekLinSysIterCGLoc::DoConjugateGradient(
     // If input residual is less than tolerance skip solve.
     if (eps < m_NekLinSysTolerance * m_NekLinSysTolerance * m_rhs_magnitude)
     {
+        m_finalError = sqrt(eps / m_rhs_magnitude);
         if (m_verbose && m_root)
         {
             cout << "CG iterations made = " << m_totalIterations
                  << " using tolerance of " << m_NekLinSysTolerance
-                 << " (error = " << sqrt(eps / m_rhs_magnitude)
+                 << " (error = " << m_finalError
                  << ", rhs_mag = " << sqrt(m_rhs_magnitude) << ")" << endl;
         }
         return;
@@ -163,15 +175,16 @@ void NekLinSysIterCGLoc::DoConjugateGradient(
     {
         if (m_totalIterations > m_NekLinSysMaxIterations)
         {
+            m_finalError = sqrt(eps / m_rhs_magnitude);
             if (m_root)
             {
                 cout << "CG iterations made = " << m_totalIterations
                      << " using tolerance of " << m_NekLinSysTolerance
-                     << " (error = " << sqrt(eps / m_rhs_magnitude)
-                     << ", rhs_mag = " << sqrt(m_rhs_magnitude) << ")" << endl;
+                     << " (error = " << m_finalError
+                     << ", rhs_mag = " << sqrt(m_rhs_magnitude) << ")"
+                     << " WARNING: Exceeded maxIt" << endl;
             }
-            ROOTONLY_NEKERROR(ErrorUtil::efatal,
-                              "Exceeded maximum number of iterations");
+            break;
         }
 
         // Compute new search direction p_k, q_k
@@ -196,10 +209,12 @@ void NekLinSysIterCGLoc::DoConjugateGradient(
         // <s_{k+1}, w_{k+1}>
         vExchange[1] = Vmath::Dot(nLocal, s_A, w_A);
 
-        // <r_{k+1}, r_{k+1}>
-        m_operator.DoAssembleLoc(r_A, wk, true);
-        vExchange[2] = Vmath::Dot(nLocal, wk, r_A);
-
+        if (m_totalIterations % m_errorCheckInterval == 0)
+        {
+            // <r_{k+1}, r_{k+1}>
+            m_operator.DoAssembleLoc(r_A, wk, true);
+            vExchange[2] = Vmath::Dot(nLocal, wk, r_A);
+        }
         // Perform inner-product exchanges
         m_rowComm->AllReduce(vExchange, Nektar::LibUtilities::ReduceSum);
 
@@ -212,11 +227,12 @@ void NekLinSysIterCGLoc::DoConjugateGradient(
         // Test if norm is within tolerance
         if (eps < m_NekLinSysTolerance * m_NekLinSysTolerance * m_rhs_magnitude)
         {
+            m_finalError = sqrt(eps / m_rhs_magnitude);
             if (m_verbose && m_root)
             {
                 cout << "CG iterations made = " << m_totalIterations
                      << " using tolerance of " << m_NekLinSysTolerance
-                     << " (error = " << sqrt(eps / m_rhs_magnitude)
+                     << " (error = " << m_finalError
                      << ", rhs_mag = " << sqrt(m_rhs_magnitude) << ")" << endl;
             }
             break;

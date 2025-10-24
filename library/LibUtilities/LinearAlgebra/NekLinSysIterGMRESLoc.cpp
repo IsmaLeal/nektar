@@ -104,6 +104,16 @@ int NekLinSysIterGMRESLoc::v_SolveSystem(
     return niterations;
 }
 
+void NekLinSysIterGMRESLoc::v_DoIterate(const int nGlobal,
+                                        const Array<OneD, NekDouble> &rhs,
+                                        Array<OneD, NekDouble> &x,
+                                        [[maybe_unused]] const int nDir,
+                                        NekDouble &err, int &iter)
+{
+    iter = DoGMRES(nGlobal, rhs, x);
+    err  = m_finalError;
+}
+
 /**  
  * Solve a global linear system using the Gmres 
  * We solve only for the non-Dirichlet modes. The operator is evaluated  
@@ -174,7 +184,7 @@ int NekLinSysIterGMRESLoc::DoGMRES(const int nLocal,
         {
             cout << "GMRES iterations made = " << m_totalIterations
                  << " using tolerance of " << m_NekLinSysTolerance
-                 << " (error = " << sqrt(eps * m_prec_factor / m_rhs_magnitude)
+                 << " (error = " << m_finalError
                  << ", rhs_mag = " << sqrt(m_rhs_magnitude)
                  << " with (GMRES eps = " << eps << " REAL eps= " << eps1
                  << ")";
