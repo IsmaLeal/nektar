@@ -786,26 +786,26 @@ void Extrapolate::GenerateHOPBCMap(
                     }
                 }
 
-                LibUtilities::Equation coeff =
+                LibUtilities::EquationSharedPtr coeff =
                     std::static_pointer_cast<
                         SpatialDomains::RobinBoundaryCondition>(m_PBndConds[n])
                         ->m_robinPrimitiveCoeff;
 
                 // checkout equation evaluation options!!
-                m_houtflow->m_pressurePrimCoeff[n] = coeff.Evaluate();
+                m_houtflow->m_pressurePrimCoeff[n] = coeff->Evaluate();
 
                 for (int i = 0; i < m_curl_dim; ++i)
                 {
                     Array<OneD, const SpatialDomains::BoundaryConditionShPtr>
                         UBndConds = m_fields[m_velocity[i]]->GetBndConditions();
 
-                    LibUtilities::Equation coeff1 =
+                    LibUtilities::EquationSharedPtr coeff1 =
                         std::static_pointer_cast<
                             SpatialDomains::RobinBoundaryCondition>(
                             UBndConds[n])
                             ->m_robinPrimitiveCoeff;
 
-                    m_houtflow->m_defVelPrimCoeff[i] = coeff1.GetExpression();
+                    m_houtflow->m_defVelPrimCoeff[i] = coeff1->GetExpression();
 
                     ASSERTL1(UBndConds[n]->GetBoundaryConditionType() ==
                                  SpatialDomains::eRobin,
@@ -814,7 +814,7 @@ void Extrapolate::GenerateHOPBCMap(
                              "outflow is specticied as Robin Boundary type");
 
                     // checkout equation evaluation options!!
-                    m_houtflow->m_velocityPrimCoeff[i][n] = coeff1.Evaluate();
+                    m_houtflow->m_velocityPrimCoeff[i][n] = coeff1->Evaluate();
                 }
             }
         }
@@ -850,7 +850,7 @@ void Extrapolate::UpdateRobinPrimCoeff(void)
                 SpatialDomains::BoundaryConditionShPtr bcond =
                     MemoryManager<SpatialDomains::RobinBoundaryCondition>::
                         AllocateSharedPtr(
-                            m_session, rcond->m_robinFunction.GetExpression(),
+                            m_session, rcond->m_robinFunction->GetExpression(),
                             primcoeff, rcond->GetUserDefined(),
                             rcond->m_filename);
 

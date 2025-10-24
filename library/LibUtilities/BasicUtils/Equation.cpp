@@ -40,6 +40,22 @@
 namespace Nektar::LibUtilities
 {
 
+/*
+ *  This is a Null construtor for Equation with a trivial expression.
+ */
+Equation::Equation()
+{
+    // Create Null expression and vlist
+    m_expr  = "0.0";
+    m_vlist = "x y z t";
+    boost::algorithm::trim(m_expr);
+    boost::algorithm::trim(m_vlist);
+
+    // Evaluate expression
+    m_evaluator = MemoryManager<Interpreter>::AllocateSharedPtr();
+    m_expr_id   = m_evaluator->DefineFunction(m_vlist, m_expr);
+}
+
 Equation::Equation(InterpreterSharedPtr evaluator, const std::string &expr,
                    const std::string &vlist)
     : m_vlist(vlist), m_expr(expr), m_expr_id(-1), m_evaluator(evaluator)

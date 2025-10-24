@@ -448,6 +448,10 @@ public:
     inline const Array<OneD, const NekDouble> &GetCoeffs() const;
     /// Impose Dirichlet Boundary Conditions onto Array
     inline void ImposeDirichletConditions(Array<OneD, NekDouble> &outarray);
+    /// Add Neumann Boundary Condition forcing to Array
+    inline void ImposeNeumannConditions(Array<OneD, NekDouble> &outarray);
+    /// Add Robin Boundary Condition forcing to Array
+    inline void ImposeRobinConditions(Array<OneD, NekDouble> &outarray);
     /// Fill Bnd Condition expansion from the values stored in expansion
     inline void FillBndCondFromField(const Array<OneD, NekDouble> coeffs);
     /// Fill Bnd Condition expansion in nreg from the values
@@ -1310,6 +1314,8 @@ protected:
 
     // wrapper functions about virtual functions
     virtual void v_ImposeDirichletConditions(Array<OneD, NekDouble> &outarray);
+    virtual void v_ImposeNeumannConditions(Array<OneD, NekDouble> &outarray);
+    virtual void v_ImposeRobinConditions(Array<OneD, NekDouble> &outarray);
     virtual void v_FillBndCondFromField(const Array<OneD, NekDouble> coeffs);
     virtual void v_FillBndCondFromField(const int nreg,
                                         const Array<OneD, NekDouble> coeffs);
@@ -2015,6 +2021,14 @@ inline const Array<OneD, const NekDouble> &ExpList::GetCoeffs() const
 inline void ExpList::ImposeDirichletConditions(Array<OneD, NekDouble> &outarray)
 {
     v_ImposeDirichletConditions(outarray);
+}
+inline void ExpList::ImposeNeumannConditions(Array<OneD, NekDouble> &outarray)
+{
+    v_ImposeNeumannConditions(outarray);
+}
+inline void ExpList::ImposeRobinConditions(Array<OneD, NekDouble> &outarray)
+{
+    v_ImposeRobinConditions(outarray);
 }
 inline void ExpList::FillBndCondFromField(const Array<OneD, NekDouble> coeffs)
 {

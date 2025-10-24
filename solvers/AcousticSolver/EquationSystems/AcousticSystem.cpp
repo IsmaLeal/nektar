@@ -374,11 +374,11 @@ void AcousticSystem::WhiteNoiseBC(
             SpatialDomains::eDirichlet,
         "WhiteNoise BCs must be Dirichlet type BCs");
 
-    LibUtilities::Equation cond =
+    LibUtilities::EquationSharedPtr cond =
         std::static_pointer_cast<SpatialDomains::DirichletBoundaryCondition>(
             m_fields[0]->GetBndConditions()[bcRegion])
             ->m_dirichletCondition;
-    NekDouble sigma = cond.Evaluate();
+    NekDouble sigma = cond->Evaluate();
 
     ASSERTL0(sigma > NekConstants::kNekZeroTol,
              "sigma must be greater than zero");

@@ -26,6 +26,7 @@ v5.9.0
 - Add EvaluateAtPoint interface in Equation (!2255)
 - Enable GenMatrix routine for SegExp (!2260)
 - Enforce const consitency in Comm class (!2261)
+- Add GetEquation to BoundaryCondition and ImposeNeumann/RobinConditions (!2257)
 
 **ADRSolver**
 - Add implicit UnsteadyAdvection for continuous Galerkin (!2231)

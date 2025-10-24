@@ -106,6 +106,8 @@ struct BoundaryConditionBase
         return m_comm;
     }
 
+    virtual const LibUtilities::EquationSharedPtr &GetEquation() const = 0;
+
 protected:
     LibUtilities::CommSharedPtr m_comm;
     std::string m_userDefined;
@@ -115,7 +117,6 @@ protected:
 
 struct DirichletBoundaryCondition : public BoundaryConditionBase
 {
-
     DirichletBoundaryCondition(
         const LibUtilities::SessionReaderSharedPtr &pSession,
         const std::string &eqn,
@@ -123,12 +124,19 @@ struct DirichletBoundaryCondition : public BoundaryConditionBase
         const std::string &filename            = std::string(""),
         const LibUtilities::CommSharedPtr comm = LibUtilities::CommSharedPtr())
         : BoundaryConditionBase(eDirichlet, userDefined, comm),
-          m_dirichletCondition(pSession->GetInterpreter(), eqn), m_expr(eqn),
-          m_filename(filename)
+          m_dirichletCondition(
+              MemoryManager<LibUtilities::Equation>::AllocateSharedPtr(
+                  pSession->GetInterpreter(), eqn)),
+          m_expr(eqn), m_filename(filename)
     {
     }
 
-    LibUtilities::Equation m_dirichletCondition;
+    const LibUtilities::EquationSharedPtr &GetEquation() const override
+    {
+        return m_dirichletCondition;
+    }
+
+    LibUtilities::EquationSharedPtr m_dirichletCondition;
     std::string m_expr;
     std::string m_filename;
 };
@@ -142,12 +150,19 @@ struct NeumannBoundaryCondition : public BoundaryConditionBase
         const std::string &filename            = std::string(""),
         const LibUtilities::CommSharedPtr comm = LibUtilities::CommSharedPtr())
         : BoundaryConditionBase(eNeumann, userDefined, comm),
-          m_neumannCondition(pSession->GetInterpreter(), eqn),
+          m_neumannCondition(
+              MemoryManager<LibUtilities::Equation>::AllocateSharedPtr(
+                  pSession->GetInterpreter(), eqn)),
           m_filename(filename)
     {
     }
 
-    LibUtilities::Equation m_neumannCondition;
+    const LibUtilities::EquationSharedPtr &GetEquation() const override
+    {
+        return m_neumannCondition;
+    }
+
+    LibUtilities::EquationSharedPtr m_neumannCondition;
     std::string m_filename;
 };
 
@@ -160,15 +175,25 @@ struct RobinBoundaryCondition : public BoundaryConditionBase
         const std::string &filename            = std::string(""),
         const LibUtilities::CommSharedPtr comm = LibUtilities::CommSharedPtr())
         : BoundaryConditionBase(eRobin, userDefined, comm),
-          m_robinFunction(pSession->GetInterpreter(), a),
-          m_robinPrimitiveCoeff(pSession->GetInterpreter(), b),
+          m_robinFunction(
+              MemoryManager<LibUtilities::Equation>::AllocateSharedPtr(
+                  pSession->GetInterpreter(), a)),
+          m_robinPrimitiveCoeff(
+              MemoryManager<LibUtilities::Equation>::AllocateSharedPtr(
+                  pSession->GetInterpreter(), b)),
           m_filename(filename)
     {
     }
+
+    const LibUtilities::EquationSharedPtr &GetEquation() const override
+    {
+        return m_robinFunction;
+    }
+
     // \frac{\partial {u}}{\partial{n}} +
     // m_robinPrimativeCoeff(x,y,z)*u = m_robinFunction(x,y,z)
-    LibUtilities::Equation m_robinFunction;
-    LibUtilities::Equation m_robinPrimitiveCoeff;
+    LibUtilities::EquationSharedPtr m_robinFunction;
+    LibUtilities::EquationSharedPtr m_robinPrimitiveCoeff;
     std::string m_filename;
 };
 
@@ -181,6 +206,12 @@ struct PeriodicBoundaryCondition : public BoundaryConditionBase
         : BoundaryConditionBase(ePeriodic, userDefined, comm),
           m_connectedBoundaryRegion(n)
     {
+    }
+
+    const LibUtilities::EquationSharedPtr &GetEquation() const override
+    {
+        static LibUtilities::EquationSharedPtr empty;
+        return empty;
     }
 
     unsigned int m_connectedBoundaryRegion;
@@ -196,12 +227,19 @@ struct NotDefinedBoundaryCondition : public BoundaryConditionBase
         const std::string &filename            = std::string(""),
         const LibUtilities::CommSharedPtr comm = LibUtilities::CommSharedPtr())
         : BoundaryConditionBase(eNotDefined, userDefined, comm),
-          m_notDefinedCondition(pSession->GetInterpreter(), eqn),
+          m_notDefinedCondition(
+              MemoryManager<LibUtilities::Equation>::AllocateSharedPtr(
+                  pSession->GetInterpreter(), eqn)),
           m_filename(filename)
     {
     }
 
-    LibUtilities::Equation m_notDefinedCondition;
+    const LibUtilities::EquationSharedPtr &GetEquation() const override
+    {
+        return m_notDefinedCondition;
+    }
+
+    LibUtilities::EquationSharedPtr m_notDefinedCondition;
     std::string m_filename;
 };
 

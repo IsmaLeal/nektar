@@ -247,13 +247,13 @@ void IncNavierStokes::v_InitObject(bool DeclareField)
 
                 BndExp[n]->GetCoords(x0, x1, x2);
 
-                LibUtilities::Equation coeff =
+                LibUtilities::EquationSharedPtr coeff =
                     std::static_pointer_cast<
                         SpatialDomains::RobinBoundaryCondition>(BndConds[n])
                         ->m_robinPrimitiveCoeff;
 
-                coeff.Evaluate(x0, x1, x2, m_time,
-                               tmpArray = m_fieldsRadiationFactor[i] + radpts);
+                coeff->Evaluate(x0, x1, x2, m_time,
+                                tmpArray = m_fieldsRadiationFactor[i] + radpts);
                 // Vmath::Neg(npoints,tmpArray = m_fieldsRadiationFactor[i]+
                 // radpts,1);
                 radpts += npoints;
