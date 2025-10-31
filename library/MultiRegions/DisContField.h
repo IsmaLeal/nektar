@@ -217,7 +217,17 @@ protected:
     void GenerateBoundaryConditionExpansion(
         const SpatialDomains::MeshGraphSharedPtr &graph1D,
         const SpatialDomains::BoundaryConditions &bcs,
-        const std::string variable, const bool DeclareCoeffPhysArrays = true);
+        const std::string variable, const bool DeclareCoeffPhysArrays = true,
+        const Collections::ImplementationType ImpType =
+            Collections::eNoImpType);
+
+    /// Make copy of boundary conditions.
+    void GenerateBoundaryConditionExpansion(
+        const Array<OneD, const MultiRegions::ExpListSharedPtr> &In,
+        const SpatialDomains::BoundaryConditions &bcs,
+        const std::string variable, const bool DeclareCoeffPhysArrays = true,
+        const Collections::ImplementationType ImpType =
+            Collections::eNoImpType);
 
     /// Generate a associative map of periodic vertices in a mesh.
     void FindPeriodicTraces(const SpatialDomains::BoundaryConditions &bcs,

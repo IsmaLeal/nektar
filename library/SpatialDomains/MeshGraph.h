@@ -170,26 +170,6 @@ const std::string kExpansionTypeStr[] = {"NOTYPE",
 typedef std::map<int, std::vector<unsigned int>> CompositeOrdering;
 typedef std::map<int, std::vector<unsigned int>> BndRegionOrdering;
 
-// set restriction on domain range for post-processing.
-// struct DomainRange
-// {
-//     bool m_doXrange;
-//     NekDouble m_xmin;
-//     NekDouble m_xmax;
-//     bool m_doYrange;
-//     NekDouble m_ymin;
-//     NekDouble m_ymax;
-//     bool m_doZrange;
-//     NekDouble m_zmin;
-//     NekDouble m_zmax;
-
-//     bool m_checkShape;
-//     LibUtilities::ShapeType m_shapeType;
-// };
-
-// typedef std::shared_ptr<DomainRange> DomainRangeShPtr;
-// static DomainRangeShPtr NullDomainRangeShPtr;
-
 struct Composite
 {
     std::vector<Geometry *> m_geomVec;
@@ -372,6 +352,9 @@ public:
     /// Check if goemetry is in range definition if activated
     SPATIAL_DOMAINS_EXPORT bool CheckRange(Geometry3D &geom);
 
+    /// Check if goemetry is in range definition if activated
+    SPATIAL_DOMAINS_EXPORT bool CheckRange(MeshEntity &e);
+
     /* ---- Composites and Domain ---- */
     CompositeSharedPtr GetComposite(int whichComposite)
     {
@@ -407,6 +390,11 @@ public:
         ASSERTL1(m_domain.count(domain),
                  "Request for domain which does not exist");
         return m_domain[domain];
+    }
+
+    LibUtilities::DomainRangeShPtr &GetDomainRange()
+    {
+        return m_domainRange;
     }
 
     SPATIAL_DOMAINS_EXPORT const ExpansionInfoMap &GetExpansionInfo(

@@ -67,20 +67,18 @@ ProcessBoundaryExtract::~ProcessBoundaryExtract()
 
 void ProcessBoundaryExtract::v_Process(po::variables_map &vm)
 {
-    m_f->SetUpExp(vm);
-
     m_f->m_addNormals = m_config["addnormals"].as<bool>();
 
     // Set up Field options to output boundary fld
     string bvalues = m_config["bnd"].as<string>();
 
     vector<unsigned int> bndRegions;
+    SpatialDomains::BoundaryConditions bcs(m_f->m_session, m_f->m_graph);
+
     if (boost::iequals(bvalues, "All"))
     {
         int numBndExp = 0;
 
-        SpatialDomains::BoundaryConditions bcs(m_f->m_session,
-                                               m_f->m_exp[0]->GetGraph());
         const SpatialDomains::BoundaryRegionCollection bregions =
             bcs.GetBoundaryRegions();
 
@@ -105,9 +103,28 @@ void ProcessBoundaryExtract::v_Process(po::variables_map &vm)
     }
     else
     {
+        // set a tag for use when generating explist.
+        m_f->m_session->SetTag("CreateBndRegions", bvalues);
         ASSERTL0(ParseUtils::GenerateVector(bvalues, bndRegions),
                  "Failed to interpret bnd values string");
     }
+
+    // if GlobalSysSoln is set to DirectMultiLevelStaticCond, reset it
+    // to IterativeStaticCond to stop multilevel static condensation
+    // processing and assocuated calls to partioner which may cause issues
+    if (m_f->m_session->DefinesSolverInfo("GlobalSysSoln"))
+    {
+        if (m_f->m_session->MatchSolverInfo("GlobalSysSoln",
+                                            "DirectMultiLevelStaticCond"))
+        {
+            m_f->m_session->SetSolverInfo("GlobalSysSoln",
+                                          "IterativeStaticCond");
+            NEKERROR(ErrorUtil::ewarning,
+                     "Resetting GlobalSySoln to IterativeStaticCond");
+        }
+    }
+
+    m_f->SetUpExp(vm);
 
     if (m_f->m_bndRegionsToWrite.size())
     {

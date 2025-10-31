@@ -456,7 +456,7 @@ OperatorImpMap CollectionOptimisation::SetWithTimings(
     StdRegions::VarCoeffType varcoefftypes[] = {StdRegions::eVarCoeffVelX,
                                                 StdRegions::eVarCoeffVelY,
                                                 StdRegions::eVarCoeffVelZ};
-    for (int i = 0; i < pExp->GetShapeDimension(); i++)
+    for (int i = 0; i < pExp->GetCoordim(); i++)
     {
         varcoeffs[varcoefftypes[i]] = Array<OneD, NekDouble>(maxsize, 1.0);
     }

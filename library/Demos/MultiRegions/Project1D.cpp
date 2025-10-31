@@ -141,8 +141,7 @@ protected:
 
     // v_ReadGeometry, v_WriteGeometry and v_PartitionMesh should not be used by
     // this class
-    void v_ReadGeometry([[maybe_unused]] LibUtilities::DomainRangeShPtr rng,
-                        [[maybe_unused]] bool fillGraph) override
+    void v_ReadGeometry([[maybe_unused]] bool fillGraph) override
     {
         NEKERROR(ErrorUtil::efatal, "Not implemented.");
     }

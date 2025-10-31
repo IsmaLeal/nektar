@@ -71,7 +71,7 @@ void OutputFld::v_OutputFromPts([[maybe_unused]] po::variables_map &vm)
 
 void OutputFld::v_OutputFromExp([[maybe_unused]] po::variables_map &vm)
 {
-    ASSERTL0(m_f->m_variables.size(), "OutputFld: need input data.")
+    ASSERTL0(m_f->m_variables.size(), "OutputFld: need input variable data.")
 
     // Extract the output filename and extension
     string filename = m_config["outfile"].as<string>();

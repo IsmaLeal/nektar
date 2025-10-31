@@ -70,10 +70,12 @@ protected:
         const std::string &outfilename, bool defaultExp = false,
         const LibUtilities::FieldMetaDataMap &metadata =
             LibUtilities::NullFieldMetaDataMap) override;
-    SPATIAL_DOMAINS_EXPORT void v_ReadGeometry(
-        LibUtilities::DomainRangeShPtr rng, bool fillGraph) override;
+    SPATIAL_DOMAINS_EXPORT void v_ReadGeometry(bool fillGraph) override;
     SPATIAL_DOMAINS_EXPORT void v_PartitionMesh(
         LibUtilities::SessionReaderSharedPtr session) override;
+
+    SPATIAL_DOMAINS_EXPORT void SetupCompositeRange(
+        LibUtilities::DomainRangeShPtr &rng);
 
     virtual void v_ReadVertices();
     virtual void v_ReadCurves();

@@ -37,6 +37,7 @@
 
 #include "ProcessWSS.h"
 
+#include <LibUtilities/BasicUtils/ParseUtils.h>
 #include <LibUtilities/BasicUtils/SharedArray.hpp>
 #include <MultiRegions/ExpList.h>
 
@@ -108,11 +109,42 @@ void ProcessWSS::v_Process(po::variables_map &vm)
                                            m_f->m_exp[0]->GetGraph());
     const SpatialDomains::BoundaryRegionCollection bregions =
         bcs.GetBoundaryRegions();
+
+    // when using extract we may not have defined all boundary regions
+    // so identify that here
+    std::set<int> ProcessBnd;
+    if (m_f->m_session->DefinesTag("CreateBndRegions"))
+    {
+        // evaluate bnd regions to be generated
+        vector<unsigned int> bndRegions;
+        ASSERTL0(ParseUtils::GenerateVector(
+                     m_f->m_session->GetTag("CreateBndRegions"), bndRegions),
+                 "Failed to interpret bnd values string");
+
+        for (auto &bnd : bndRegions)
+        {
+            if (bregions.count(bnd) == 1)
+            {
+                ProcessBnd.insert(bnd);
+            }
+        }
+    }
+    else
+    {
+        for (auto &it : bregions)
+        {
+            ProcessBnd.insert(it.first);
+        }
+    }
+
     map<int, int> BndRegionMap;
     int cnt = 0;
     for (auto &breg_it : bregions)
     {
-        BndRegionMap[breg_it.first] = cnt++;
+        if (ProcessBnd.count(breg_it.first))
+        {
+            BndRegionMap[breg_it.first] = cnt++;
+        }
     }
 
     // Loop over boundaries to Write

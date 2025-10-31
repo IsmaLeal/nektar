@@ -38,6 +38,7 @@ using namespace std;
 
 #include "OutputFileBase.h"
 #include <LibUtilities/BasicUtils/Filesystem.hpp>
+#include <LibUtilities/BasicUtils/ParseUtils.h>
 #include <boost/format.hpp>
 #include <iomanip>
 
@@ -145,12 +146,44 @@ void OutputFileBase::v_Process(po::variables_map &vm)
                 bcs.GetBoundaryRegions();
             map<int, int> BndRegionMap;
             map<int, LibUtilities::CommSharedPtr> BndRegionComm;
+
+            // when using extract we may not have defined all boundary regions
+            // so identify that here
+            std::set<int> ProcessBnd;
+            if (m_f->m_session->DefinesTag("CreateBndRegions"))
+            {
+                // evaluate bnd regions to be generated
+                vector<unsigned int> bndRegions;
+                ASSERTL0(
+                    ParseUtils::GenerateVector(
+                        m_f->m_session->GetTag("CreateBndRegions"), bndRegions),
+                    "Failed to interpret bnd values string");
+
+                for (auto &bnd : bndRegions)
+                {
+                    if (bregions.count(bnd) == 1)
+                    {
+                        ProcessBnd.insert(bnd);
+                    }
+                }
+            }
+            else
+            {
+                for (auto &it : bregions)
+                {
+                    ProcessBnd.insert(it.first);
+                }
+            }
+
             int cnt = 0;
             for (auto &breg_it : bregions)
             {
-                BndRegionMap[breg_it.first] = cnt++;
-                BndRegionComm[breg_it.first] =
-                    bcs.GetBoundaryCommunicators()[breg_it.first];
+                if (ProcessBnd.count(breg_it.first))
+                {
+                    BndRegionMap[breg_it.first] = cnt++;
+                    BndRegionComm[breg_it.first] =
+                        bcs.GetBoundaryCommunicators()[breg_it.first];
+                }
             }
 
             // find ending of output file and insert _b1, _b2

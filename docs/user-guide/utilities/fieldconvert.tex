@@ -264,24 +264,25 @@ FieldConvert in.fld out.fld:fld:format=Hdf5
 \end{lstlisting}
 %
 \section{Specifying a sub-range of the mesh}
+\subsection{Sub-range of the mesh by specifying a coordinate range (range)}
 Fieldconvert allows for a sub-range of the mesh (computational
 domain) by using an xml input option and either convert or manipulate
 the \nekpp output binary files.  Taking as an example the conversion
 of the \nekpp binary files (.chk or .fld) shown before and wanting to
 convert just the 2D sub-range defined by $-2\leq x \leq 3$, $-1\leq y
-\leq 2$ the additional flag \inltt{-r} can be used as follows:
+\leq 2$  can be acheived  as follows:
 %
 \begin{itemize}
 \item Paraview or VisIt (.vtu format)
 %
 \begin{lstlisting}[style=BashInputStyle]
-FieldConvert test.xml:xml:range=''-2,3,-1,2''  test.fld test.vtu
+FieldConvert test.xml:xml:range=``-2,3,-1,2''  test.fld test.vtu
 \end{lstlisting}
 %
 \item Tecplot (.dat format)
 %
 \begin{lstlisting}[style=BashInputStyle]
-FieldConvert  test.xml:xml:range=''2,3,-1,2'' test.fld test.dat
+FieldConvert  test.xml:xml:range=``2,3,-1,2'' test.fld test.dat
 \end{lstlisting}
 %
 \end{itemize}
@@ -293,6 +294,22 @@ so, a third set of numbers has to be provided to define the $z$ range.
 
 %
 %
+\subsection{Sub-range of a mesh by specifying associated surface composites (comprange)}
+
+Fieldconvert also allows for a sub-range of the mesh base on the
+composite definition of the boundaries of hte domain. Using the xml
+input option \inltt{comprange} one can specify the elements that only
+touch the surface composite. This can be useful processing boundary
+expasnions such as the \inltt{extract} module since it will only setup
+the volume mesh touching the composites associated with the boundary
+reducing the memory ane execution time to extract a surface field or
+process the wall shear stress.  As an exmple consider the extraction
+of a surface field on boundary $3$ which is associated with the mesh
+composties $1,2$ then you can specify
+%
+\begin{lstlisting}[style=BashInputStyle]
+FieldConvert -m extract:bnd=3 test.xml:xml:comprange=``1,2'' test.fld bnd.fld
+\end{lstlisting}
 
 \section{FieldConvert in NekPy}
 

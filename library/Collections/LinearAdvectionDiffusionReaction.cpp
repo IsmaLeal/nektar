@@ -653,8 +653,11 @@ public:
             }
         }
         ASSERTL0(ndir, "Must define at least one advection velocity");
-        ASSERTL1(ndir <= m_coordim,
-                 "Number of constants is larger than coordinate dimensions");
+        ASSERTL1(ndir >= m_coordim,
+                 "Number of coordingates is larger than number of constants "
+                 "provided (ndir = " +
+                     std::to_string(ndir) +
+                     ", m_coordim = " + std::to_string(m_coordim) + ")");
 
         // Extract advection velocities, interleave and pass to
         // libMatrixFree Multiply by -1/lambda for combined (Mass +

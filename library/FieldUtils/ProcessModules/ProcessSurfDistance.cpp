@@ -102,12 +102,6 @@ void ProcessSurfDistance::v_Process(po::variables_map &vm)
 
     for (i = cnt = 0; i < BndExp.size(); ++i)
     {
-        if (i != surf)
-        {
-            cnt += BndExp[i]->GetExpSize();
-            continue;
-        }
-
         for (j = 0; j < BndExp[i]->GetExpSize(); ++j, ++cnt)
         {
             int elmtNum     = BoundarytoElmtID[cnt];
