@@ -30,6 +30,7 @@ v5.9.0
 - Add GetEquation to BoundaryCondition and ImposeNeumann/RobinConditions (!2257)
 - Adjustments to `NekLinSys` classes for future multigrid capability (!1811)
 - Avoid multiple data copy in NekFFTW (!2268)
+- Add FieldConvert modules to perform force decomposition for incompressible flows (!1531)
 
 **ADRSolver**
 - Add implicit UnsteadyAdvection for continuous Galerkin (!2231)

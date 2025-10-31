@@ -11,6 +11,7 @@ IF( NEKTAR_SOLVER_ADR )
         ./ADRSolver.cpp
         ./EquationSystems/Helmholtz.cpp
         ./EquationSystems/Laplace.cpp
+        ./EquationSystems/LaplacePhi.cpp
         ./EquationSystems/Poisson.cpp
         ./EquationSystems/Projection.cpp
         ./EquationSystems/SteadyAdvectionDiffusion.cpp
@@ -235,6 +236,7 @@ IF( NEKTAR_SOLVER_ADR )
     ADD_NEKTAR_TEST(SVV_Tri)
     ADD_NEKTAR_TEST(SVV_Prism)
     ADD_NEKTAR_TEST(SVV_Tet)
+    ADD_NEKTAR_TEST(LaplacePhi)
 
     # Movement tests
     ADD_NEKTAR_TEST(Movement_fixed_interfaces232_dirichlet)

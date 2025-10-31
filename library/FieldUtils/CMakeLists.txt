@@ -60,6 +60,9 @@ SET(FieldUtilsHeaders
     ProcessModules/ProcessScalGrad.h
     ProcessModules/ProcessMultiShear.h
     ProcessModules/ProcessWSS.h
+    ProcessModules/ProcessForceDecompose.h
+    ProcessModules/ProcessForceDecomposeBnd.h
+    ProcessModules/ProcessForceDecomposeVol.h
     ProcessModules/ProcessWallNormalData.h
     ProcessModules/ProcessBodyFittedVelocity.h
     ProcessModules/ProcessC0Projection.h
@@ -130,6 +133,9 @@ SET(FieldUtilsSources
     ProcessModules/ProcessSurfDistance.cpp
     ProcessModules/ProcessMultiShear.cpp
     ProcessModules/ProcessWSS.cpp
+    ProcessModules/ProcessForceDecompose.cpp
+    ProcessModules/ProcessForceDecomposeBnd.cpp
+    ProcessModules/ProcessForceDecomposeVol.cpp
     ProcessModules/ProcessWallNormalData.cpp
     ProcessModules/ProcessBodyFittedVelocity.cpp
     ProcessModules/ProcessC0Projection.cpp
