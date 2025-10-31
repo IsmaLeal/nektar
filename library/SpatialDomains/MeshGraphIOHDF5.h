@@ -67,8 +67,7 @@ protected:
         const std::string &outfilename, bool defaultExp = false,
         const LibUtilities::FieldMetaDataMap &metadata =
             LibUtilities::NullFieldMetaDataMap) final;
-    SPATIAL_DOMAINS_EXPORT void v_ReadGeometry(
-        LibUtilities::DomainRangeShPtr rng, bool fillGraph) final;
+    SPATIAL_DOMAINS_EXPORT void v_ReadGeometry(bool fillGraph) final;
     SPATIAL_DOMAINS_EXPORT void v_PartitionMesh(
         LibUtilities::SessionReaderSharedPtr session) final;
 
@@ -77,6 +76,7 @@ private:
                       const std::unordered_set<int> &readIds);
     void ReadDomain();
     void ReadComposites();
+    void SetupCompositeRange(LibUtilities::DomainRangeShPtr &rng);
 
     template <class T>
     void WriteGeometryMap(GeomMapView<T> &geomMap, std::string datasetName);

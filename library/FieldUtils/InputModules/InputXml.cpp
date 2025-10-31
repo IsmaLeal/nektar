@@ -62,7 +62,8 @@ InputXml::InputXml(FieldSharedPtr f) : InputModule(f)
 {
     m_allowedFiles.insert("xml");
     m_allowedFiles.insert("xml.gz");
-    m_config["range"] = ConfigOption(false, "", "range values");
+    m_config["range"]     = ConfigOption(false, "", "range values");
+    m_config["comprange"] = ConfigOption(false, "", "composite range values");
 }
 
 /**
@@ -77,7 +78,8 @@ InputXml::~InputXml()
  */
 void InputXml::v_Process(po::variables_map &vm)
 {
-    string range = m_config["range"].as<string>();
+    string range     = m_config["range"].as<string>();
+    string comprange = m_config["comprange"].as<string>();
 
     LibUtilities::Timer timerpart;
     if (m_f->m_verbose)
@@ -140,37 +142,73 @@ void InputXml::v_Process(po::variables_map &vm)
                 "Failed to interpret range string");
         }
 
-        ASSERTL0(values.size() > 1, "Do not have minimum values of xmin,xmax");
-        ASSERTL0(values.size() % 2 == 0,
-                 "Do not have an even number of range values");
-
-        int nvalues = values.size() / 2;
-        rng = MemoryManager<LibUtilities::DomainRange>::AllocateSharedPtr();
-
-        rng->m_doZrange   = false;
-        rng->m_doYrange   = false;
-        rng->m_checkShape = false;
-
-        switch (nvalues)
+        if (values.size())
         {
-            case 3:
-                rng->m_doZrange = true;
-                rng->m_zmin     = values[4];
-                rng->m_zmax     = values[5];
-                /* Falls through. */
-            case 2:
-                rng->m_doYrange = true;
-                rng->m_ymin     = values[2];
-                rng->m_ymax     = values[3];
-                /* Falls through. */
-            case 1:
-                rng->m_doXrange = true;
-                rng->m_xmin     = values[0];
-                rng->m_xmax     = values[1];
-                break;
-            default:
-                NEKERROR(ErrorUtil::efatal,
-                         "too many values specfied in range");
+            ASSERTL0(values.size() > 1,
+                     "Do not have minimum values of xmin,xmax");
+            ASSERTL0(values.size() % 2 == 0,
+                     "Do not have an even number of range values");
+
+            int nvalues = values.size() / 2;
+            rng = MemoryManager<LibUtilities::DomainRange>::AllocateSharedPtr();
+
+            rng->m_doZrange   = false;
+            rng->m_doYrange   = false;
+            rng->m_checkShape = false;
+
+            switch (nvalues)
+            {
+                case 3:
+                    rng->m_doZrange = true;
+                    rng->m_zmin     = values[4];
+                    rng->m_zmax     = values[5];
+                    /* Falls through. */
+                case 2:
+                    rng->m_doYrange = true;
+                    rng->m_ymin     = values[2];
+                    rng->m_ymax     = values[3];
+                    /* Falls through. */
+                case 1:
+                    rng->m_doXrange = true;
+                    rng->m_xmin     = values[0];
+                    rng->m_xmax     = values[1];
+                    break;
+                default:
+                    NEKERROR(ErrorUtil::efatal,
+                             "too many values specfied in range");
+            }
+        }
+    }
+
+    if (comprange.size())
+    {
+        if ((m_f->m_comm->GetSize() > 1) && (m_f->m_comm->GetRank() == 0))
+        {
+            NEKERROR(ErrorUtil::ewarning,
+                     "Using the comprange option in parallel may  cause "
+                     "problems with partitioning (particuarly with Scotch) "
+                     "since the elements are not contiguous");
+        }
+
+        vector<unsigned> compvalues;
+
+        ASSERTL0(ParseUtils::GenerateVector(comprange, compvalues),
+                 "Failed to interpret comprange string");
+
+        if (compvalues.size())
+        {
+            if (rng == LibUtilities::NullDomainRangeShPtr)
+            {
+                rng = MemoryManager<
+                    LibUtilities::DomainRange>::AllocateSharedPtr();
+            }
+            // initialise with 3D and check when graph setup
+            rng->m_compElmts = 3;
+
+            for (auto it : compvalues)
+            {
+                rng->m_comps.insert(it);
+            }
         }
     }
 

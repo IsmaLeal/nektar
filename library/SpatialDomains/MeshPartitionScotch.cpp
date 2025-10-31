@@ -32,6 +32,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+#include <LibUtilities/BasicUtils/VmathArray.hpp>
 #include <SpatialDomains/MeshPartitionScotch.h>
 
 namespace Nektar::SpatialDomains
@@ -63,6 +64,30 @@ void MeshPartitionScotch::v_PartitionGraphImpl(
     [[maybe_unused]] Nektar::Array<Nektar::OneD, int> &edgeWgt, int &nparts,
     int &volume, Nektar::Array<Nektar::OneD, int> &part)
 {
+
+    // This method seems to fail if we have elements in the graph that
+    // are isolated from others can happen when post-processing (i.e. mesh on a
+    // surface). So remove these elementsand add in at the end
+    std::set<unsigned> isolated;
+    for (int i = 0; i < nVerts; ++i)
+    {
+        if (xadj[i] == xadj[i + 1])
+        {
+            isolated.insert(i);
+        }
+    }
+
+    if (isolated.size())
+    {
+        Nektar::Array<Nektar::OneD, int> tmp;
+        for (auto i : isolated)
+        {
+            // contract xadjacent list
+            Vmath::Vcopy(nVerts - i, xadj + i + 1, 1, tmp = xadj + i, 1);
+            nVerts--;
+        }
+    }
+
     int wgtflag = 0;
     int *vwgt   = nullptr;
     int *vsize  = nullptr;
@@ -80,6 +105,24 @@ void MeshPartitionScotch::v_PartitionGraphImpl(
 
     PartGraphVKway(&nVerts, &xadj[0], &adjcy[0], vwgt, vsize, &wgtflag,
                    &numflag, &nparts, &volume, &part[0]);
+
+    // distribute isolated elements to each partition in order.
+    if (isolated.size())
+    {
+        Nektar::Array<Nektar::OneD, int> tmp;
+        unsigned topart = 0;
+        for (auto i : isolated)
+        {
+            // contract xadjacent list
+            if (nVerts - i)
+            {
+                Vmath::Vcopy(nVerts - i, part + i, 1, tmp = part + i + 1, 1);
+            }
+            part[i] = topart % nparts;
+            nVerts++;
+            topart++;
+        }
+    }
 }
 
 void MeshPartitionScotch::PartGraphVKway(

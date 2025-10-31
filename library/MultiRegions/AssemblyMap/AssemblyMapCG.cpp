@@ -98,7 +98,6 @@ int AssemblyMapCG::CreateGraph(
 
     for (i = 0; i < bndCondExp.size(); i++)
     {
-
         m_numLocalBndCondCoeffs += bndCondExp[i]->GetNcoeffs();
 
         if (bndConditions[0][i]->GetBoundaryConditionType() ==
@@ -1229,12 +1228,6 @@ int AssemblyMapCG::CreateGraph(
     int nGraphVerts = tempGraphVertId;
     Array<OneD, int> perm(nGraphVerts);
     Array<OneD, int> iperm(nGraphVerts);
-    Array<OneD, int> vwgts(nGraphVerts);
-    ASSERTL1(vwgts_map.size() == nGraphVerts, "Non matching dimensions");
-    for (i = 0; i < nGraphVerts; ++i)
-    {
-        vwgts[i] = vwgts_map[i];
-    }
 
     if (nGraphVerts)
     {

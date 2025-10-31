@@ -2,7 +2,7 @@
 <test>
     <description> Fitst part of wallNormalData module (projection a point to the boudndary) </description>
     <executable>FieldConvert</executable>
-    <parameters> -f -e -m wallNormalData:bnd=0:xorig="0,0":projDir="1,1":nptsH=3:distH=0.002 wallNormalData.xml wallNormalData.fld wallNormalData.pts</parameters>
+    <parameters> -f -e -m wallNormalData:bnd=0:xorig="0,0":projDir="1,1":nptsH=3:distH=0.002 wallNormalData.xml:xml:comprange=8 wallNormalData.fld wallNormalData.pts</parameters>
     <files>
         <file description="Session File">wallNormalData.xml</file>
         <file description="Session File">wallNormalData.fld</file>

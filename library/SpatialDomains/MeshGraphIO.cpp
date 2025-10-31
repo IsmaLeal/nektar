@@ -109,10 +109,13 @@ MeshGraphSharedPtr MeshGraphIO::Read(
         meshIO->m_meshPartitioned = true;
     }
 
+    // set up domain range info before partitioning
+    meshIO->m_meshGraph->SetDomainRange(rng);
+
     meshIO->PartitionMesh(session);
 
     // Finally, read the geometry information.
-    meshIO->ReadGeometry(rng, fillGraph);
+    meshIO->ReadGeometry(fillGraph);
 
     return meshIO->m_meshGraph;
 }
@@ -146,24 +149,30 @@ std::map<int, MeshEntity> MeshGraphIO::CreateMeshEntities()
         {
             for (auto [id, geom] : m_meshGraph->GetGeomMap<TriGeom>())
             {
-                MeshEntity e;
-                e.id = e.origId = id;
-                e.list.push_back(geom->GetEdge(0)->GetGlobalID());
-                e.list.push_back(geom->GetEdge(1)->GetGlobalID());
-                e.list.push_back(geom->GetEdge(2)->GetGlobalID());
-                e.ghost        = false;
-                elements[e.id] = e;
+                if (m_meshGraph->CheckRange(*geom))
+                {
+                    MeshEntity e;
+                    e.id = e.origId = id;
+                    e.list.push_back(geom->GetEdge(0)->GetGlobalID());
+                    e.list.push_back(geom->GetEdge(1)->GetGlobalID());
+                    e.list.push_back(geom->GetEdge(2)->GetGlobalID());
+                    e.ghost        = false;
+                    elements[e.id] = e;
+                }
             }
             for (auto [id, geom] : m_meshGraph->GetGeomMap<QuadGeom>())
             {
-                MeshEntity e;
-                e.id = e.origId = id;
-                e.list.push_back(geom->GetEdge(0)->GetGlobalID());
-                e.list.push_back(geom->GetEdge(1)->GetGlobalID());
-                e.list.push_back(geom->GetEdge(2)->GetGlobalID());
-                e.list.push_back(geom->GetEdge(3)->GetGlobalID());
-                e.ghost        = false;
-                elements[e.id] = e;
+                if (m_meshGraph->CheckRange(*geom))
+                {
+                    MeshEntity e;
+                    e.id = e.origId = id;
+                    e.list.push_back(geom->GetEdge(0)->GetGlobalID());
+                    e.list.push_back(geom->GetEdge(1)->GetGlobalID());
+                    e.list.push_back(geom->GetEdge(2)->GetGlobalID());
+                    e.list.push_back(geom->GetEdge(3)->GetGlobalID());
+                    e.ghost        = false;
+                    elements[e.id] = e;
+                }
             }
         }
         break;
@@ -171,51 +180,63 @@ std::map<int, MeshEntity> MeshGraphIO::CreateMeshEntities()
         {
             for (auto [id, geom] : m_meshGraph->GetGeomMap<TetGeom>())
             {
-                MeshEntity e;
-                e.id = e.origId = id;
-                e.list.push_back(geom->GetFace(0)->GetGlobalID());
-                e.list.push_back(geom->GetFace(1)->GetGlobalID());
-                e.list.push_back(geom->GetFace(2)->GetGlobalID());
-                e.list.push_back(geom->GetFace(3)->GetGlobalID());
-                e.ghost        = false;
-                elements[e.id] = e;
+                if (m_meshGraph->CheckRange(*geom))
+                {
+                    MeshEntity e;
+                    e.id = e.origId = id;
+                    e.list.push_back(geom->GetFace(0)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(1)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(2)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(3)->GetGlobalID());
+                    e.ghost        = false;
+                    elements[e.id] = e;
+                }
             }
             for (auto [id, geom] : m_meshGraph->GetGeomMap<PyrGeom>())
             {
-                MeshEntity e;
-                e.id = e.origId = id;
-                e.list.push_back(geom->GetFace(0)->GetGlobalID());
-                e.list.push_back(geom->GetFace(1)->GetGlobalID());
-                e.list.push_back(geom->GetFace(2)->GetGlobalID());
-                e.list.push_back(geom->GetFace(3)->GetGlobalID());
-                e.list.push_back(geom->GetFace(4)->GetGlobalID());
-                e.ghost        = false;
-                elements[e.id] = e;
+                if (m_meshGraph->CheckRange(*geom))
+                {
+                    MeshEntity e;
+                    e.id = e.origId = id;
+                    e.list.push_back(geom->GetFace(0)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(1)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(2)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(3)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(4)->GetGlobalID());
+                    e.ghost        = false;
+                    elements[e.id] = e;
+                }
             }
             for (auto [id, geom] : m_meshGraph->GetGeomMap<PrismGeom>())
             {
-                MeshEntity e;
-                e.id = e.origId = id;
-                e.list.push_back(geom->GetFace(0)->GetGlobalID());
-                e.list.push_back(geom->GetFace(1)->GetGlobalID());
-                e.list.push_back(geom->GetFace(2)->GetGlobalID());
-                e.list.push_back(geom->GetFace(3)->GetGlobalID());
-                e.list.push_back(geom->GetFace(4)->GetGlobalID());
-                e.ghost        = false;
-                elements[e.id] = e;
+                if (m_meshGraph->CheckRange(*geom))
+                {
+                    MeshEntity e;
+                    e.id = e.origId = id;
+                    e.list.push_back(geom->GetFace(0)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(1)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(2)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(3)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(4)->GetGlobalID());
+                    e.ghost        = false;
+                    elements[e.id] = e;
+                }
             }
             for (auto [id, geom] : m_meshGraph->GetGeomMap<HexGeom>())
             {
-                MeshEntity e;
-                e.id = e.origId = id;
-                e.list.push_back(geom->GetFace(0)->GetGlobalID());
-                e.list.push_back(geom->GetFace(1)->GetGlobalID());
-                e.list.push_back(geom->GetFace(2)->GetGlobalID());
-                e.list.push_back(geom->GetFace(3)->GetGlobalID());
-                e.list.push_back(geom->GetFace(4)->GetGlobalID());
-                e.list.push_back(geom->GetFace(5)->GetGlobalID());
-                e.ghost        = false;
-                elements[e.id] = e;
+                if (m_meshGraph->CheckRange(*geom))
+                {
+                    MeshEntity e;
+                    e.id = e.origId = id;
+                    e.list.push_back(geom->GetFace(0)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(1)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(2)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(3)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(4)->GetGlobalID());
+                    e.list.push_back(geom->GetFace(5)->GetGlobalID());
+                    e.ghost        = false;
+                    elements[e.id] = e;
+                }
             }
         }
         break;

@@ -93,6 +93,14 @@ void MeshGraphIOXml::v_PartitionMesh(
     comm->Bcast(isPartitioned, 0);
     comm->Bcast(meshDimension, 0);
 
+    if (m_meshGraph->GetDomainRange() &&
+        m_meshGraph->GetDomainRange()->m_compElmts)
+    {
+        m_meshGraph->GetDomainRange()->m_compElmts = meshDimension;
+    }
+
+    SetupCompositeRange(m_meshGraph->GetDomainRange());
+
     // If the mesh is already partitioned, we are done. Remaining
     // processes must load their partitions.
     if (isPartitioned)
@@ -136,7 +144,7 @@ void MeshGraphIOXml::v_PartitionMesh(
                      "The 'part-only' option should be used in serial.");
 
             // Read 'lite' geometry information
-            ReadGeometry(LibUtilities::NullDomainRangeShPtr, false);
+            ReadGeometry(false);
 
             // Number of partitions is specified by the parameter.
             int nParts;
@@ -198,7 +206,7 @@ void MeshGraphIOXml::v_PartitionMesh(
                 if (isRoot)
                 {
                     // Read 'lite' geometry information
-                    ReadGeometry(LibUtilities::NullDomainRangeShPtr, false);
+                    ReadGeometry(false);
 
                     // Store composite ordering and boundary information.
                     m_compOrder = CreateCompositeOrdering();
@@ -335,7 +343,7 @@ void MeshGraphIOXml::v_PartitionMesh(
             else
             {
                 m_session->InitSession();
-                ReadGeometry(LibUtilities::NullDomainRangeShPtr, false);
+                ReadGeometry(false);
 
                 m_compOrder = CreateCompositeOrdering();
                 m_meshGraph->SetCompositeOrdering(m_compOrder);
@@ -394,13 +402,151 @@ void MeshGraphIOXml::v_PartitionMesh(
     }
 }
 
-void MeshGraphIOXml::v_ReadGeometry(LibUtilities::DomainRangeShPtr rng,
-                                    bool fillGraph)
+void MeshGraphIOXml::SetupCompositeRange(LibUtilities::DomainRangeShPtr &rng)
+{
+    // Get row of comm, or the whole comm if not split
+    LibUtilities::CommSharedPtr comm     = m_session->GetComm();
+    LibUtilities::CommSharedPtr commMesh = comm->GetRowComm();
+    const bool isRoot                    = comm->TreatAsRankZero();
+
+    if (!rng || rng->m_compElmts == 0)
+    {
+        return; // composite rangge not being used.
+    }
+
+    TiXmlElement *field = nullptr;
+
+    if (isRoot)
+    {
+        /// Look for elements in ELEMENT block.
+        if (m_session->DefinesElement("NEKTAR/GEOMETRY/COMPOSITE"))
+        {
+
+            field = m_session->GetElement("NEKTAR/GEOMETRY/COMPOSITE");
+        }
+        else
+        {
+            return; // composite not defined
+        }
+
+        ASSERTL0(field, "Unable to find COMPOSITE tag in file.");
+
+        TiXmlElement *node = field->FirstChildElement("C");
+
+        while (node)
+        {
+            /// All elements are of the form: "<? ID="#"> ... </?>", with
+            /// ? being the element type.
+            int indx;
+            int err = node->QueryIntAttribute("ID", &indx);
+            ASSERTL0(err == TIXML_SUCCESS, "Unable to read attribute ID.");
+            // check to see if we need to add this composite
+            if (rng->m_comps.count(indx))
+            {
+
+                TiXmlNode *compositeChild = node->FirstChild();
+                // This is primarily to skip comments that may be present.
+                // Comments appear as nodes just like elements.
+                // We are specifically looking for text in the body
+                // of the definition.
+                while (compositeChild &&
+                       compositeChild->Type() != TiXmlNode::TINYXML_TEXT)
+                {
+                    compositeChild = compositeChild->NextSibling();
+                }
+
+                ASSERTL0(compositeChild,
+                         "Unable to read composite definition body.");
+                std::string compositeStr = compositeChild->ToText()->ValueStr();
+
+                /// Parse out the element components corresponding to type of
+                /// element.
+                std::istringstream compositeDataStrm(compositeStr.c_str());
+
+                try
+                {
+                    while (!compositeDataStrm.fail())
+                    {
+                        std::string compStr;
+                        compositeDataStrm >> compStr;
+
+                        if (compStr.length() > 0)
+                        {
+                            // extract setquence of values
+                            std::string::size_type indxBeg =
+                                compStr.find_first_of('[') + 1;
+                            std::string::size_type indxEnd =
+                                compStr.find_last_of(']') - 1;
+
+                            ASSERTL0(indxBeg <= indxEnd,
+                                     (std::string(
+                                          "Error reading index definition:") +
+                                      compStr)
+                                         .c_str());
+
+                            std::string indxStr =
+                                compStr.substr(indxBeg, indxEnd - indxBeg + 1);
+                            std::vector<unsigned int> seqVector;
+                            bool err = ParseUtils::GenerateSeqVector(
+                                indxStr.c_str(), seqVector);
+                            ASSERTL0(err, "Error reading composite elements: " +
+                                              indxStr);
+
+                            for (auto it : seqVector) // add ids to Traceid
+                            {
+                                rng->m_traceIDs.insert(it);
+                            }
+                        }
+                    }
+                }
+                catch (...)
+                {
+                    NEKERROR(ErrorUtil::efatal,
+                             (std::string("Unable to read COMPOSITE data in "
+                                          "composite range setup: ") +
+                              compositeStr)
+                                 .c_str());
+                }
+            }
+            /// Keep looking for additional composite definitions.
+            node = node->NextSiblingElement("C");
+        }
+
+        std::vector<unsigned> traceIDs;
+        unsigned nTraceIDs = rng->m_traceIDs.size();
+
+        comm->Bcast(nTraceIDs, 0);
+
+        for (auto &It : rng->m_traceIDs)
+        {
+            traceIDs.push_back(It);
+        }
+
+        // Send across data.
+        if (!traceIDs.empty())
+        {
+            comm->Bcast(traceIDs, 0);
+        }
+    }
+    else // share TraceIDs from root
+    {
+        unsigned nTraceIDs;
+        comm->Bcast(nTraceIDs, 0);
+
+        std::vector<unsigned> traceIDs;
+        traceIDs.resize(nTraceIDs);
+        comm->Bcast(traceIDs, 0);
+        for (auto &It : traceIDs)
+        {
+            rng->m_traceIDs.insert(It);
+        }
+    }
+}
+
+void MeshGraphIOXml::v_ReadGeometry(bool fillGraph)
 {
     // Reset member variables.
     m_meshGraph->Clear();
-
-    m_meshGraph->SetDomainRange(rng);
     m_xmlGeom = m_session->GetElement("NEKTAR/GEOMETRY");
 
     int err; /// Error value returned by TinyXML.

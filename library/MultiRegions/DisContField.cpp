@@ -34,6 +34,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+#include <LibUtilities/BasicUtils/ParseUtils.h>
 #include <LibUtilities/Foundations/ManagerAccess.h>
 #include <LocalRegions/Expansion0D.h>
 #include <LocalRegions/Expansion1D.h>
@@ -101,7 +102,7 @@ DisContField::DisContField(const LibUtilities::SessionReaderSharedPtr &pSession,
         SpatialDomains::BoundaryConditions bcs(m_session, graph);
 
         GenerateBoundaryConditionExpansion(graph, bcs, bcvar,
-                                           DeclareCoeffPhysArrays);
+                                           DeclareCoeffPhysArrays, ImpType);
         if (DeclareCoeffPhysArrays)
         {
             EvaluateBoundaryConditions(0.0, bcvar);
@@ -623,7 +624,8 @@ DisContField::DisContField(const LibUtilities::SessionReaderSharedPtr &pSession,
         SpatialDomains::BoundaryConditionsSharedPtr DomBCs =
             GetDomainBCs(domain, Allbcs, variable);
 
-        GenerateBoundaryConditionExpansion(m_graph, *DomBCs, variable);
+        GenerateBoundaryConditionExpansion(m_graph, *DomBCs, variable, true,
+                                           ImpType);
         EvaluateBoundaryConditions(0.0, variable);
         ApplyGeomInfo();
         FindPeriodicTraces(*DomBCs, variable);
@@ -680,7 +682,8 @@ DisContField::DisContField(const DisContField &In,
     if (variable.compare("DefaultVar") != 0)
     {
         SpatialDomains::BoundaryConditions bcs(m_session, graph);
-        GenerateBoundaryConditionExpansion(graph, bcs, variable);
+        GenerateBoundaryConditionExpansion(In.m_bndCondExpansions, bcs,
+                                           variable);
 
         if (DeclareCoeffPhysArrays)
         {
@@ -823,7 +826,8 @@ DisContField::~DisContField()
 void DisContField::GenerateBoundaryConditionExpansion(
     const SpatialDomains::MeshGraphSharedPtr &graph,
     const SpatialDomains::BoundaryConditions &bcs, const std::string variable,
-    const bool DeclareCoeffPhysArrays)
+    const bool DeclareCoeffPhysArrays,
+    const Collections::ImplementationType ImpType)
 {
     int cnt = 0;
     SpatialDomains::BoundaryConditionShPtr bc;
@@ -833,21 +837,148 @@ void DisContField::GenerateBoundaryConditionExpansion(
     const SpatialDomains::BoundaryConditionCollection &bconditions =
         bcs.GetBoundaryConditions();
 
+    std::set<int> ProcessBnd;
+    if (m_session->DefinesTag("CreateBndRegions"))
+    {
+        // evaluate bnd regions to be generated
+        vector<unsigned int> bndRegions;
+        ASSERTL0(ParseUtils::GenerateVector(
+                     m_session->GetTag("CreateBndRegions"), bndRegions),
+                 "Failed to interpret bnd values string");
+
+        for (auto &bnd : bndRegions)
+        {
+            if (bregions.count(bnd) ==
+                1) // this boundary may not exist on processor
+            {
+                ProcessBnd.insert(bnd);
+            }
+        }
+    }
+    else
+    {
+        for (auto &it : bregions)
+        {
+            ProcessBnd.insert(it.first);
+        }
+    }
+
     m_bndCondExpansions =
-        Array<OneD, MultiRegions::ExpListSharedPtr>(bregions.size());
+        Array<OneD, MultiRegions::ExpListSharedPtr>(ProcessBnd.size());
     m_bndConditions =
-        Array<OneD, SpatialDomains::BoundaryConditionShPtr>(bregions.size());
+        Array<OneD, SpatialDomains::BoundaryConditionShPtr>(ProcessBnd.size());
 
     m_bndCondBndWeight = Array<OneD, NekDouble>{bregions.size(), 0.0};
 
     // count the number of non-periodic boundary points
     for (auto &it : bregions)
     {
+        // check to see if reduced bnd regions have been set in FieldConvert.
+        if (ProcessBnd.count(it.first) == 0)
+        {
+            continue;
+        }
+
         bc = GetBoundaryCondition(bconditions, it.first, variable);
 
         locExpList = MemoryManager<MultiRegions::ExpList>::AllocateSharedPtr(
             m_session, *(it.second), graph, DeclareCoeffPhysArrays, variable,
-            false, bc->GetComm());
+            false, bc->GetComm(), ImpType);
+
+        m_bndCondExpansions[cnt] = locExpList;
+        m_bndConditions[cnt]     = bc;
+
+        std::string type = m_bndConditions[cnt]->GetUserDefined();
+
+        // Set up normals on non-Dirichlet boundary conditions. Second
+        // two conditions ideally should be in local solver setup (when
+        // made into factory)
+        if (bc->GetBoundaryConditionType() != SpatialDomains::eDirichlet ||
+            boost::iequals(type, "I") || boost::iequals(type, "CalcBC"))
+        {
+            SetUpPhysNormals();
+        }
+        cnt++;
+    }
+}
+
+/**
+ * \brief This function discretises the boundary conditions using an already
+ * setup expansion list of one-dimensions lower boundary expansions.
+ *
+ * According to their boundary region, the separate  boundary
+ * expansions are bundled together in an object of the class
+ *
+ * @param   In          An array of boundary conditions from  an alread setup
+ *                      expansion and the spectral/hp element expansions.
+ * @param   bcs         Information about the enforced boundary
+ *                      conditions.
+ * @param   variable    The session variable associated with the
+ *                      boundary conditions to enforce.
+ * @param DeclareCoeffPhysArrays bool to identify if array
+ *                               space should be setup.
+ *                               Default is true.
+ */
+void DisContField::GenerateBoundaryConditionExpansion(
+    const Array<OneD, const MultiRegions::ExpListSharedPtr> &In,
+    const SpatialDomains::BoundaryConditions &bcs, const std::string variable,
+    const bool DeclareCoeffPhysArrays,
+    [[maybe_unused]] const Collections::ImplementationType ImpType)
+{
+    int cnt = 0;
+    SpatialDomains::BoundaryConditionShPtr bc;
+    MultiRegions::ExpListSharedPtr locExpList;
+    const SpatialDomains::BoundaryRegionCollection &bregions =
+        bcs.GetBoundaryRegions();
+    const SpatialDomains::BoundaryConditionCollection &bconditions =
+        bcs.GetBoundaryConditions();
+
+    std::set<int> ProcessBnd;
+    if (m_session->DefinesTag("CreateBndRegions"))
+    {
+        // evaluate bnd regions to be generated
+        vector<unsigned int> bndRegions;
+        ASSERTL0(ParseUtils::GenerateVector(
+                     m_session->GetTag("CreateBndRegions"), bndRegions),
+                 "Failed to interpret bnd values string");
+
+        for (auto &bnd : bndRegions)
+        {
+            if (bregions.count(bnd) == 1)
+            {
+                ProcessBnd.insert(bnd);
+            }
+        }
+    }
+    else
+    {
+        for (auto &it : bregions)
+        {
+            ProcessBnd.insert(it.first);
+        }
+    }
+
+    m_bndCondExpansions =
+        Array<OneD, MultiRegions::ExpListSharedPtr>(ProcessBnd.size());
+    m_bndConditions =
+        Array<OneD, SpatialDomains::BoundaryConditionShPtr>(ProcessBnd.size());
+
+    m_bndCondBndWeight = Array<OneD, NekDouble>{bregions.size(), 0.0};
+
+    // count the number of non-periodic boundary points
+    for (auto &it : bregions)
+    {
+        // check to see if reduced bnd regions have been set in FieldConvert.
+        if (ProcessBnd.count(it.first) == 0)
+        {
+            continue;
+        }
+
+        bc = GetBoundaryCondition(bconditions, it.first, variable);
+
+        // make a copy of existing Bc passed to generate function
+        locExpList = MemoryManager<MultiRegions::ExpList>::AllocateSharedPtr(
+            *(In[cnt]), DeclareCoeffPhysArrays);
 
         m_bndCondExpansions[cnt] = locExpList;
         m_bndConditions[cnt]     = bc;
@@ -1313,9 +1444,12 @@ void DisContField::FindPeriodicTraces(
                          "Unable to find composite " + id1s + " in order map.");
                 ASSERTL0(compOrder.count(id2) > 0,
                          "Unable to find composite " + id2s + " in order map.");
-                ASSERTL0(compOrder[id1].size() == compOrder[id2].size(),
-                         "Periodic composites " + id1s + " and " + id2s +
-                             " should have the same number of elements.");
+                WARNINGL0(
+                    compOrder[id1].size() == compOrder[id2].size(),
+                    "Periodic composites " + id1s + " and " + id2s +
+                        " should have the same number of elements. Have " +
+                        std::to_string(compOrder[id1].size()) + " vs " +
+                        std::to_string(compOrder[id2].size()));
                 ASSERTL0(compOrder[id1].size() > 0, "Periodic composites " +
                                                         id1s + " and " + id2s +
                                                         " are empty!");
@@ -2124,9 +2258,12 @@ void DisContField::FindPeriodicTraces(
                          "Unable to find composite " + id1s + " in order map.");
                 ASSERTL0(compOrder.count(id2) > 0,
                          "Unable to find composite " + id2s + " in order map.");
-                ASSERTL0(compOrder[id1].size() == compOrder[id2].size(),
-                         "Periodic composites " + id1s + " and " + id2s +
-                             " should have the same number of elements.");
+                WARNINGL0(
+                    compOrder[id1].size() == compOrder[id2].size(),
+                    "Periodic composites " + id1s + " and " + id2s +
+                        " should have the same number of elements. Have " +
+                        std::to_string(compOrder[id1].size()) + " vs " +
+                        std::to_string(compOrder[id2].size()));
                 ASSERTL0(compOrder[id1].size() > 0, "Periodic composites " +
                                                         id1s + " and " + id2s +
                                                         " are empty!");
@@ -3779,7 +3916,8 @@ void DisContField::v_EvaluateBoundaryConditions(const NekDouble time,
 
     for (i = 0; i < m_bndCondExpansions.size(); ++i)
     {
-        if (time == 0.0 || m_bndConditions[i]->IsTimeDependent())
+        if (m_bndCondExpansions[i] &&
+            (time == 0.0 || m_bndConditions[i]->IsTimeDependent()))
         {
             m_bndCondBndWeight[i] = 1.0;
             locExpList            = m_bndCondExpansions[i];
@@ -4167,7 +4305,10 @@ void DisContField::v_GetBoundaryToElmtMap(Array<OneD, int> &ElmtID,
                 // Determine number of boundary condition expansions.
                 for (i = 0; i < m_bndConditions.size(); ++i)
                 {
-                    nbcs += m_bndCondExpansions[i]->GetExpSize();
+                    if (m_bndCondExpansions[i])
+                    {
+                        nbcs += m_bndCondExpansions[i]->GetExpSize();
+                    }
                 }
 
                 // Initialize arrays

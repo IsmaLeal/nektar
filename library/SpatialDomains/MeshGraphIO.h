@@ -70,10 +70,9 @@ public:
     }
 
     /*an inital read which loads a very light weight data structure*/
-    SPATIAL_DOMAINS_EXPORT void ReadGeometry(LibUtilities::DomainRangeShPtr rng,
-                                             bool fillGraph)
+    SPATIAL_DOMAINS_EXPORT void ReadGeometry(bool fillGraph)
     {
-        v_ReadGeometry(rng, fillGraph);
+        v_ReadGeometry(fillGraph);
     }
 
     SPATIAL_DOMAINS_EXPORT void PartitionMesh(
@@ -102,8 +101,7 @@ protected:
         const LibUtilities::FieldMetaDataMap &metadata =
             LibUtilities::NullFieldMetaDataMap) = 0;
 
-    SPATIAL_DOMAINS_EXPORT virtual void v_ReadGeometry(
-        LibUtilities::DomainRangeShPtr rng, bool fillGraph) = 0;
+    SPATIAL_DOMAINS_EXPORT virtual void v_ReadGeometry(bool fillGraph) = 0;
 
     SPATIAL_DOMAINS_EXPORT virtual void v_PartitionMesh(
         LibUtilities::SessionReaderSharedPtr session) = 0;

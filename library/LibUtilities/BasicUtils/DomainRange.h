@@ -40,6 +40,7 @@
 
 #include <LibUtilities/BasicConst/NektarUnivTypeDefs.hpp>
 #include <LibUtilities/BasicUtils/ShapeType.hpp>
+#include <set>
 
 namespace Nektar::LibUtilities
 {
@@ -47,18 +48,22 @@ namespace Nektar::LibUtilities
 // set restriction on domain range for post-processing.
 struct DomainRange
 {
-    bool m_doXrange;
+    bool m_doXrange = false;
     NekDouble m_xmin;
     NekDouble m_xmax;
-    bool m_doYrange;
+    bool m_doYrange = false;
     NekDouble m_ymin;
     NekDouble m_ymax;
-    bool m_doZrange;
+    bool m_doZrange = false;
     NekDouble m_zmin;
     NekDouble m_zmax;
 
-    bool m_checkShape;
+    bool m_checkShape = false;
     LibUtilities::ShapeType m_shapeType;
+
+    unsigned m_compElmts = 0;
+    std::set<unsigned> m_comps;
+    std::set<int> m_traceIDs;
 };
 
 typedef std::shared_ptr<DomainRange> DomainRangeShPtr;

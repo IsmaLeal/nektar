@@ -1239,7 +1239,7 @@ ExpList::ExpList(const LibUtilities::SessionReaderSharedPtr &pSession,
     int cnt = 0;
     for (auto &compIt : domain)
     {
-        bool IsNot0D = true; // Cehck for 0D expansion
+        bool IsNot0D = true; // Check for 0D expansion
         // Process each expansion in the region.
         for (j = 0; j < compIt.second->m_geomVec.size(); ++j)
         {
@@ -1307,52 +1307,60 @@ ExpList::ExpList(const LibUtilities::SessionReaderSharedPtr &pSession,
                 SpatialDomains::Geometry *geom = elmts->at(0).first;
                 int face_id                    = elmts->at(0).second;
                 auto expInfo = expansions.find(geom->GetGlobalID());
-                ASSERTL0(expInfo != expansions.end(),
-                         "Failed to find expansion info");
-                LibUtilities::BasisKey Ba =
-                    expInfo->second->m_basisKeyVector[0];
-                LibUtilities::BasisKey Bb =
-                    expInfo->second->m_basisKeyVector[1];
-                LibUtilities::BasisKey Bc =
-                    expInfo->second->m_basisKeyVector[2];
-                StdRegions::StdExpansionSharedPtr elmtStdExp;
+                if (expInfo == expansions.end())
+                {
+                    NEKERROR(ErrorUtil::ewarning,
+                             "Failed to find expansion info for goemetry id: " +
+                                 std::to_string(geom->GetGlobalID()));
+                }
+                else
+                {
+                    LibUtilities::BasisKey Ba =
+                        expInfo->second->m_basisKeyVector[0];
+                    LibUtilities::BasisKey Bb =
+                        expInfo->second->m_basisKeyVector[1];
+                    LibUtilities::BasisKey Bc =
+                        expInfo->second->m_basisKeyVector[2];
+                    StdRegions::StdExpansionSharedPtr elmtStdExp;
 
-                if (geom->GetShapeType() == LibUtilities::ePrism)
-                {
-                    elmtStdExp = MemoryManager<
-                        StdRegions::StdPrismExp>::AllocateSharedPtr(Ba, Bb, Bc);
-                }
-                else if (geom->GetShapeType() == LibUtilities::eTetrahedron)
-                {
-                    elmtStdExp =
-                        MemoryManager<StdRegions::StdTetExp>::AllocateSharedPtr(
-                            Ba, Bb, Bc);
-                }
-                else if (geom->GetShapeType() == LibUtilities::ePyramid)
-                {
-                    elmtStdExp =
-                        MemoryManager<StdRegions::StdPyrExp>::AllocateSharedPtr(
-                            Ba, Bb, Bc);
-                }
-                else // hex cannot have tri surface
-                {
-                    NEKERROR(ErrorUtil::efatal,
-                             "Fail to cast geom to a known 3D shape.");
-                }
-                // Then, get the trace basis key from the element stdExp,
-                // which may be different from Ba, Bb and Bc.
-                LibUtilities::BasisKey TriBa =
-                    elmtStdExp->GetTraceBasisKey(face_id, 0, UseGLLOnTri);
-                LibUtilities::BasisKey TriBb =
-                    elmtStdExp->GetTraceBasisKey(face_id, 1, UseGLLOnTri);
-                // swap TriBa and TriBb orientation is transposed
-                if (geom->GetForient(face_id) >= 9)
-                {
-                    std::swap(TriBa, TriBb);
-                }
+                    if (geom->GetShapeType() == LibUtilities::ePrism)
+                    {
+                        elmtStdExp = MemoryManager<
+                            StdRegions::StdPrismExp>::AllocateSharedPtr(Ba, Bb,
+                                                                        Bc);
+                    }
+                    else if (geom->GetShapeType() == LibUtilities::eTetrahedron)
+                    {
+                        elmtStdExp = MemoryManager<
+                            StdRegions::StdTetExp>::AllocateSharedPtr(Ba, Bb,
+                                                                      Bc);
+                    }
+                    else if (geom->GetShapeType() == LibUtilities::ePyramid)
+                    {
+                        elmtStdExp = MemoryManager<
+                            StdRegions::StdPyrExp>::AllocateSharedPtr(Ba, Bb,
+                                                                      Bc);
+                    }
+                    else // hex cannot have tri surface
+                    {
+                        NEKERROR(ErrorUtil::efatal,
+                                 "Fail to cast geom to a known 3D shape.");
+                    }
+                    // Then, get the trace basis key from the element stdExp,
+                    // which may be different from Ba, Bb and Bc.
+                    LibUtilities::BasisKey TriBa =
+                        elmtStdExp->GetTraceBasisKey(face_id, 0, UseGLLOnTri);
+                    LibUtilities::BasisKey TriBb =
+                        elmtStdExp->GetTraceBasisKey(face_id, 1, UseGLLOnTri);
+                    // swap TriBa and TriBb orientation is transposed
+                    if (geom->GetForient(face_id) >= 9)
+                    {
+                        std::swap(TriBa, TriBb);
+                    }
 
-                eInfo->m_basisKeyVector.push_back(TriBa);
-                eInfo->m_basisKeyVector.push_back(TriBb);
+                    eInfo->m_basisKeyVector.push_back(TriBa);
+                    eInfo->m_basisKeyVector.push_back(TriBb);
+                }
             }
             else if ((QuadGeom = dynamic_cast<SpatialDomains::QuadGeom *>(
                           compIt.second->m_geomVec[j])))
@@ -1366,52 +1374,60 @@ ExpList::ExpList(const LibUtilities::SessionReaderSharedPtr &pSession,
                 SpatialDomains::Geometry *geom = elmts->at(0).first;
                 int face_id                    = elmts->at(0).second;
                 auto expInfo = expansions.find(geom->GetGlobalID());
-                ASSERTL0(expInfo != expansions.end(),
-                         "Failed to find expansion info");
-                LibUtilities::BasisKey Ba =
-                    expInfo->second->m_basisKeyVector[0];
-                LibUtilities::BasisKey Bb =
-                    expInfo->second->m_basisKeyVector[1];
-                LibUtilities::BasisKey Bc =
-                    expInfo->second->m_basisKeyVector[2];
-                StdRegions::StdExpansionSharedPtr elmtStdExp;
+                if (expInfo == expansions.end())
+                {
+                    NEKERROR(ErrorUtil::ewarning,
+                             "Failed to find expansion info for goemetry id: " +
+                                 std::to_string(geom->GetGlobalID()));
+                }
+                else
+                {
+                    LibUtilities::BasisKey Ba =
+                        expInfo->second->m_basisKeyVector[0];
+                    LibUtilities::BasisKey Bb =
+                        expInfo->second->m_basisKeyVector[1];
+                    LibUtilities::BasisKey Bc =
+                        expInfo->second->m_basisKeyVector[2];
+                    StdRegions::StdExpansionSharedPtr elmtStdExp;
 
-                if (geom->GetShapeType() == LibUtilities::ePrism)
-                {
-                    elmtStdExp = MemoryManager<
-                        StdRegions::StdPrismExp>::AllocateSharedPtr(Ba, Bb, Bc);
-                }
-                else if (geom->GetShapeType() == LibUtilities::eHexahedron)
-                {
-                    elmtStdExp =
-                        MemoryManager<StdRegions::StdHexExp>::AllocateSharedPtr(
-                            Ba, Bb, Bc);
-                }
-                else if (geom->GetShapeType() == LibUtilities::ePyramid)
-                {
-                    elmtStdExp =
-                        MemoryManager<StdRegions::StdPyrExp>::AllocateSharedPtr(
-                            Ba, Bb, Bc);
-                }
-                else // Tet cannot have quad surface
-                {
-                    NEKERROR(ErrorUtil::efatal,
-                             "Fail to cast geom to a known 3D shape.");
-                }
-                // Then, get the trace basis key from the element stdExp,
-                // which may be different from Ba, Bb and Bc.
-                LibUtilities::BasisKey QuadBa =
-                    elmtStdExp->GetTraceBasisKey(face_id, 0);
-                LibUtilities::BasisKey QuadBb =
-                    elmtStdExp->GetTraceBasisKey(face_id, 1);
-                // swap Ba and Bb if the orientation is transposed
-                if (geom->GetForient(face_id) >= 9)
-                {
-                    std::swap(QuadBa, QuadBb);
-                }
+                    if (geom->GetShapeType() == LibUtilities::ePrism)
+                    {
+                        elmtStdExp = MemoryManager<
+                            StdRegions::StdPrismExp>::AllocateSharedPtr(Ba, Bb,
+                                                                        Bc);
+                    }
+                    else if (geom->GetShapeType() == LibUtilities::eHexahedron)
+                    {
+                        elmtStdExp = MemoryManager<
+                            StdRegions::StdHexExp>::AllocateSharedPtr(Ba, Bb,
+                                                                      Bc);
+                    }
+                    else if (geom->GetShapeType() == LibUtilities::ePyramid)
+                    {
+                        elmtStdExp = MemoryManager<
+                            StdRegions::StdPyrExp>::AllocateSharedPtr(Ba, Bb,
+                                                                      Bc);
+                    }
+                    else // Tet cannot have quad surface
+                    {
+                        NEKERROR(ErrorUtil::efatal,
+                                 "Fail to cast geom to a known 3D shape.");
+                    }
+                    // Then, get the trace basis key from the element stdExp,
+                    // which may be different from Ba, Bb and Bc.
+                    LibUtilities::BasisKey QuadBa =
+                        elmtStdExp->GetTraceBasisKey(face_id, 0);
+                    LibUtilities::BasisKey QuadBb =
+                        elmtStdExp->GetTraceBasisKey(face_id, 1);
+                    // swap Ba and Bb if the orientation is transposed
+                    if (geom->GetForient(face_id) >= 9)
+                    {
+                        std::swap(QuadBa, QuadBb);
+                    }
 
-                eInfo->m_basisKeyVector.push_back(QuadBa);
-                eInfo->m_basisKeyVector.push_back(QuadBb);
+                    eInfo->m_basisKeyVector.push_back(QuadBa);
+                    eInfo->m_basisKeyVector.push_back(QuadBb);
+                }
             }
             else
             {
