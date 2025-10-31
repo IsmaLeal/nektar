@@ -28,6 +28,7 @@ v5.9.0
 - Enforce const consitency in Comm class (!2261)
 - Add GetEquation to BoundaryCondition and ImposeNeumann/RobinConditions (!2257)
 - Adjustments to `NekLinSys` classes for future multigrid capability (!1811)
+- Avoid multiple data copy in NekFFTW (!2268)
 
 **ADRSolver**
 - Add implicit UnsteadyAdvection for continuous Galerkin (!2231)
