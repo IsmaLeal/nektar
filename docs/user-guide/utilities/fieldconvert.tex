@@ -456,6 +456,8 @@ possibly also Reynolds stresses) into single file;
 \item \inltt{averagefld}: Compute the averaging of several field files;
 \item \inltt{powerspectrum}: Compute power spectrum at given regions from a 3DH1D expansion;
 \item \inltt{zero-homo-plane}: Zero a specfied homogeneous plane in wavespace.
+\item \inltt{FDecomposeBnd}: Calculate boundary force element using the weighted pressure source theory.
+\item \inltt{FDecomposeVol}: Calculate volume force element using the weighted pressure source theory.
 \end{enumerate}
 The module list above can be seen by running the command
 %
@@ -1747,6 +1749,40 @@ One example of \inltt{vortexfilament.dat} that defines two-counter rotating Lamb
 -0.5 0 -1 1; -0.5 0 1 1; 0.1 -1
 0.5 0 -1 1;  0.5 0 1 1; 0.1 1
 \end{lstlisting}
+
+\subsection{Perform force diagnostics}
+There is a strong correlation between the fluid force exerted on a solid body and flow structures. To elucidate this relationship, a series of force diagnostic methods have been proposed~\cite{Gao2019Passing,Gao2019note,Gao2025Weighted}. This module uses a modified force element method, which is based on the weighted integral of the source term of the pressure Poisson equation, to achieve force diagnostics in incompressible flows.
+
+First, the pressure Poisson equation is
+\[
+\nabla^2 p = 2\rho Q.
+\]
+Here, $Q$ is the second invariant of the velocity gradient tensor. $Q$ is also known as a vortex identification method, the Q-criterion. On the wall, the pressure satisfies boundary condition
+\[
+\textbf{\emph{n}}\cdot\nabla p = -\rho\textbf{\emph{a}}\cdot\textbf{\emph{n}} + (\mu \nabla^2\textbf{\emph{u}})\cdot\textbf{\emph{n}}.
+\]
+Here, $\textbf{\emph{n}}$ is the unit normal vector on the body surface pointing from the fluid side to the solid.
+The above equation and boundary condition show that the pressure is determined by the $Q$ field, the wall-normal acceleration and the viscous effect in the pressure boundary condition. Their effects on the total force and moment can be quantified with the aid of auxiliary functions, $\phi_{\overline{i}}$, ${\overline{i}}=1,2,3,4,5,6$, which satisfies $\nabla^2 \phi_{\overline{i}}=0$ in the fluid domain and boundary conditions
+\[
+\textbf{\emph{n}}\cdot\nabla \phi_i = -\textbf{\emph{e}}_i\cdot\textbf{\emph{n}},\quad \textbf{\emph{n}}\cdot\nabla \phi_{i+3} = -(\textbf{\emph{x}}\times\textbf{\emph{n}})\cdot\textbf{\emph{e}}_i, \quad i=1,2,3.
+\]
+$\phi_1,\phi_2,\phi_3$ correspond to the three force components and $\phi_4,\phi_5,\phi_6$ correspond to the three moment components. They represent the sensitivity of the force or moment to spatial locations.
+
+The total force or moment can be expressed as
+\[
+\textbf{\emph{F}}\cdot\textbf{\emph{e}}_j = \int_{\textit{Vol}_\infty}{2\rho Q \phi_j d V} + \oint_{\partial B}{\rho\phi_j\textbf{\emph{n}}\cdot\textbf{\emph{a}} d S} + \oint_{\partial B}{-\mu\phi_j\textbf{\emph{n}}\cdot\nabla^2\textbf{\emph{u}} d S} + \textbf{\emph{e}}_j\cdot\textbf{\emph{F}}_f,
+\]
+The first term on the right-hand side is the volume force element. The remaining three terms are the boundary force elements, which represent the wall-normal acceleration effect, the viscous pressure boundary condition effect and the skin friction force. To obtain these force components, the auxiliary functions $\phi_i$ need to be first computed by the \inltt{ADRSolver} with \inltt{<I PROPERTY="EQTYPE" VALUE="LaplacePhi"/>}. Then, the $Q$ field can be computed using \inltt{FieldConvert -m QCriterion}. With these extra fields, the final results can be calculated. An example is shown below.
+
+\begin{lstlisting}[style=BashInputStyle]
+  mpirun -np 8 ADRSolver mesh.xml phi.xml -v
+  FieldConvert  -m QCriterion mesh.xml NS.xml field.chk  Q.fld -f
+  FieldConvert  mesh.xml Q.fld mesh.fld  combine.fld -f
+  FieldConvert -f -v -m FDecomposeBnd mesh.xml NS.xml combine.fld stdout > bndlog
+  FieldConvert -f -v -m FDecomposeVol:box=-3,6,-3,3,0,0:scandir=0 mesh.xml NS.xml combine.fld combine.plt > vollog
+\end{lstlisting}
+
+Although the volume integration requires the whole computational domain, the real domain can be truncated to a relatively small domain because of fast decay of the integrand $Q\phi_i$. Usually, a radius about three body lengths is sufficient. An option \inltt{box=xmin,xmax,ymin,ymax,zmin,zmax} can be provided to the \inltt{FDecomposeVol}. In addition, to show the distribution of the volume force element, an accumulated integral in one spatial direction can also be generated and the specified direction is assigned by an integer \inltt{scandir}.
 
 \section{FieldConvert in parallel}
 To run FieldConvert in parallel the user needs to compile

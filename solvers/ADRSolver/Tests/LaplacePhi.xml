@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<NEKTAR>
+    <EXPANSIONS>
+        <E COMPOSITE="C[5]" NUMMODES="3, 3" BASISTYPE="Modified_A,Modified_A" POINTSTYPE="GaussLobattoLegendre,GaussLobattoLegendre"   NUMPOINTS="4,4" FIELDS="phi0,phi1,phi2,phi3" />
+        <E COMPOSITE="C[6]" NUMMODES="3, 3" BASISTYPE="Modified_A,Modified_B" POINTSTYPE="GaussLobattoLegendre,GaussRadauMAlpha1Beta0" NUMPOINTS="4,3" FIELDS="phi0,phi1,phi2,phi3" />
+    </EXPANSIONS>
+    <CONDITIONS>
+        <SOLVERINFO>
+            <I PROPERTY="EQTYPE"                        VALUE="LaplacePhi"     />
+            <I PROPERTY="Projection"                    VALUE="Continuous"                 />
+        </SOLVERINFO>
+
+        <VARIABLES>
+            <V ID="0"> phi0 </V>
+            <V ID="1"> phi1 </V>
+            <V ID="2"> phi2 </V>
+            <V ID="3"> phi3 </V>
+        </VARIABLES>
+
+        <BOUNDARYREGIONS>
+            <B ID="0"> C[0] </B>    <!-- Wall -->
+            <B ID="1"> C[1-4] </B>  <!-- inlet,outlet,top,bottom -->
+        </BOUNDARYREGIONS>
+
+        <BOUNDARYCONDITIONS>
+            <REGION REF="0">
+                <N VAR="phi0" USERDEFINEDTYPE="MOVE" VALUE="0." />
+                <N VAR="phi1" USERDEFINEDTYPE="MOVE" VALUE="0." />
+                <N VAR="phi2" USERDEFINEDTYPE="MOVE" VALUE="0." />
+                <N VAR="phi3" USERDEFINEDTYPE="MOVE" VALUE="0." />
+            </REGION>
+            <REGION REF="1">
+                <D VAR="phi0" VALUE="0" />
+                <D VAR="phi1" VALUE="0" />
+                <D VAR="phi2" VALUE="0"  />
+                <D VAR="phi3" VALUE="0"  />
+            </REGION>
+        </BOUNDARYCONDITIONS>
+
+        <FUNCTION NAME="InitialConditions">
+            <E VAR="phi0" VALUE="0" />
+            <E VAR="phi1" VALUE="0" />
+            <E VAR="phi2" VALUE="0" />
+            <E VAR="phi3" VALUE="0" />
+        </FUNCTION>
+    </CONDITIONS>
+</NEKTAR>
