@@ -43,14 +43,12 @@ std::string NekFFTW::className =
 
 NekFFTW::NekFFTW(int N) : NektarFFT(N)
 {
-    m_wsp  = Array<OneD, NekDouble>(m_N);
-    m_phys = Array<OneD, NekDouble>(m_N);
-    m_coef = Array<OneD, NekDouble>(m_N);
+    m_wsp = Array<OneD, NekDouble>(m_N);
 
     m_plan_forward =
-        fftw_plan_r2r_1d(m_N, &m_phys[0], &m_coef[0], FFTW_R2HC, FFTW_ESTIMATE);
+        fftw_plan_r2r_1d(m_N, nullptr, nullptr, FFTW_R2HC, FFTW_ESTIMATE);
     m_plan_backward =
-        fftw_plan_r2r_1d(m_N, &m_coef[0], &m_phys[0], FFTW_HC2R, FFTW_ESTIMATE);
+        fftw_plan_r2r_1d(m_N, nullptr, nullptr, FFTW_HC2R, FFTW_ESTIMATE);
 
     m_FFTW_w     = Array<OneD, NekDouble>(m_N);
     m_FFTW_w_inv = Array<OneD, NekDouble>(m_N);
@@ -58,7 +56,7 @@ NekFFTW::NekFFTW(int N) : NektarFFT(N)
     m_FFTW_w[0] = 1.0 / (NekDouble)m_N;
     m_FFTW_w[1] = 0.0;
 
-    m_FFTW_w_inv[0] = m_N;
+    m_FFTW_w_inv[0] = 1.0;
     m_FFTW_w_inv[1] = 0.0;
 
     for (int i = 2; i < m_N; i++)
@@ -68,74 +66,53 @@ NekFFTW::NekFFTW(int N) : NektarFFT(N)
     }
 }
 
-// Distructor
+// Destructor
 NekFFTW::~NekFFTW()
 {
+    fftw_destroy_plan(m_plan_forward);
+    fftw_destroy_plan(m_plan_backward);
 }
 
 // Forward transformation
 void NekFFTW::v_FFTFwdTrans(Array<OneD, NekDouble> &inarray,
                             Array<OneD, NekDouble> &outarray)
 {
-    Vmath::Vcopy(m_N, inarray, 1, m_phys, 1);
+    // FFTW_R2HC
+    fftw_execute_r2r(m_plan_forward, inarray.data(), m_wsp.data());
 
-    fftw_execute(m_plan_forward);
+    // Reshuffle
+    int halfN = m_N / 2;
 
-    Reshuffle_FFTW2Nek(m_coef);
+    outarray[1] = m_FFTW_w[1] * m_wsp[halfN];
 
-    Vmath::Vcopy(m_N, m_coef, 1, outarray, 1);
+    Vmath::Vmul(halfN, m_wsp, 1, m_FFTW_w, 2, outarray, 2);
+
+    for (int i = 0; i < halfN - 1; i++)
+    {
+        outarray[(m_N - 1) - 2 * i] =
+            m_FFTW_w[(m_N - 1) - 2 * i] * m_wsp[halfN + 1 + i];
+    }
 }
 
 // Backward transformation
 void NekFFTW::v_FFTBwdTrans(Array<OneD, NekDouble> &inarray,
                             Array<OneD, NekDouble> &outarray)
 {
-    Vmath::Vcopy(m_N, inarray, 1, m_coef, 1);
-
-    Reshuffle_Nek2FFTW(m_coef);
-
-    fftw_execute(m_plan_backward);
-
-    Vmath::Vcopy(m_N, m_phys, 1, outarray, 1);
-}
-
-// Reshuffle FFTW2Nek
-void NekFFTW::Reshuffle_FFTW2Nek(Array<OneD, NekDouble> &coef)
-{
+    // Reshuffle
     int halfN = m_N / 2;
 
-    m_wsp[1] = coef[halfN];
+    m_wsp[halfN] = m_FFTW_w_inv[1] * inarray[1];
 
-    Vmath::Vcopy(halfN, coef, 1, m_wsp, 2);
+    Vmath::Vmul(halfN, inarray, 2, m_FFTW_w_inv, 2, m_wsp, 1);
 
     for (int i = 0; i < (halfN - 1); i++)
     {
-        m_wsp[(m_N - 1) - 2 * i] = coef[halfN + 1 + i];
+        m_wsp[halfN + 1 + i] =
+            m_FFTW_w_inv[(m_N - 1) - 2 * i] * inarray[(m_N - 1) - 2 * i];
     }
 
-    Vmath::Vmul(m_N, m_wsp, 1, m_FFTW_w, 1, coef, 1);
-
-    return;
+    // FFTW_HC2R
+    fftw_execute_r2r(m_plan_backward, m_wsp.data(), outarray.data());
 }
 
-// Reshuffle Nek2FFTW
-void NekFFTW::Reshuffle_Nek2FFTW(Array<OneD, NekDouble> &coef)
-{
-    int halfN = m_N / 2;
-
-    Vmath::Vmul(m_N, coef, 1, m_FFTW_w_inv, 1, coef, 1);
-
-    m_wsp[halfN] = coef[1];
-
-    Vmath::Vcopy(halfN, coef, 2, m_wsp, 1);
-
-    for (int i = 0; i < (halfN - 1); i++)
-    {
-        m_wsp[halfN + 1 + i] = coef[(m_N - 1) - 2 * i];
-    }
-
-    Vmath::Smul(m_N, 1.0 / m_N, m_wsp, 1, coef, 1);
-
-    return;
-}
 } // namespace Nektar::LibUtilities
