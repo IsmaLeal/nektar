@@ -1835,7 +1835,6 @@
         <PARAMETERS>
             <P> TimeStep      = 0.002             </P>
             <P> NumSteps      = 10                </P>
-            <P> IO_CheckSteps = 10                </P>
             <P> IO_InfoSteps  = 10               </P>
             <P> IO_CFLSteps  = 10                </P>
             <P> Re            = 200               </P>

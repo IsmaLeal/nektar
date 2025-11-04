@@ -6,11 +6,10 @@
 !.clang-tidy
 !.dockerignore
 !.gitlab-ci
-# Ignore builds and ThirdParty directories
-build
-buildDebug
-builds
+# Ignore builds, ThirdParty and Testing directories
+build*
 ThirdParty
+Testing
 # Ignore .DS_Store sometimes created by OS X.
 .DS_Store
 # for the userguide
@@ -26,3 +25,5 @@ cmake-build-*
 __pycache__
 # Generated CardiacEPSolver CellModel class
 solvers/CardiacEPSolver/CellModels/CellMLTest.*
+# Generated source files
+library/MatrixFreeOps/SwitchLimits.h

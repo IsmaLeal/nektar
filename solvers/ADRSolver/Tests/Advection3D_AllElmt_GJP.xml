@@ -5,7 +5,6 @@
         <PARAMETERS>
             <P> NumSteps       = 100         </P>
             <P> TimeStep       = 0.001     </P>
-            <P> IO_CheckSteps  = 100        </P>
             <P> IO_InfoSteps   = 50          </P>
             <P> advx           = 1          </P>
             <P> advy           = 1          </P>

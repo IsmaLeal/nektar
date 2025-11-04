@@ -34,7 +34,6 @@
             <P> ExSteps       = 3E-6 /  TimeStep    </P>
             <P> NumSteps      = ExSteps * 10        </P>
             <P> FinTime       = TimeStep*NumSteps   </P>
-            <P> IO_CheckSteps = ExSteps * 1         </P>
             <P> IO_InfoSteps  = 1                   </P>
         </PARAMETERS>
         <VARIABLES>

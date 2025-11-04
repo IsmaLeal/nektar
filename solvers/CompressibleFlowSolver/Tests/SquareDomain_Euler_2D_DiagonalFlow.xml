@@ -52,7 +52,6 @@
             <P> CFL             = 0.1                         </P>
             <P> NumSteps        = 500                         </P>
             <P> SteadyStateTol  = 5e-15                       </P>
-            <P> IO_CheckSteps   = 0                           </P>
             <P> IO_InfoSteps    = 1                           </P>
             <P> Gamma           = 1.4                         </P>
             <P> GasConstant     = 1. / Gamma                  </P>

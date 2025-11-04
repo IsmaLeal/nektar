@@ -140,7 +140,6 @@
             -->
             <P> TimeStep              = 1.0                           </P>
             <P> NumSteps              = 200                           </P>
-            <P> IO_CheckSteps         = 0                             </P>
             <P> IO_InfoSteps          = 1                             </P>
             <P> Gamma                 = 1.4                           </P>
             <P> GasConstant           = 1/1.4                         </P>

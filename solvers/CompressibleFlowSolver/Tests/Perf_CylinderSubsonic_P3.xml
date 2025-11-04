@@ -726,7 +726,6 @@
             <P> TimeStep        = 0         </P>
             <P> FinTime         = 0.0       </P>
             <P> NumSteps        = 2000      </P>
-            <P> IO_CheckSteps   = 2000      </P>
             <P> IO_InfoSteps    = 2000      </P>
             <P> Gamma           = 1.4       </P>
             <P> pInf            = 101325    </P>

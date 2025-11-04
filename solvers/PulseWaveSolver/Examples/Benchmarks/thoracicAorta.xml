@@ -36,7 +36,6 @@
             <P> TimeStep       = 1E-4               </P>
             <P> FinTime        = 15                 </P>
             <P> NumSteps       = FinTime / TimeStep </P>
-            <P> IO_CheckSteps  = NumSteps / 500     </P>
             <P> IO_InfoSteps   = 100                </P>
             <P> T              = 1                  </P>
             <P> omega          = 2 * PI / T         </P>

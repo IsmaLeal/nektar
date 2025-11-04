@@ -81,7 +81,6 @@
             <P> FinTime         = 0.8                   </P>
             <P> TimeStep        = 0.005                 </P>
             <P> NumSteps        = FinTime/TimeStep      </P>
-            <P> IO_CheckSteps   = 0                     </P>
             <P> IO_InfoSteps    = 0                     </P>
             <P> epsilon         = 0.05                  </P>
         </PARAMETERS>

@@ -22,7 +22,6 @@
         <PARAMETERS>
             <P> TimeStep       = 1e-2		</P>
             <P> NumSteps       = 100		</P>
-            <P> IO_CheckSteps  = 1000		</P>
             <P> IO_InfoSteps   = 1000		</P>
             <P> Re             = 10			</P>
             <P> Kinvis         = 1/Re		</P>

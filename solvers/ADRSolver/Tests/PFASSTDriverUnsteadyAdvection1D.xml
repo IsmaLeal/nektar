@@ -306,7 +306,6 @@
         <PARAMETERS>
             <P> TimeStep        = 0.002                 </P>
             <P> NumSteps        = 400                   </P>
-            <P> IO_CheckSteps   = 0                     </P>
             <P> IO_InfoSteps    = 0                     </P>
             <P> advx            = 0.5                   </P>
             <P> advy            = 0                     </P>

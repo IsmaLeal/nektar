@@ -613,7 +613,6 @@
             <P> TimeStep       = 0.001             </P>
             <P> NumSteps       = 100                </P>
             <P> FinTime        = TimeStep*NumSteps </P>
-            <P> IO_CheckSteps  = 20               </P>
             <P> IO_InfoSteps   = 20              </P>
             <P> ElemtGroup1 =  31             </P>
             <P> Alpha = 1.0   </P>

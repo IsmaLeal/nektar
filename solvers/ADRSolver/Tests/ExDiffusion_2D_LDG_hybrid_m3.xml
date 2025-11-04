@@ -64,7 +64,6 @@
             <P> TimeStep        = 0.000001          </P>
             <P> NumSteps        = 500               </P>
             <P> FinTime         = TimeStep*NumSteps </P>
-            <P> IO_CheckSteps   = 100               </P>
             <P> IO_InfoSteps    = 100               </P>
         </PARAMETERS>
 

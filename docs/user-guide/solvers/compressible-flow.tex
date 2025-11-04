@@ -190,7 +190,6 @@ Under this section it is possible to set the parameters of the simulation.
   <P> TimeStep            = 0.0000001                  </P>
   <P> FinTime             = 1.0                        </P>
   <P> NumSteps            = FinTime/TimeStep           </P>
-  <P> IO_CheckSteps       = 5000                       </P>
   <P> IO_InfoSteps        = 1                          </P>
   <P> Gamma               = 1.4                        </P>
   <P> pInf                = 101325                     </P>
@@ -212,8 +211,6 @@ Under this section it is possible to set the parameters of the simulation.
 \item \inltt{FinTime} is the final physical time at which we want our simulation to stop.
 \item \inltt{NumSteps} is the equivalent of \inltt{FinTime} but instead of specifying the
 physical final time we specify the number of time-steps.
-\item \inltt{IO\_CheckSteps} sets the number of steps between successive checkpoint files.
-No checkpoint file is written if it is set to 0.
 \item \inltt{IO\_InfoSteps} sets the number of steps between successive info stats are printed
 to screen.
 \item \inltt{Gamma} ratio of the specific heats. Default value = 1.4.

@@ -16,7 +16,6 @@
             <P> TimeStep       = 5e-6           </P>
             <P> NumSteps       = 5              </P>
             <P> IO_InfoSteps   = 10            </P>
-            <P> IO_CheckSteps  = 0              </P>
             <P> SteadyStateTol = 1e-8           </P>
             <!-- Fluid Properties -->
             <P> Gamma          = 1.018          </P>

@@ -88,7 +88,6 @@
             <P> FinTime         = 2.00                  </P>
             <P> TimeStep        = 0.01                  </P>
             <P> NumSteps        = FinTime/TimeStep      </P>
-            <P> IO_CheckSteps   = 100000                </P>
             <P> IO_InfoSteps    = 100000                </P>
             <P> advx            = 1                     </P>
             <P> advy            = 0                     </P>

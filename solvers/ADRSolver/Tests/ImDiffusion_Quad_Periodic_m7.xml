@@ -8,7 +8,6 @@
             <P> TimeStep       = 0.0001            </P>
             <P> NumSteps       = 100               </P>
             <P> FinTime        = TimeStep*NumSteps </P>
-            <P> IO_CheckSteps  = 0                 </P>
             <P> IO_InfoSteps   = 200               </P>
             <P> wavefreq       = PI                </P>
             <P> epsilon        = 1.0               </P>

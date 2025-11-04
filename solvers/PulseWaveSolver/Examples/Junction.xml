@@ -56,7 +56,6 @@
         <PARAMETERS>
             <P> TimeStep       = 2.5e-3              </P>
             <P> NumSteps       = 8000               </P>
-            <P> IO_CheckSteps  = NumSteps/50        </P>
             <P> IO_InfoSteps   = 100                </P>
             <P> T              = 10                 </P>
             <P> omega          = 2*PI/T             </P>

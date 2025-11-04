@@ -107,7 +107,6 @@
         <PARAMETERS>
             <P> NumSteps       = 1000              </P>
             <P> TimeStep       = 0.001     </P>
-            <P> IO_CheckSteps  = 1000         </P>
             <P> IO_InfoSteps   = 1000              </P>
             <P> advx           = 1                 </P>
             <P> advy           = 1                 </P>

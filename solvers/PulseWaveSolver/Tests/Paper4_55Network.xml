@@ -514,7 +514,6 @@
             <P> TimeStep       = 1e-4               </P>
             <P> FinTime        = 0.025                </P>
             <P> NumSteps       = FinTime/TimeStep   </P>
-            <P> IO_CheckSteps  = NumSteps*50        </P>
             <P> IO_InfoSteps   = 500                </P>
             <P> T              = 1.0                </P>
             <P> omega          = 2*PI/T             </P>

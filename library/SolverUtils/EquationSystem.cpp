@@ -721,6 +721,13 @@ void EquationSystem::v_InitObject(bool DeclareFields)
                  (m_checktime == 0.0 && m_checksteps > 0),
              "Only one of IO_CheckTime and IO_CheckSteps "
              "should be set!");
+    WARNINGL0(!m_session->DefinesParameter("IO_CheckSteps"),
+              "The IO_CheckSteps parameter is now deprecated.\nPlease use the "
+              "'Checkpoint' filter instead");
+    WARNINGL0(!m_session->DefinesParameter("IO_CheckTime"),
+              "The IO_CheckTime parameter is now deprecated.\nPlease use the "
+              "'Checkpoint' filter instead");
+
     m_session->LoadParameter("TimeIncrementFactor", m_TimeIncrementFactor, 1.0);
 
     // Check for parallel-in-time

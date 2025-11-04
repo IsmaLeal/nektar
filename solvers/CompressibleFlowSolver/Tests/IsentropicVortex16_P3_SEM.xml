@@ -1122,7 +1122,6 @@
             <P> FinTime         = 0         </P>
             <P> TimeStep        = 0         </P>
             <P> NumSteps        = 10        </P>
-            <P> IO_CheckSteps   = 1000      </P>
             <P> IO_InfoSteps    = 100       </P>
             <P> Gamma           = 1.4       </P>
             <P> pInf            = 101325    </P>

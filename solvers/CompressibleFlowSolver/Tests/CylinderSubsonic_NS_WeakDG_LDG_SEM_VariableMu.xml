@@ -4069,7 +4069,6 @@
             <P> TimeStep              = 0.00001       </P>
             <P> NumSteps              = 10          </P>
             <P> FinTime               = 0             </P>
-            <P> IO_CheckSteps         = 500000        </P>
             <P> IO_InfoSteps          = 500000        </P>
             <P> GasConstant           = 287.058       </P>
             <P> Gamma                 = 1.4           </P>

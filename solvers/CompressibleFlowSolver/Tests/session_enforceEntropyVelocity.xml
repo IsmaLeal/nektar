@@ -25,7 +25,6 @@
             <!--Computational parameters-->
             <P> TimeStep            = 0.05    			        </P>
             <P> NumSteps            = 100    			        </P>
-            <P> IO_CheckSteps       = 200    			        </P>
             <P> IO_InfoSteps        = 100      		        	</P>
             <P> IO_CFLSteps         = 100           			</P>
             <!-- Fluid properties -->

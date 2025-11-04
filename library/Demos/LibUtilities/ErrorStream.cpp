@@ -66,7 +66,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
         // Format exception error to the appropriate message that should be
         // output by the ErrorUtil class.
         std::stringstream outf;
-        outf << "Fatal   : " << e.what() << std::endl;
+        outf << std::endl
+             << "\033[31mFatal   : \033[0m" << e.what() << std::endl
+             << std::endl;
         output = outf.str();
     }
 

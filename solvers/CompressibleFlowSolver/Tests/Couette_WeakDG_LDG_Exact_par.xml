@@ -71,7 +71,6 @@
             <P> TimeStep              = 0.00005          </P>
             <P> FinTime               = 0.01             </P>
             <P> NumSteps              = FinTime/TimeStep </P>
-            <P> IO_CheckSteps         = 500000           </P>
             <P> IO_InfoSteps          = 100              </P>
             <P> GasConstant           = 287.1428571      </P>
             <P> Gamma                 = 1.4              </P>

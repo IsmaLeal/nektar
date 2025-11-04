@@ -41,7 +41,6 @@
             <!--  Final time -->
             <P>T = 4.00e+0</P>
             <P>NumSteps = T/TimeStep</P>
-            <P>IO_CheckSteps = NumSteps/100</P>
             <P>IO_InfoSteps = 1</P>
             <P>IO_CFLSteps = 10</P>
             <!-- Reynolds number -->

@@ -93,7 +93,6 @@
         <PARAMETERS>
             <P> TimeStep      = 0.1     </P>
             <P> NumSteps      = 2       </P>
-            <P> IO_CheckSteps = 100     </P>
             <P> IO_InfoSteps  = 1       </P>
             <P> IO_CFLSteps   = 1       </P>
             <P> Kinvis        = 1       </P>

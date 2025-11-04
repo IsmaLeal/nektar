@@ -72,7 +72,6 @@
         <PARAMETERS>
             <P> TimeStep      = 0.00001        </P>
             <P> NumSteps      = 200          </P>
-            <P> IO_CheckSteps = 200          </P>
             <P> IO_InfoSteps  = 10           </P>
             <P> wavefreq      = PI           </P>
             <P> epsilon       = 1.0          </P>

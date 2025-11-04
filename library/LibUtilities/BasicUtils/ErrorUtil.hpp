@@ -146,7 +146,10 @@ public:
                     {
                         (*m_outStream) << btMessage;
                     }
-                    (*m_outStream) << "Fatal   : " << baseMsg << std::endl;
+                    (*m_outStream)
+                        << std::endl
+                        << "\033[31mFatal   : \033[0m" << baseMsg << std::endl
+                        << std::endl;
                 }
 
 #if defined(NEKTAR_USE_MPI) && !defined(NEKTAR_USE_CWIPI)
@@ -167,12 +170,17 @@ public:
                     {
                         (*m_outStream) << btMessage;
                     }
-                    (*m_outStream) << "Warning : " << baseMsg << std::endl;
+                    (*m_outStream)
+                        << std::endl
+                        << "\033[36mWarning : \033[0m" << baseMsg << std::endl
+                        << std::endl;
                 }
                 break;
             default:
-                (*m_outStream)
-                    << "Unknown warning type: " << baseMsg << std::endl;
+                (*m_outStream) << std::endl
+                               << "\033[35mUnknown warning type: \033[0m"
+                               << baseMsg << std::endl
+                               << std::endl;
         }
     }
 

@@ -17312,7 +17312,6 @@
         <PARAMETERS>
             <P> TimeStep        = 0.0000001                  </P>
             <P> NumSteps        = 5                          </P>
-            <P> IO_CheckSteps   = 1000                       </P>
             <P> IO_InfoSteps    = 1                          </P>
             <P> Gamma           = 1.4                        </P>
             <P> pInf            = 101325                     </P>

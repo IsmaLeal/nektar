@@ -36,7 +36,6 @@
             <P>TimeStep = 1.00e-5</P>
             <P>NumSteps = 500001</P>
             <!--   0.6/TimeStep  -->
-            <P>IO_CheckSteps = OutputEvery</P>
             <P>IO_InfoSteps = 100</P>
             <P>IO_CFLSteps = 100</P>
             <P>Linf = 0.24</P>

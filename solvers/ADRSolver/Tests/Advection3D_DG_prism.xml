@@ -107,7 +107,6 @@
         <PARAMETERS>
             <P> TimeStep      = 0.001        </P>
             <P> NumSteps      = 1            </P>
-            <P> IO_CheckSteps = 0            </P>
             <P> IO_InfoSteps  = 1            </P>
         </PARAMETERS>
 

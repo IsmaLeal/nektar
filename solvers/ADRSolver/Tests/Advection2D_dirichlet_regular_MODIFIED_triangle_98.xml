@@ -11,7 +11,6 @@
             <P> FinTime         = 1.0e-0            </P>
             <P> TimeStep        = 1.0e-2            </P>
             <P> NumSteps        = FinTime/TimeStep  </P>
-            <P> IO_CheckSteps   = NumSteps*10       </P>
             <P> IO_InfoSteps    = NumSteps*10       </P>
             <P> advx            = 1.2               </P>
             <P> advy            = 1.2               </P>

@@ -27,7 +27,6 @@
             <P> TimeStep = 0.005        </P>
             <P> NumSteps = 10</P>
             <P> NumRuns = 5 </P>
-            <P> IO_CheckSteps = NumSteps*NumRuns       </P>
             <P> IO_CFLSteps = 100       </P>
             <P> IO_InfoSteps = 100       </P>
             <P> Re = 40.0        </P>

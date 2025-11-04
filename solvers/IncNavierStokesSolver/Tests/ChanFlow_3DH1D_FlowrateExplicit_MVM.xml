@@ -22,7 +22,6 @@
         <PARAMETERS>
             <P> TimeStep 		= 0.002		</P>
             <P> NumSteps 		= 100       </P>
-            <P> IO_CheckSteps 	= 0       	</P>
             <P> IO_InfoSteps 	= 1000     	</P>
             <P> Kinvis 			= 1         </P>
             <P> HomModesZ      	= 12     	</P>
