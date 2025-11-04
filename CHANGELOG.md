@@ -44,6 +44,7 @@ v5.9.0
 - Minor Bug-fix for industrial pipeline !2057 (!2135)
 - Scaling the mesh nodes (!2115)
 - Improved Isoparametric Splitting for O-type Prisms "bl" legacy, which kept as "blold" (!1757)
+- Read Gmsh V2.2 meshes without Physical Boundaries specified. Use CAD ID tag. (!2278)
 
 **CI and Packaging**
 - Disable CWIPI on Fedora (!2199)
