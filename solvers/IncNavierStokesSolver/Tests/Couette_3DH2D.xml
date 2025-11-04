@@ -49,7 +49,6 @@
         <PARAMETERS>
             <P> TimeStep      = 0.1       </P>
             <P> NumSteps      = 100         </P>
-            <P> IO_CheckSteps = NumSteps         </P>
             <P> IO_InfoSteps  = NumSteps          </P>
             <P> Kinvis        = 1         </P>
             <P> HomModesY = 4               </P>

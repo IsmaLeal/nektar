@@ -93,7 +93,6 @@
             <P> TimeStep       = 5e-8               </P>
             <P> NumSteps       = 100  </P>
             <P> IO_InfoSteps   = 100                </P>
-            <P> IO_CheckSteps  = 0                </P>
             <P> SteadyStateTol = 1e-7                </P>
 
             <!-- Fluid Properties -->

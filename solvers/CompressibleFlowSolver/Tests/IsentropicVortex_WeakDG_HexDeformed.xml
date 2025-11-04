@@ -896,7 +896,6 @@
         <PARAMETERS>
             <P> FinTime         = 0.01       </P>
             <P> TimeStep        = 0.001     </P>
-            <P> IO_CheckSteps   = 2000        </P>
             <P> IO_InfoSteps    = 100         </P>
             <P> Gamma           = 1.4       </P>
             <P> pInf            = 1         </P>

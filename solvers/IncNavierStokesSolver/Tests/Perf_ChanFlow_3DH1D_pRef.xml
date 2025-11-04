@@ -73,7 +73,6 @@
         <PARAMETERS>
             <P> TimeStep      = 0.0005  </P>
             <P> NumSteps      = 3000    </P>
-            <P> IO_CheckSteps = 3000    </P>
             <P> IO_InfoSteps  = 3000    </P>
             <P> Kinvis        = 1       </P>
             <P> HomModesZ     = 8       </P>

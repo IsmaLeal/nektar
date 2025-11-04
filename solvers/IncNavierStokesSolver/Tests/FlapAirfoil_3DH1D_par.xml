@@ -33,7 +33,6 @@
             <P> Tper          = 1./freq   </P>
             <P> TimeStep      = Tper/NperT </P>
             <P> NumSteps      = 10 </P>
-            <P> IO_CheckSteps = 1000     </P>
             <P> IO_InfoSteps  = 1000      </P>
             <P> IO_FiltersInfoSteps   = 1000                   </P>
             <P> IO_CFLSteps   = 1000              </P>

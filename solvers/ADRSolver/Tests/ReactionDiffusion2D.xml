@@ -27,7 +27,6 @@
         <PARAMETERS>
             <P> TimeStep       = 0.001            </P>
             <P> NumSteps       = 100              </P>
-            <P> IO_CheckSteps  = 0                </P>
             <P> IO_InfoSteps   = 100              </P>
             <P> epsilon        = 0.2              </P>
         </PARAMETERS>

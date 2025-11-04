@@ -26,7 +26,6 @@
             <!--  Final time -->
             <P> T              = 1e-4             </P>
             <P> NumSteps       = 20                </P>
-            <P> IO_CheckSteps  = NumSteps/1          </P>
             <P> IO_InfoSteps   = 1                   </P>
             <P> IO_CFLSteps    = 1	             </P>
             <P> IO_FlowSteps   = 1                  </P>

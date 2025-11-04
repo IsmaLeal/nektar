@@ -34,7 +34,6 @@
         <PARAMETERS>
             <P> TimeStep       = 2.5e-4    	 </P>
             <P> NumSteps       = 20         </P>
-            <P> IO_CheckSteps  = 1000    </P>
             <P> IO_InfoSteps   = 1             </P>
             <P> IO_FiltersInfoSteps   = 100    </P>
             <P> advx           = 1                 </P>

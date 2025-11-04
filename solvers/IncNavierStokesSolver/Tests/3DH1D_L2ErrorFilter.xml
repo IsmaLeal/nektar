@@ -29,7 +29,6 @@
             <!--  Final time -->
             <P> TFinal         = 0.00             </P>
             <P> NumSteps       = TFinal/TimeStep  </P>
-            <P> IO_CheckSteps  = 1/TimeStep       </P>
             <P> IO_InfoSteps   = 1/TimeStep       </P>
             <P> IO_CFLSteps    = 1/TimeStep	      </P>
 

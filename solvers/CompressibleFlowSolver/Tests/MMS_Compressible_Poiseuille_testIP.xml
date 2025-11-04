@@ -324,7 +324,6 @@
         <PARAMETERS>
             <P> TimeStep              = 2.5E-5                    </P>
             <P> NumSteps              = 1000                       </P>
-            <P> IO_CheckSteps         = 50000                    </P>
             <P> IO_InfoSteps          = 1000                    </P>
             <P> GasConstant           = 287.058                   </P>
             <P> Gamma                 = 1.4                       </P>

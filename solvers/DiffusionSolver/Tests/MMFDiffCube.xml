@@ -775,7 +775,6 @@
             <P> TimeStep       = 0.002             </P>
             <P> NumSteps       = 5            </P>
             <P> FinTime        = TimeStep*NumSteps </P>
-            <P> IO_CheckSteps  = 20               </P>
             <P> IO_InfoSteps   = 20              </P>
             <P> epsilon0 = 2.0             </P>
             <P> epsilon1 = 2.0             </P>

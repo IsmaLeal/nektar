@@ -33,7 +33,6 @@
         <PARAMETERS>
             <P> TimeStep              = 0.05                          </P>
             <P> NumSteps              = 30                           </P>
-            <P> IO_CheckSteps         = 0                             </P>
             <P> IO_InfoSteps          = 1                             </P>
             <P> Gamma                 = 1.4                           </P>
             <P> GasConstant           = 1/1.4                         </P>

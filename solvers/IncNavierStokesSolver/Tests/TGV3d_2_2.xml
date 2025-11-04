@@ -43,7 +43,6 @@
             <P> TimeStep       = 0.002    </P>
             <P> FinalTime      = 20.0     </P>
             <P> NumSteps       = 10 </P>
-            <P> IO_CheckSteps  = NumSteps/4     </P>
             <P> IO_InfoSteps   = 1       </P>
             <P> IO_CFLSteps    = 1       </P>
             <!--   <P> IO_CFDWriteFld = 100      </P> -->

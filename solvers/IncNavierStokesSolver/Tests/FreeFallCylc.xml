@@ -34,7 +34,6 @@
             <P> NperT        = 1000  </P>
             <P> TimeStep      = 1./Utest/NperT </P>
             <P> NumSteps      = NadvD*NperT </P>
-            <P> IO_CheckSteps = 1*NperT     </P>
             <P> IO_InfoSteps  = 1000      </P>
             <P> SVVDiffCoeff  = 0.1                 </P>
             <P> NewmarkGamma  = 0.8                 </P>

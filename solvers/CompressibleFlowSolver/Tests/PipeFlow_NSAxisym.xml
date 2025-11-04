@@ -12,7 +12,6 @@
             <P> CFL            = 0.1                </P>
             <P> NumSteps       = 1000               </P>
             <P> IO_InfoSteps   = 1000               </P>
-            <P> IO_CheckSteps  = 0                  </P>
             <P> SteadyStateTol = 1e-8               </P>
             <!-- Fluid Properties -->
             <P> Gamma          = 1.4                </P>

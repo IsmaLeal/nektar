@@ -53,7 +53,6 @@
             <!-- Computational parameters -->
             <P> TimeStep       = 5e-5                                </P>
             <P> NumSteps       = 10                                  </P>
-            <P> IO_CheckSteps  = 30                                  </P> <!-- NumSteps/40 -->
             <P> IO_InfoSteps   = 1                                   </P>
             <P> IO_CFLSteps    = 1                                   </P>
 

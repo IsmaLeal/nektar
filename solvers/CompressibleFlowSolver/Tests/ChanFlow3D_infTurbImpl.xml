@@ -50,7 +50,6 @@
         <PARAMETERS>
             <P> TimeStep      = 0.02            </P>
             <P> NumSteps      = 10              </P>
-            <P> IO_CheckSteps = 0               </P>
             <P> IO_InfoSteps  = 1               </P>
             <P> IO_CFLSteps   = 1               </P>
             <P> tauw          = 5.92464e-05     </P>

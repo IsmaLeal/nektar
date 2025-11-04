@@ -30,7 +30,6 @@
             <P> TimeStep       = 1E-4               </P>
             <P> FinTime        = 15                 </P>
             <P> NumSteps       = FinTime / TimeStep </P>
-            <P> IO_CheckSteps  = NumSteps / 500     </P>
             <P> IO_InfoSteps   = 100                </P>
             <P> rho            = 1.050E-03          </P> <!-- Density [kg/cm^3]-->
             <P> nue            = 0.5                </P> <!-- Poisson's ratio -->

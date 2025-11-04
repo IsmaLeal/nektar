@@ -19,7 +19,6 @@
         <PARAMETERS>
             <P> TimeStep             = 1.0e-8                         </P>
             <P> NumSteps             = 10                             </P>
-            <P> IO_CheckSteps        = 0                              </P>
             <P> IO_InfoSteps         = 1                              </P>
 
             <!-- Stationary shock -->

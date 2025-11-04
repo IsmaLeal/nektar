@@ -35,7 +35,6 @@
         <PARAMETERS>
             <P> TimeStep       = 5e-2           </P>
             <P> NumSteps       = 10             </P>
-            <P> IO_CheckSteps  = 100            </P>
             <P> IO_InfoSteps   = 1              </P>
             <P> Gamma          = 1.4            </P>
             <P> pInf           = 2.862          </P>

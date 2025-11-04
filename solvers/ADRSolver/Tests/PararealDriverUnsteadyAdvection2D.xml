@@ -83,7 +83,6 @@
             <TIMELEVEL VALUE="0">
                 <P> TimeStep        = 1.0e-04           </P>
                 <P> NumSteps        = 10000             </P>
-                <P> IO_CheckSteps   = 0                 </P>
                 <P> IO_InfoSteps    = 0                 </P>
                 <P> wavefreq        = PI                </P>
                 <P> ax              = 20.0              </P>

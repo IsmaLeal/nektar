@@ -268,7 +268,6 @@
         <PARAMETERS>
             <P> TimeStep      = 0.001  </P>
             <P> NumSteps      = 60     </P>
-            <P> IO_CheckSteps = 60     </P>
             <P> IO_InfoSteps  = 60     </P>
             <P> Re            = 7500   </P>
             <P> Kinvis        = 1.0/Re </P>

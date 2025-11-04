@@ -50,7 +50,6 @@
             <P> Timestep              = 2.0e-3                </P>
             <P> NumSteps              = 2000                 </P>
             <P> IO_InfoSteps          = 500                   </P>
-            <P> IO_CheckSteps         = 2000                   </P>
 
             <!--<P> TOL = 2e-8</P>-->
         </PARAMETERS>

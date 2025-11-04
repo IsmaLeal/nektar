@@ -31,6 +31,7 @@ v5.9.0
 - Adjustments to `NekLinSys` classes for future multigrid capability (!1811)
 - Avoid multiple data copy in NekFFTW (!2268)
 - Add FieldConvert modules to perform force decomposition for incompressible flows (!1531)
+- Deprecate use of IO_CheckSteps in favour of CheckpointFilter (!2197)
 
 **ADRSolver**
 - Add implicit UnsteadyAdvection for continuous Galerkin (!2231)

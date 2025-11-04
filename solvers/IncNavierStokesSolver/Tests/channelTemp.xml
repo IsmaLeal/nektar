@@ -28,7 +28,6 @@
             <!--  Final time -->
             <P> T              = 1.00           </P>
             <P> NumSteps       = 100            </P>
-            <P> IO_CheckSteps  = 100            </P>
             <P> IO_InfoSteps   = 10              </P>
             <P> IO_CFLSteps    = 10	        </P>
             <P> IO_NormSteps    = 1	        </P>

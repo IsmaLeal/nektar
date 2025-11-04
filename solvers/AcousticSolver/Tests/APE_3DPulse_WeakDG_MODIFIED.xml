@@ -1371,7 +1371,6 @@
             <P> TimeStep       = 0.00001            </P>
             <P> NumSteps       = 100                </P>
             <P> FinTime        = TimeStep*NumSteps  </P>
-            <P> IO_CheckSteps  = NumSteps * 2       </P>
             <P> IO_InfoSteps   = NumSteps * 2       </P>
             <P> Rho0           = 1.204              </P> <!-- Incompressible density -->
             <P> Pinfinity      = 100000             </P> <!-- Ambient pressure -->

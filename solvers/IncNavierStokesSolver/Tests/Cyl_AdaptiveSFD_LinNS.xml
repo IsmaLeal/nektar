@@ -18,7 +18,6 @@
         <PARAMETERS>
             <P> TimeStep = 0.01   </P>
             <P> NumSteps = 1.0/TimeStep    </P>
-            <P> IO_CheckSteps = 1.0/TimeStep  </P>
             <P> IO_InfoSteps  = 0.25/TimeStep   </P>
             <P> IO_CFLSteps   = 100 </P>
             <P> Re = 100.0         </P>

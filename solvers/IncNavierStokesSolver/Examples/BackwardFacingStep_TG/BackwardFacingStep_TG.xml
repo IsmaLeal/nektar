@@ -1700,7 +1700,6 @@
             <P> FinalTime       = 0.1                   </P>
             <P> TimeStep        = 0.005                 </P>
             <P> NumSteps        = FinalTime/TimeStep    </P>
-            <P> IO_CheckSteps   = 1/TimeStep            </P>
             <P> IO_InfoSteps    = 1                     </P>
             <P> Re              = 500                   </P>
             <P> Kinvis          = 1.0/Re                </P>
