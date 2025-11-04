@@ -71,6 +71,7 @@ ADD_NEKTAR_TEST(Gmsh/v2.2/square_quad)
 ADD_NEKTAR_TEST(Gmsh/v2.2/square_tri_lin)
 ADD_NEKTAR_TEST(Gmsh/v2.2/square_tri)
 ADD_NEKTAR_TEST(Gmsh/v2.2/peralign_3d_cylinder)
+ADD_NEKTAR_TEST(Gmsh/v2.2/identify_boundary_tet)
 
 ADD_NEKTAR_TEST(Gmsh/v4.0/cube_all)
 ADD_NEKTAR_TEST(Gmsh/v4.0/cube_hex_lin)

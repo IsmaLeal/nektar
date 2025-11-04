@@ -366,6 +366,7 @@ where it exists. The table below indicates support currently implemented.
     \midrule
     CGNS & \texttt{cgns} & \cmark & Based on the output currently provide by ANSA. Have support for high order elements supported. Requires NEKTAR\_USE\_CGNS option to be activated in cmake which then requires cgns library 4.4 to be  available or compiled \\
     Gmsh & \texttt{msh} & \cmark & Only reads nodes, elements and physical groups (which are mapped to composites). File format versions 2.x and 4.x currently supported.\\
+    Gmsh & \texttt{msh:msh:identifyComposite} & \cmark & Same, but uses the CAD IDs to identify boundary composites. Use if no Physical Surfaces/Volume defined in Gmsh.  \\
     Nektar & \texttt{rea} & \cmark & Reads elements, fluid boundary conditions. Most curve types are unsupported: high-order information must be defined in an accompanying .hsf file. \\
     Nektar++ & \texttt{xml} & \cmark & Fully supported. \\
     PLY & \texttt{ply} & \xmark & Reads only the ASCII format.. \\

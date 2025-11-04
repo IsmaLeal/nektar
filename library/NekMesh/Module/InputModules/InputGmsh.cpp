@@ -723,6 +723,8 @@ std::vector<int> hexTensorNodeOrdering(const std::vector<int> &nodes, int n)
 InputGmsh::InputGmsh(MeshSharedPtr m)
     : InputModule(m), m_version(0.0), m_prevId(-1), m_maxTagId(-1)
 {
+    m_config["identifyComposite"] =
+        ConfigOption(false, "", "Use Gmsh CAD IDs for composites.");
 }
 
 InputGmsh::~InputGmsh()
@@ -767,6 +769,12 @@ void InputGmsh::Process()
 
     m_log(VERBOSE) << "Reading Gmsh file: '" << m_config["infile"].as<string>()
                    << "'" << std::endl;
+
+    if (m_config["identifyComposite"].beenSet)
+    {
+        m_log(WARNING) << "Identifying Composites based on CAD Object ID "
+                       << endl;
+    }
 
     std::vector<std::map<int, GmshEntity>> entityMap(4);
 
@@ -926,6 +934,13 @@ void InputGmsh::Process()
                 {
                     ReadNextElement();
                 }
+            }
+
+            // If boundary elements of a lower dimension are created delete them
+            // in NekMesh boundary elements are only [m_dim -1]
+            for (int i = 0; i < m_mesh->m_expDim - 1; i++)
+            {
+                m_mesh->m_element[i] = {};
             }
         }
     }
@@ -1133,6 +1148,28 @@ void InputGmsh::ReadNextElement(int tag, int elm_type)
     if (m_version >= 4.0)
     {
         tags.push_back(tag);
+    }
+    // use the elementary CAD object ID if no physical group is defined
+    if (m_config["identifyComposite"].beenSet && m_version == 2.2)
+    {
+        tags[0] = tags[1];
+        // Put All Tets in C1005, Prisms C1007,Pyramids 1006, Hex 1008
+        if (it->second.m_e == LibUtilities::ShapeType::eTetrahedron)
+        {
+            tags[0] = 1000 + LibUtilities::ShapeType::eTetrahedron;
+        }
+        else if (it->second.m_e == LibUtilities::ShapeType::eHexahedron)
+        {
+            tags[0] = 1000 + LibUtilities::ShapeType::eHexahedron;
+        }
+        else if (it->second.m_e == LibUtilities::ShapeType::ePrism)
+        {
+            tags[0] = 1000 + LibUtilities::ShapeType::ePrism;
+        }
+        else if (it->second.m_e == LibUtilities::ShapeType::ePyramid)
+        {
+            tags[0] = 1000 + LibUtilities::ShapeType::ePyramid;
+        }
     }
     tags.resize(1);
 
