@@ -1,5 +1,11 @@
 Changelog
 =========
+v5.10.0
+------
+**Library**
+- Tidy check for nonsymmetric linear system (!2259)
+
+
 v5.9.0
 ------
 **Library**

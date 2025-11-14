@@ -81,15 +81,16 @@ GlobalLinSysIterative::GlobalLinSysIterative(
     m_isAconjugate     = m_numSuccessiveRHS > 0;
     m_numSuccessiveRHS = std::abs(m_numSuccessiveRHS);
     m_useProjection    = m_numSuccessiveRHS > 0;
+    m_isConjugateGradient =
+        m_linSysIterSolver.find("ConjugateGradient") != std::string::npos;
+    m_isLocalSolver = m_linSysIterSolver.find("Loc") != std::string::npos;
 
-    // Check for advection matrix and switch to GMRES, if not already used
-    m_matrixType           = StdRegions::MatrixTypeMap[pKey.GetMatrixType()];
-    m_isNonSymmetricLinSys = m_matrixType.find("Advection") != string::npos;
-
-    if (m_isNonSymmetricLinSys &&
-        !m_linSysIterSolver.compare("ConjugateGradient"))
+    // Check for nonsymmetric matrix and switch to GMRES, if not already used
+    auto matrixType = pKey.GetMatrixType();
+    if (isNonSymmetricLinSys(matrixType) && m_isConjugateGradient)
     {
-        m_linSysIterSolver = "GMRES";
+        m_linSysIterSolver = m_isLocalSolver ? "GMRESLoc" : "GMRES";
+
         WARNINGL0(
             false,
             "Detected ConjugateGradient solver and a "
@@ -473,6 +474,25 @@ void GlobalLinSysIterative::UpdateKnownSolutions(
     m_coeffMatrixFactor = coeffMatrixFactor;
     m_ipivot            = ipivot;
     ++m_numPrevSols;
+}
+
+/**
+ * Check if the matrix type is non-symmetric to allow swtiching to a capable
+ * iterative solver.
+ *
+ * @param mt type of the Matrix using StdRegions::MatrixType
+ * @return boolean if it is a non-symmetric type
+ */
+bool GlobalLinSysIterative::isNonSymmetricLinSys(StdRegions::MatrixType mt)
+{
+    constexpr std::array<StdRegions::MatrixType, 4> nonSymmetric = {
+        StdRegions::eLinearAdvection,
+        StdRegions::eLinearAdvectionReaction,
+        StdRegions::eLinearAdvectionDiffusionReaction,
+        StdRegions::eLinearAdvectionDiffusionReactionGJP,
+    };
+    return std::find(nonSymmetric.begin(), nonSymmetric.end(), mt) !=
+           nonSymmetric.end();
 }
 
 } // namespace Nektar::MultiRegions
