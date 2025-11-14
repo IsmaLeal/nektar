@@ -80,6 +80,12 @@ protected:
     /// Whether to apply projection technique
     bool m_useProjection;
 
+    // Whether a ConjugateGradient solver is used
+    bool m_isConjugateGradient;
+
+    // Whether a local type solver is used
+    bool m_isLocalSolver;
+
     /// Root if parallel
     bool m_root;
 
@@ -95,7 +101,6 @@ protected:
     int m_numSuccessiveRHS;
     bool m_isAconjugate;
     std::string m_matrixType;
-    bool m_isNonSymmetricLinSys;
     int m_numPrevSols;
     bool m_isAbsoluteTolerance;
 
@@ -111,6 +116,8 @@ protected:
                       const Array<OneD, const NekDouble> &pInput,
                       Array<OneD, NekDouble> &pOutput, const int pNumDir,
                       const bool isAconjugate);
+
+    bool isNonSymmetricLinSys(StdRegions::MatrixType mt);
 
     virtual void v_UniqueMap() = 0;
 
