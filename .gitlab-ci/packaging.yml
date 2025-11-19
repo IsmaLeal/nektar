@@ -11,7 +11,7 @@
 
 .package-env-build: &package-env-build
   <<: *package-conditions
-  image: docker:stable
+  image: docker:28.5.0-dind
   stage: package-env
   needs: []
   script:
@@ -231,7 +231,7 @@
 # This cleans up the temporary environment image
 .package-env-cleanup: &package-env-cleanup
   <<: *package-conditions
-  image: docker:stable
+  image: docker:28.5.0-dind
   stage: cleanup
 #  except:
 #    refs:

@@ -4,6 +4,7 @@ v5.10.0
 ------
 **Library**
 - Tidy check for nonsymmetric linear system (!2259)
+- Fix docker 29 breaking API change (!2298)
 
 
 v5.9.0
