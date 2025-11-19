@@ -57,7 +57,7 @@ include:
 .build-env-template: &build-env-template
   <<: *execution-conditions
   stage: build-env
-  image: docker:19.03.6
+  image: docker:28.5.0-dind
   timeout: 1h
   variables:
     REMOVE_UCX: 0
@@ -76,7 +76,7 @@ include:
 .build-and-test-template: &build-and-test-template
   <<: *execution-conditions
   stage: build-and-test
-  image: docker:19.03.6
+  image: docker:28.5.0-dind
   variables:
     GIT_STRATEGY: clone
   script:
@@ -393,7 +393,7 @@ debian-bookworm-xml-format:
 # DOCUMENTATION
 debian-trixie-documentation-build-env:
   <<: *execution-conditions
-  image: docker:19.03.6
+  image: docker:28.5.0-dind
   stage: build-env-full
   script:
     - OS_DISTRO=$(echo $CI_JOB_NAME | cut -d- -f 1)
@@ -797,7 +797,7 @@ win10-mpi-default-build-and-test:
 # correct image version can be grabbed from the container registry.
 .dockerhub_build_template: &dockerhub_build_template
   <<: *execution-conditions
-  image: docker:stable
+  image: docker:28.5.0-dind
   script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
     - IMAGE=$CI_REGISTRY_IMAGE/${image_name}
@@ -831,7 +831,7 @@ win10-mpi-default-build-and-test:
 # runners can be difficult if they are tagged multiple times, so we also perform
 # a quick rmi to make sure we only keep the images from the registry.
 .dockerhub-deploy-template: &dockerhub_deploy_template
-  image: docker:stable
+  image: docker:28.5.0-dind
   stage: package-deploy
   only:
     refs:
@@ -855,7 +855,7 @@ win10-mpi-default-build-and-test:
 # This cleans up the local temporary image if not deploying
 .dockerhub-cleanup-template: &dockerhub_cleanup_template
   <<: *execution-conditions
-  image: docker:stable
+  image: docker:28.5.0-dind
   stage: cleanup
 #  except:
 #    refs:
