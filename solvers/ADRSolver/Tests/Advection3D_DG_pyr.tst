@@ -8,10 +8,10 @@
     </files>
     <metrics>
         <metric type="L2" id="1">
-            <value variable="u" tolerance="1e-9">0.000570306</value>
+            <value variable="u" tolerance="1e-9">0.000649196</value>
         </metric>
         <metric type="Linf" id="2">
-            <value variable="u" tolerance="1e-9">0.00709511</value>
+            <value variable="u" tolerance="1e-9">0.00749442</value>
         </metric>
     </metrics>
 </test>

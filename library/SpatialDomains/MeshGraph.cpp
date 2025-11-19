@@ -1755,7 +1755,7 @@ LibUtilities::BasisKeyVector MeshGraph::DefineBasisKeyFromExpansionType(
                     returnval.push_back(bkey);
 
                     const LibUtilities::PointsKey pkey1(
-                        nummodes + quadoffset,
+                        nummodes + quadoffset - 1,
                         LibUtilities::eGaussRadauMAlpha2Beta0);
                     LibUtilities::BasisKey bkey1(LibUtilities::eModifiedPyr_C,
                                                  nummodes, pkey1);
