@@ -103,6 +103,7 @@ include:
       -e "BUILD_FC=$BUILD_FC"
       -e "DISABLE_CWIPI=$DISABLE_CWIPI"
       -e "DISABLE_MCA=$DISABLE_MCA"
+      -e "ENABLE_ALIGN_MEM=$ENABLE_ALIGN_MEM"
       -e "DO_COVERAGE=$DO_COVERAGE"
       -e "NUM_CPUS=$NUM_CPUS"
       -e "CCACHE_DIR=$CCACHE_DIR"
@@ -330,6 +331,15 @@ debian-bookworm-full-avx512-build-and-test:
   tags:
     - avx512
 
+debian-bookworm-full-avx512-align-mem-build-and-test:
+  <<: *build-and-test-template
+  needs: ["debian-bookworm-full-build-env"]
+  variables:
+    BUILD_SIMD: avx512
+    ENABLE_ALIGN_MEM: true
+  tags:
+    - avx512
+
 # COMPILER WARNINGS
 debian-trixie-default-warnings:
   <<: *compiler-warning-template
@@ -366,6 +376,10 @@ debian-bookworm-full-avx2-warnings:
 debian-bookworm-full-avx512-warnings:
   <<: *compiler-warning-template
   needs: ["debian-bookworm-full-avx512-build-and-test"]
+
+debian-bookworm-full-avx512-align-mem-warnings:
+  <<: *compiler-warning-template
+  needs: ["debian-bookworm-full-avx512-align-mem-build-and-test"]
 
 debian-bookworm-performance-warnings:
   <<: *compiler-warning-template
