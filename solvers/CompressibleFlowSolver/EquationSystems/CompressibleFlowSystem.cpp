@@ -827,14 +827,10 @@ Array<OneD, NekDouble> CompressibleFlowSystem::v_GetMaxStdVelocity(
         offset  = m_fields[0]->GetPhys_Offset(el);
         int nq  = m_fields[0]->GetExp(el)->GetTotPoints();
 
-        const SpatialDomains::GeomFactorsSharedPtr metricInfo =
-            m_fields[0]->GetExp(el)->GetGeom()->GetMetricInfo();
+        SpatialDomains::GeomFactors *metricInfo =
+            m_fields[0]->GetExp(el)->GetGeomFactors();
         const Array<TwoD, const NekDouble> &gmat =
-            m_fields[0]
-                ->GetExp(el)
-                ->GetGeom()
-                ->GetMetricInfo()
-                ->GetDerivFactors(ptsKeys);
+            metricInfo->GetDerivFactors();
 
         // Convert to standard element
         //    consider soundspeed in all directions

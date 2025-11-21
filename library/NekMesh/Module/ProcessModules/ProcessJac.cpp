@@ -198,10 +198,10 @@ void ProcessJac::Process()
         SpatialDomains::Geometry *geom =
             el[i]->GetGeom(m_mesh->m_spaceDim, holder);
 
+        LibUtilities::PointsKeyVector p = geom->GetXmap()->GetPointsKeys();
         // Generate geometric factors.
-        SpatialDomains::GeomFactorsSharedPtr gfac = geom->GetGeomFactors();
+        SpatialDomains::GeomFactorsUniquePtr gfac = geom->GenGeomFactors(p);
 
-        LibUtilities::PointsKeyVector p    = geom->GetXmap()->GetPointsKeys();
         SpatialDomains::DerivStorage deriv = gfac->GetDeriv(p);
         const int pts                      = deriv[0][0].size();
         Array<OneD, NekDouble> jc(pts);

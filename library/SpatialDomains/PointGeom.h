@@ -89,7 +89,8 @@ protected:
         return m_globalID;
     }
 
-    void v_GenGeomFactors() override;
+    GeomFactorsUniquePtr v_GenGeomFactors(
+        LibUtilities::PointsKeyVector &keyTgt) override;
 };
 
 } // namespace Nektar::SpatialDomains

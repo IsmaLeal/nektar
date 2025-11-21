@@ -6,6 +6,7 @@ v5.10.0
 - Tidy check for nonsymmetric linear system (!2259)
 -  Set default quadrature of Pyr to nq, nq nq-1 for modified basis (!2297)
 - Fix docker 29 breaking API change (!2298)
+- Curves and GeomFactors as unique pointers (!2191)
 
 
 v5.9.0

@@ -215,7 +215,8 @@ bool operator!=(const PointGeom *x, const PointGeom &y)
     return (x->m_globalID != y.m_globalID);
 }
 
-void PointGeom::v_GenGeomFactors()
+GeomFactorsUniquePtr PointGeom::v_GenGeomFactors(
+    [[maybe_unused]] LibUtilities::PointsKeyVector &keyTgt)
 {
     if (!m_setupState)
     {
@@ -223,14 +224,7 @@ void PointGeom::v_GenGeomFactors()
         SetUpCoeffs(m_xmap->GetNcoeffs());
         m_setupState = true;
     }
-
-    if (m_geomFactorsState != ePtsFilled)
-    {
-        SpatialDomains::GeomType gType = eRegular;
-        m_geomFactors = MemoryManager<GeomFactors>::AllocateSharedPtr(
-            gType, m_coordim, m_xmap, m_coeffs);
-        m_geomFactorsState = ePtsFilled;
-    }
+    return GeomFactorsUniquePtr();
 }
 
 } // namespace Nektar::SpatialDomains

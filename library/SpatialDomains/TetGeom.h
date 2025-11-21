@@ -45,6 +45,9 @@ namespace Nektar::SpatialDomains
 class TetGeom : public Geometry3D
 {
 public:
+    SPATIAL_DOMAINS_EXPORT TetGeom();
+    SPATIAL_DOMAINS_EXPORT TetGeom(int id, TriGeom *faces[]);
+
     SPATIAL_DOMAINS_EXPORT static const int kNverts  = 4;
     SPATIAL_DOMAINS_EXPORT static const int kNedges  = 6;
     SPATIAL_DOMAINS_EXPORT static const int kNqfaces = 0;
@@ -53,7 +56,6 @@ public:
     SPATIAL_DOMAINS_EXPORT static const int kNfacets = kNfaces;
     SPATIAL_DOMAINS_EXPORT static const std::string XMLElementType;
 
-    SPATIAL_DOMAINS_EXPORT TetGeom();
     SPATIAL_DOMAINS_EXPORT TetGeom(int id,
                                    std::array<TriGeom *, kNfaces> faces);
     SPATIAL_DOMAINS_EXPORT ~TetGeom() override = default;
@@ -66,7 +68,9 @@ protected:
     int v_GetDir(const int faceidx, const int facedir) const override;
     void v_Reset(CurveMap &curvedEdges, CurveMap &curvedFaces) override;
     void v_Setup() override;
-    void v_GenGeomFactors() override;
+    GeomType v_CalcGeomType() override;
+    GeomFactorsUniquePtr v_GenGeomFactors(
+        LibUtilities::PointsKeyVector &keyTgt) override;
     void v_FillGeom() override;
 
     inline int v_GetNumVerts() const final

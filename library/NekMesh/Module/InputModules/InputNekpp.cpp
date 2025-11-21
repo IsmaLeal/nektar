@@ -175,8 +175,8 @@ void InputNekpp::Process()
     // Curved Edges
     for (auto &it : graph->GetCurvedEdges())
     {
-        SpatialDomains::CurveSharedPtr curve = it.second;
-        int id                               = curve->m_curveID;
+        SpatialDomains::Curve *curve = it.second.get();
+        int id                       = curve->m_curveID;
         ASSERTL1(eIdMap.find(id) != eIdMap.end(), "Failed to find curved edge");
         EdgeSharedPtr edg = eIdMap[id];
         edg->m_curveType  = curve->m_ptype;
@@ -191,8 +191,8 @@ void InputNekpp::Process()
     // Curved Faces
     for (auto &it : graph->GetCurvedFaces())
     {
-        SpatialDomains::CurveSharedPtr curve = it.second;
-        int id                               = curve->m_curveID;
+        SpatialDomains::Curve *curve = it.second.get();
+        int id                       = curve->m_curveID;
         ASSERTL1(fIdMap.find(id) != fIdMap.end(), "Failed to find curved edge");
         FaceSharedPtr fac = fIdMap[id];
         fac->m_curveType  = curve->m_ptype;

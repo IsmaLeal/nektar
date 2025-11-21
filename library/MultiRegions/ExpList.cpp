@@ -345,10 +345,8 @@ ExpList::ExpList(
                     {
                         if ((eInfo->m_basisKeyVector ==
                              ExpOrder[i][0]->m_basisKeyVector) &&
-                            (eInfo->m_geomPtr->GetGeomFactors()->GetGtype() ==
-                             ExpOrder[i][0]
-                                 ->m_geomPtr->GetGeomFactors()
-                                 ->GetGtype()))
+                            (eInfo->m_geomPtr->CalcGeomType() ==
+                             ExpOrder[i][0]->m_geomPtr->CalcGeomType()))
                         {
                             ExpOrder[i].push_back(eInfo);
                             break;
@@ -898,8 +896,8 @@ ExpList::ExpList(
                     auto it1 = edgeOrders.find(opt[i][0]);
 
                     if ((it.second.second == it1->second.second) &&
-                        (it.second.first->GetGeomFactors()->GetGtype() ==
-                         it1->second.first->GetGeomFactors()->GetGtype()))
+                        (it.second.first->CalcGeomType() ==
+                         it1->second.first->CalcGeomType()))
                     {
                         opt[i].push_back(it.first);
                         break;
@@ -952,8 +950,8 @@ ExpList::ExpList(
                     if ((it.second.second.first == it1->second.second.first) &&
                         (it.second.second.second ==
                          it1->second.second.second) &&
-                        (it.second.first->GetGeomFactors()->GetGtype() ==
-                         it1->second.first->GetGeomFactors()->GetGtype()))
+                        (it.second.first->CalcGeomType() ==
+                         it1->second.first->CalcGeomType()))
                     {
                         opt[i].push_back(it.first);
                         break;
@@ -1441,10 +1439,8 @@ ExpList::ExpList(const LibUtilities::SessionReaderSharedPtr &pSession,
                 {
                     if ((eInfo->m_basisKeyVector ==
                          ExpOrder[i][0]->m_basisKeyVector) &&
-                        (eInfo->m_geomPtr->GetGeomFactors()->GetGtype() ==
-                         ExpOrder[i][0]
-                             ->m_geomPtr->GetGeomFactors()
-                             ->GetGtype()))
+                        (eInfo->m_geomPtr->CalcGeomType() ==
+                         ExpOrder[i][0]->m_geomPtr->CalcGeomType()))
                     {
                         ExpOrder[i].push_back(eInfo);
                         break;
@@ -1654,8 +1650,8 @@ void ExpList::InitialiseExpVector(
 
                 if ((expIt->second->m_basisKeyVector ==
                      expInfo->m_basisKeyVector) &&
-                    (expIt->second->m_geomPtr->GetGeomFactors()->GetGtype() ==
-                     expInfo->m_geomPtr->GetGeomFactors()->GetGtype()))
+                    (expIt->second->m_geomPtr->CalcGeomType() ==
+                     expInfo->m_geomPtr->CalcGeomType()))
                 {
                     ExpOrder[i].push_back(expIt->first);
                     break;
@@ -4381,7 +4377,7 @@ void ExpList::v_GetMovingFrames(const SpatialDomains::GeomMMF MMFdir,
         }
 
         // MF from LOCALREGIONS
-        (*m_exp)[i]->GetMetricInfo()->GetMovingFrames(
+        (*m_exp)[i]->GetGeomFactors()->GetMovingFrames(
             (*m_exp)[i]->GetPointsKeys(), MMFdir, CircCentre, MFloc);
 
         // Get the physical data offset for this expansion.
@@ -5852,7 +5848,7 @@ void ExpList::CreateCollections(Collections::ImplementationType ImpType)
 
     // initialize the deformed flag based on the first element
     bool prevDef =
-        exp->GetMetricInfo()->GetGtype() == SpatialDomains::eDeformed;
+        exp->GetGeomFactors()->GetGtype() == SpatialDomains::eDeformed;
     // collsize is the maximum size among all collections
     int collsize = 0;
     int mincol   = (*m_exp).size();
@@ -5870,7 +5866,7 @@ void ExpList::CreateCollections(Collections::ImplementationType ImpType)
         }
         // fetch deformed flag of current element
         bool Deformed =
-            (exp->GetMetricInfo()->GetGtype() == SpatialDomains::eDeformed);
+            (exp->GetGeomFactors()->GetGtype() == SpatialDomains::eDeformed);
 
         // Check if this element is the same type as the previous one or
         // if we have reached the maximum collection size

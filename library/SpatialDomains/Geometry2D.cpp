@@ -47,7 +47,7 @@ Geometry2D::Geometry2D()
 {
 }
 
-Geometry2D::Geometry2D(const int coordim, CurveSharedPtr curve)
+Geometry2D::Geometry2D(const int coordim, Curve *curve)
     : Geometry(coordim), m_curve(curve)
 {
     ASSERTL0(m_coordim > 1,
@@ -94,8 +94,8 @@ void Geometry2D::NewtonIterationForLocCoord(
     // |r,s|    > LcoordDIV stop   the search
     const NekDouble LcoordDiv = 15.0;
 
-    Array<OneD, const NekDouble> Jac =
-        m_geomFactors->GetJac(m_xmap->GetPointsKeys());
+    LibUtilities::PointsKeyVector ptsKeys = m_xmap->GetPointsKeys();
+    Array<OneD, const NekDouble> Jac      = v_GenGeomFactors(ptsKeys)->GetJac();
 
     NekDouble ScaledTol =
         Vmath::Vsum(Jac.size(), Jac, 1) / ((NekDouble)Jac.size());
@@ -223,9 +223,10 @@ NekDouble Geometry2D::v_GetLocCoords(const Array<OneD, const NekDouble> &coords,
 {
     NekDouble dist = std::numeric_limits<double>::max();
     Array<OneD, NekDouble> tmpcoords(2);
-    tmpcoords[0] = coords[m_manifold[0]];
-    tmpcoords[1] = coords[m_manifold[1]];
-    if (GetMetricInfo()->GetGtype() == eRegular)
+    tmpcoords[0]   = coords[m_manifold[0]];
+    tmpcoords[1]   = coords[m_manifold[1]];
+    GeomType Gtype = CalcGeomType();
+    if (Gtype == eRegular)
     {
         tmpcoords[0] -= m_isoParameter[0][0];
         tmpcoords[1] -= m_isoParameter[1][0];
@@ -238,7 +239,7 @@ NekDouble Geometry2D::v_GetLocCoords(const Array<OneD, const NekDouble> &coords,
     {
         SolveStraightEdgeQuad(tmpcoords, Lcoords);
     }
-    else if (GetMetricInfo()->GetGtype() == eDeformed)
+    else if (Gtype == eDeformed)
     {
         v_FillGeom();
         // Determine nearest point of coords  to values in m_xmap
@@ -269,7 +270,7 @@ NekDouble Geometry2D::v_GetLocCoords(const Array<OneD, const NekDouble> &coords,
         Array<OneD, NekDouble> ptsz(npts);
         m_xmap->BwdTrans(m_coeffs[m_manifold[2]], ptsz);
         NekDouble z = m_xmap->PhysEvaluate(xi, ptsz) - coords[m_manifold[2]];
-        if (GetMetricInfo()->GetGtype() == eDeformed)
+        if (Gtype == eDeformed)
         {
             dist = sqrt(z * z + dist * dist);
         }
@@ -289,7 +290,8 @@ int Geometry2D::v_GetShapeDim() const
 NekDouble Geometry2D::v_FindDistance(const Array<OneD, const NekDouble> &xs,
                                      Array<OneD, NekDouble> &xiOut)
 {
-    if (m_geomFactors->GetGtype() == eRegular)
+    GeomType Gtype = CalcGeomType();
+    if (Gtype == eRegular)
     {
         xiOut = Array<OneD, NekDouble>(2, 0.0);
 
@@ -307,7 +309,7 @@ NekDouble Geometry2D::v_FindDistance(const Array<OneD, const NekDouble> &xs,
     }
     // If deformed edge then the inverse mapping is non-linear so need to
     // numerically solve for the local coordinate
-    else if (m_geomFactors->GetGtype() == eDeformed)
+    else if (Gtype == eDeformed)
     {
         // Choose starting based on closest quad
         Array<OneD, NekDouble> xi(2, 0.0), eta(2, 0.0);

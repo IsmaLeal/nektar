@@ -163,7 +163,7 @@ protected:
     /// Vector of all points in the zone
     std::vector<PointGeomUniquePtr> m_verts;
     /// Vector of all curves in the zone
-    std::vector<CurveSharedPtr> m_curves;
+    std::vector<Curve *> m_curves;
     /// Vector of all points in the zone at initialisation
     std::vector<PointGeom> m_origVerts;
 

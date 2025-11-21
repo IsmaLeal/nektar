@@ -582,25 +582,6 @@ void TetGeom::v_Setup()
         }
         SetUpXmap();
         SetUpCoeffs(m_xmap->GetNcoeffs());
-        m_setupState = true;
-    }
-}
-
-/**
- * Generate the geometry factors for this element.
- */
-void TetGeom::v_GenGeomFactors()
-{
-    if (!m_setupState)
-    {
-        TetGeom::v_Setup();
-    }
-
-    if (m_geomFactorsState != ePtsFilled)
-    {
-        GeomType Gtype = eRegular;
-
-        v_FillGeom();
 
         // check to see if expansions are linear
         m_straightEdge = 1;
@@ -608,33 +589,66 @@ void TetGeom::v_GenGeomFactors()
             m_xmap->GetBasisNumModes(1) != 2 ||
             m_xmap->GetBasisNumModes(2) != 2)
         {
-            Gtype          = eDeformed;
             m_straightEdge = 0;
         }
 
-        if (Gtype == eRegular)
-        {
-            m_isoParameter = Array<OneD, Array<OneD, NekDouble>>(3);
-            for (int i = 0; i < 3; ++i)
-            {
-                m_isoParameter[i]    = Array<OneD, NekDouble>(4, 0.);
-                NekDouble A          = (*m_verts[0])(i);
-                NekDouble B          = (*m_verts[1])(i);
-                NekDouble C          = (*m_verts[2])(i);
-                NekDouble D          = (*m_verts[3])(i);
-                m_isoParameter[i][0] = 0.5 * (-A + B + C + D);
-
-                m_isoParameter[i][1] = 0.5 * (-A + B); // xi1
-                m_isoParameter[i][2] = 0.5 * (-A + C); // xi2
-                m_isoParameter[i][3] = 0.5 * (-A + D); // xi3
-            }
-            v_CalculateInverseIsoParam();
-        }
-
-        m_geomFactors = MemoryManager<GeomFactors>::AllocateSharedPtr(
-            Gtype, m_coordim, m_xmap, m_coeffs);
-        m_geomFactorsState = ePtsFilled;
+        m_setupState = true;
     }
+}
+
+/**
+ * Generate the geometry factors for this element.
+ */
+GeomType TetGeom::v_CalcGeomType()
+{
+    if (!m_setupState)
+    {
+        TetGeom::v_Setup();
+    }
+    v_FillGeom();
+
+    GeomType Gtype = eRegular;
+
+    // check to see if expansions are linear
+    if (m_xmap->GetBasisNumModes(0) != 2 || m_xmap->GetBasisNumModes(1) != 2 ||
+        m_xmap->GetBasisNumModes(2) != 2)
+    {
+        Gtype = eDeformed;
+    }
+
+    if (Gtype == eRegular)
+    {
+        m_isoParameter = Array<OneD, Array<OneD, NekDouble>>(3);
+        for (int i = 0; i < 3; ++i)
+        {
+            m_isoParameter[i]    = Array<OneD, NekDouble>(4, 0.);
+            NekDouble A          = (*m_verts[0])(i);
+            NekDouble B          = (*m_verts[1])(i);
+            NekDouble C          = (*m_verts[2])(i);
+            NekDouble D          = (*m_verts[3])(i);
+            m_isoParameter[i][0] = 0.5 * (-A + B + C + D);
+
+            m_isoParameter[i][1] = 0.5 * (-A + B); // xi1
+            m_isoParameter[i][2] = 0.5 * (-A + C); // xi2
+            m_isoParameter[i][3] = 0.5 * (-A + D); // xi3
+        }
+    }
+
+    if (Gtype == eRegular)
+    {
+        v_CalculateInverseIsoParam();
+    }
+
+    return Gtype;
+}
+
+GeomFactorsUniquePtr TetGeom::v_GenGeomFactors(
+    LibUtilities::PointsKeyVector &keyTgt)
+{
+    GeomType Gtype = CalcGeomType();
+
+    return ObjPoolManager<GeomFactors>::AllocateUniquePtr(
+        Gtype, m_coordim, m_xmap, m_coeffs, keyTgt);
 }
 
 /**

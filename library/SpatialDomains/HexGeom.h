@@ -45,6 +45,9 @@ namespace Nektar::SpatialDomains
 class HexGeom : public Geometry3D
 {
 public:
+    SPATIAL_DOMAINS_EXPORT HexGeom();
+    SPATIAL_DOMAINS_EXPORT HexGeom(int id, QuadGeom *faces[]);
+
     SPATIAL_DOMAINS_EXPORT static const int kNverts  = 8;
     SPATIAL_DOMAINS_EXPORT static const int kNedges  = 12;
     SPATIAL_DOMAINS_EXPORT static const int kNqfaces = 6;
@@ -53,13 +56,14 @@ public:
     SPATIAL_DOMAINS_EXPORT static const int kNfacets = kNfaces;
     SPATIAL_DOMAINS_EXPORT static const std::string XMLElementType;
 
-    SPATIAL_DOMAINS_EXPORT HexGeom();
     SPATIAL_DOMAINS_EXPORT HexGeom(int id,
                                    std::array<QuadGeom *, kNfaces> faces);
     SPATIAL_DOMAINS_EXPORT ~HexGeom() override = default;
 
 protected:
-    void v_GenGeomFactors() override;
+    GeomType v_CalcGeomType() override;
+    GeomFactorsUniquePtr v_GenGeomFactors(
+        LibUtilities::PointsKeyVector &keyTgt) override;
     int v_GetVertexEdgeMap(const int i, const int j) const override;
     int v_GetVertexFaceMap(const int i, const int j) const override;
     int v_GetEdgeFaceMap(const int i, const int j) const override;

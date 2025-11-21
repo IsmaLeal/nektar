@@ -83,8 +83,9 @@ void ProcessOptiExtract::Process()
             SpatialDomains::Geometry *geom =
                 el[i]->GetGeom(m_mesh->m_spaceDim, holder);
 
+            LibUtilities::PointsKeyVector p = geom->GetXmap()->GetPointsKeys();
             // Generate geometric factors.
-            SpatialDomains::GeomFactorsSharedPtr gfac = geom->GetGeomFactors();
+            SpatialDomains::GeomFactorsUniquePtr gfac = geom->GenGeomFactors(p);
 
             // Get the Jacobian and, if it is negative, print a warning
             // message.

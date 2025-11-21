@@ -599,17 +599,11 @@ Array<OneD, NekDouble> UnsteadyAdvectionDiffusion::GetMaxStdVelocity(
                 n_points_0 = n_points;
             }
 
-            Array<TwoD, const NekDouble> gmat = m_fields[0]
-                                                    ->GetExp(el)
-                                                    ->GetGeom()
-                                                    ->GetMetricInfo()
-                                                    ->GetDerivFactors(ptsKeys);
+            Array<TwoD, const NekDouble> gmat =
+                m_fields[0]->GetExp(el)->GetGeomFactors()->GetDerivFactors();
 
-            if (m_fields[0]
-                    ->GetExp(el)
-                    ->GetGeom()
-                    ->GetMetricInfo()
-                    ->GetGtype() == SpatialDomains::eDeformed)
+            if (m_fields[0]->GetExp(el)->GetGeomFactors()->GetGtype() ==
+                SpatialDomains::eDeformed)
             {
                 for (int i = 0; i < n_points; i++)
                 {
@@ -666,17 +660,11 @@ Array<OneD, NekDouble> UnsteadyAdvectionDiffusion::GetMaxStdVelocity(
                 n_points_0 = n_points;
             }
 
-            Array<TwoD, const NekDouble> gmat = m_fields[0]
-                                                    ->GetExp(el)
-                                                    ->GetGeom()
-                                                    ->GetMetricInfo()
-                                                    ->GetDerivFactors(ptsKeys);
+            Array<TwoD, const NekDouble> gmat =
+                m_fields[0]->GetExp(el)->GetGeomFactors()->GetDerivFactors();
 
-            if (m_fields[0]
-                    ->GetExp(el)
-                    ->GetGeom()
-                    ->GetMetricInfo()
-                    ->GetGtype() == SpatialDomains::eDeformed)
+            if (m_fields[0]->GetExp(el)->GetGeomFactors()->GetGtype() ==
+                SpatialDomains::eDeformed)
             {
                 for (int i = 0; i < n_points; i++)
                 {

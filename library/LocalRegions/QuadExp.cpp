@@ -51,11 +51,9 @@ QuadExp::QuadExp(const LibUtilities::BasisKey &Ba,
       StdExpansion2D(Ba.GetNumModes() * Bb.GetNumModes(), Ba, Bb),
       StdQuadExp(Ba, Bb), Expansion(geom), Expansion2D(geom),
       m_matrixManager(
-          std::bind(&Expansion2D::CreateMatrix, this, std::placeholders::_1),
-          std::string("QuadExpMatrix")),
+          std::bind(&Expansion2D::CreateMatrix, this, std::placeholders::_1)),
       m_staticCondMatrixManager(std::bind(&Expansion::CreateStaticCondMatrix,
-                                          this, std::placeholders::_1),
-                                std::string("QuadExpStaticCondMatrix"))
+                                          this, std::placeholders::_1))
 {
 }
 
@@ -70,12 +68,12 @@ NekDouble QuadExp::v_Integral(const Array<OneD, const NekDouble> &inarray)
 {
     int nquad0                       = m_base[0]->GetNumPoints();
     int nquad1                       = m_base[1]->GetNumPoints();
-    Array<OneD, const NekDouble> jac = m_metricinfo->GetJac(GetPointsKeys());
+    Array<OneD, const NekDouble> jac = m_geomFactors->GetJac();
     NekDouble ival;
     Array<OneD, NekDouble> tmp(nquad0 * nquad1);
 
     // multiply inarray with Jacobian
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vmul(nquad0 * nquad1, jac, 1, inarray, 1, tmp, 1);
     }
@@ -94,17 +92,16 @@ void QuadExp::v_PhysDeriv(const Array<OneD, const NekDouble> &inarray,
                           Array<OneD, NekDouble> &out_d1,
                           Array<OneD, NekDouble> &out_d2)
 {
-    int nquad0 = m_base[0]->GetNumPoints();
-    int nquad1 = m_base[1]->GetNumPoints();
-    int nqtot  = nquad0 * nquad1;
-    const Array<TwoD, const NekDouble> &df =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    int nquad0                             = m_base[0]->GetNumPoints();
+    int nquad1                             = m_base[1]->GetNumPoints();
+    int nqtot                              = nquad0 * nquad1;
+    const Array<TwoD, const NekDouble> &df = m_geomFactors->GetDerivFactors();
     Array<OneD, NekDouble> diff0(2 * nqtot);
     Array<OneD, NekDouble> diff1(diff0 + nqtot);
 
     StdQuadExp::v_PhysDeriv(inarray, diff0, diff1);
 
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         if (out_d0.size())
         {
@@ -186,15 +183,14 @@ void QuadExp::v_PhysDirectionalDeriv(
     int nquad1 = m_base[1]->GetNumPoints();
     int nqtot  = nquad0 * nquad1;
 
-    const Array<TwoD, const NekDouble> &df =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    const Array<TwoD, const NekDouble> &df = m_geomFactors->GetDerivFactors();
 
     Array<OneD, NekDouble> diff0(2 * nqtot);
     Array<OneD, NekDouble> diff1(diff0 + nqtot);
 
     StdQuadExp::v_PhysDeriv(inarray, diff0, diff1);
 
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Array<OneD, Array<OneD, NekDouble>> tangmat(2);
 
@@ -219,7 +215,7 @@ void QuadExp::v_PhysDirectionalDeriv(
     }
     else
     {
-        ASSERTL1(m_metricinfo->GetGtype() == SpatialDomains::eDeformed,
+        ASSERTL1(m_geomFactors->GetGtype() == SpatialDomains::eDeformed,
                  "Wrong route");
     }
 }
@@ -462,15 +458,14 @@ void QuadExp::v_AlignVectorToCollapsedDir(
     int nqtot   = nquad0 * nquad1;
     int nmodes0 = m_base[0]->GetNumModes();
 
-    const Array<TwoD, const NekDouble> &df =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    const Array<TwoD, const NekDouble> &df = m_geomFactors->GetDerivFactors();
 
     Array<OneD, NekDouble> tmp1 = outarray[0];
     Array<OneD, NekDouble> tmp2 = outarray[1];
     Array<OneD, NekDouble> tmp3(m_ncoeffs);
     Array<OneD, NekDouble> tmp4(nmodes0 * nquad1);
 
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vmul(nqtot, &df[2 * dir][0], 1, inarray.data(), 1, tmp1.data(),
                     1);
@@ -497,7 +492,7 @@ void QuadExp::v_NormVectorIProductWRTBase(
         GetLeftAdjacentElementExp()->GetTraceNormal(
             GetLeftAdjacentElementTrace());
 
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vvtvvtp(nq, &normals[0][0], 1, &Fx[0], 1, &normals[1][0], 1,
                        &Fy[0], 1, &Fn[0], 1);
@@ -771,9 +766,8 @@ void QuadExp::v_GetTraceQFactors(const int edge,
     int nquad1 = m_base[1]->GetNumPoints();
 
     LibUtilities::PointsKeyVector ptsKeys   = GetPointsKeys();
-    const Array<OneD, const NekDouble> &jac = m_metricinfo->GetJac(ptsKeys);
-    const Array<TwoD, const NekDouble> &df =
-        m_metricinfo->GetDerivFactors(ptsKeys);
+    const Array<OneD, const NekDouble> &jac = m_geomFactors->GetJac();
+    const Array<TwoD, const NekDouble> &df  = m_geomFactors->GetDerivFactors();
 
     Array<OneD, NekDouble> j(max(nquad0, nquad1), 0.0);
     Array<OneD, NekDouble> g0(max(nquad0, nquad1), 0.0);
@@ -781,7 +775,7 @@ void QuadExp::v_GetTraceQFactors(const int edge,
     Array<OneD, NekDouble> g2(max(nquad0, nquad1), 0.0);
     Array<OneD, NekDouble> g3(max(nquad0, nquad1), 0.0);
 
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         // Implementation for all the basis except Gauss points
         if (m_base[0]->GetPointsType() != LibUtilities::eGaussGaussLegendre &&
@@ -980,9 +974,7 @@ void QuadExp::v_GetTraceQFactors(const int edge,
 void QuadExp::v_ComputeTraceNormal(const int edge)
 {
     int i;
-    const SpatialDomains::GeomFactorsSharedPtr &geomFactors =
-        GetGeom()->GetMetricInfo();
-    SpatialDomains::GeomType type = geomFactors->GetGtype();
+    SpatialDomains::GeomType type = m_geomFactors->GetGtype();
 
     LibUtilities::PointsKeyVector ptsKeys = GetPointsKeys();
     for (i = 0; i < ptsKeys.size(); ++i)
@@ -996,8 +988,9 @@ void QuadExp::v_ComputeTraceNormal(const int edge)
     }
 
     const Array<TwoD, const NekDouble> &df =
-        geomFactors->GetDerivFactors(ptsKeys);
-    const Array<OneD, const NekDouble> &jac = geomFactors->GetJac(ptsKeys);
+        m_geomFactors->ComputeDerivFactors(ptsKeys);
+    const Array<OneD, const NekDouble> &jac =
+        m_geomFactors->ComputeJac(ptsKeys);
 
     // The points of normals should follow trace basis, not local basis.
     LibUtilities::BasisKey tobasis = GetTraceBasisKey(edge);
@@ -1248,7 +1241,7 @@ void QuadExp::v_ComputeTraceNormal(const int edge)
     {
         for (i = 0; i < vCoordDim; ++i)
         {
-            if (geomFactors->GetGtype() == SpatialDomains::eDeformed)
+            if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
             {
                 Vmath::Reverse(nqe, normal[i], 1, normal[i], 1);
             }
@@ -1557,7 +1550,7 @@ void QuadExp::v_ComputeLaplacianMetric()
         ComputeQuadratureMetric();
     }
 
-    const SpatialDomains::GeomType type = m_metricinfo->GetGtype();
+    const SpatialDomains::GeomType type = m_geomFactors->GetGtype();
     const unsigned int nqtot            = GetTotPoints();
     const unsigned int dim              = 2;
     const MetricType m[3][3]            = {
@@ -1566,7 +1559,7 @@ void QuadExp::v_ComputeLaplacianMetric()
         {eMetricLaplacian02, eMetricLaplacian12, eMetricLaplacian22}};
 
     const Array<TwoD, const NekDouble> gmat =
-        m_metricinfo->GetGmat(GetPointsKeys());
+        m_geomFactors->GetGmat(GetPointsKeys());
     for (unsigned int i = 0; i < dim; ++i)
     {
         for (unsigned int j = i; j < dim; ++j)
@@ -1593,9 +1586,9 @@ void QuadExp::v_SVVLaplacianFilter(Array<OneD, NekDouble> &array,
     int nq = GetTotPoints();
 
     // Calculate sqrt of the Jacobian
-    Array<OneD, const NekDouble> jac = m_metricinfo->GetJac(GetPointsKeys());
+    Array<OneD, const NekDouble> jac = m_geomFactors->GetJac();
     Array<OneD, NekDouble> sqrt_jac(nq);
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vsqrt(nq, jac, 1, sqrt_jac, 1);
     }
@@ -1627,8 +1620,7 @@ void QuadExp::v_NormalTraceDerivFactors(
     int nquad0 = GetNumPoints(0);
     int nquad1 = GetNumPoints(1);
 
-    const Array<TwoD, const NekDouble> &df =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    const Array<TwoD, const NekDouble> &df = m_geomFactors->GetDerivFactors();
 
     if (d0factors.size() != 4)
     {
@@ -1664,7 +1656,7 @@ void QuadExp::v_NormalTraceDerivFactors(
 
     int ncoords = normal_0.size();
 
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         // needs checking for 3D coords
 

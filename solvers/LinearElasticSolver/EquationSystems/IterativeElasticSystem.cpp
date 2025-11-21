@@ -150,8 +150,8 @@ void IterativeElasticSystem::v_DoSolve()
         // Check for invalid elements.
         for (j = 0; j < m_fields[0]->GetExpSize(); ++j)
         {
-            SpatialDomains::GeomFactorsSharedPtr geomFac =
-                m_fields[0]->GetExp(j)->GetGeom()->GetGeomFactors();
+            SpatialDomains::GeomFactors *geomFac =
+                m_fields[0]->GetExp(j)->GetGeomFactors();
 
             if (!geomFac->IsValid())
             {

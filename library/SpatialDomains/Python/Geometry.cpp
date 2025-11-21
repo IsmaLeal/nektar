@@ -52,12 +52,16 @@ bool Geometry_ContainsPoint(Geometry *geom,
 
 void Geometry_GenGeomFactors(Geometry *geom)
 {
-    GeomFactorsSharedPtr geomFactors = geom->GetGeomFactors();
+    geom->Setup();
+    LibUtilities::PointsKeyVector p  = geom->GetXmap()->GetPointsKeys();
+    GeomFactorsUniquePtr geomFactors = geom->GenGeomFactors(p);
 }
 
 bool Geometry_IsValid(Geometry *geom)
 {
-    GeomFactorsSharedPtr geomFactors = geom->GetGeomFactors();
+    geom->Setup();
+    LibUtilities::PointsKeyVector p  = geom->GetXmap()->GetPointsKeys();
+    GeomFactorsUniquePtr geomFactors = geom->GenGeomFactors(p);
     return geomFactors->IsValid();
 }
 

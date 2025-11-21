@@ -66,11 +66,9 @@ TetExp::TetExp(const LibUtilities::BasisKey &Ba,
                      Ba, Bb, Bc),
       StdTetExp(Ba, Bb, Bc), Expansion(geom), Expansion3D(geom),
       m_matrixManager(
-          std::bind(&Expansion3D::CreateMatrix, this, std::placeholders::_1),
-          std::string("TetExpMatrix")),
+          std::bind(&Expansion3D::CreateMatrix, this, std::placeholders::_1)),
       m_staticCondMatrixManager(std::bind(&Expansion::CreateStaticCondMatrix,
-                                          this, std::placeholders::_1),
-                                std::string("TetExpStaticCondMatrix"))
+                                          this, std::placeholders::_1))
 {
 }
 
@@ -104,12 +102,12 @@ NekDouble TetExp::v_Integral(const Array<OneD, const NekDouble> &inarray)
     int nquad0                       = m_base[0]->GetNumPoints();
     int nquad1                       = m_base[1]->GetNumPoints();
     int nquad2                       = m_base[2]->GetNumPoints();
-    Array<OneD, const NekDouble> jac = m_metricinfo->GetJac(GetPointsKeys());
+    Array<OneD, const NekDouble> jac = m_geomFactors->GetJac();
     NekDouble retrunVal;
     Array<OneD, NekDouble> tmp(nquad0 * nquad1 * nquad2);
 
     // multiply inarray with Jacobian
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vmul(nquad0 * nquad1 * nquad2, &jac[0], 1,
                     (NekDouble *)&inarray[0], 1, &tmp[0], 1);
@@ -146,15 +144,14 @@ void TetExp::v_PhysDeriv(const Array<OneD, const NekDouble> &inarray,
     int TotPts = m_base[0]->GetNumPoints() * m_base[1]->GetNumPoints() *
                  m_base[2]->GetNumPoints();
 
-    Array<TwoD, const NekDouble> df =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
-    Array<OneD, NekDouble> Diff0 = Array<OneD, NekDouble>(3 * TotPts);
-    Array<OneD, NekDouble> Diff1 = Diff0 + TotPts;
-    Array<OneD, NekDouble> Diff2 = Diff1 + TotPts;
+    Array<TwoD, const NekDouble> df = m_geomFactors->GetDerivFactors();
+    Array<OneD, NekDouble> Diff0    = Array<OneD, NekDouble>(3 * TotPts);
+    Array<OneD, NekDouble> Diff1    = Diff0 + TotPts;
+    Array<OneD, NekDouble> Diff2    = Diff1 + TotPts;
 
     StdTetExp::v_PhysDeriv(inarray, Diff0, Diff1, Diff2);
 
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         if (out_d0.size())
         {
@@ -401,10 +398,9 @@ void TetExp::v_AlignVectorToCollapsedDir(
     Array<OneD, NekDouble> tmp2(nqtot);
     Array<OneD, NekDouble> tmp3(nqtot);
 
-    const Array<TwoD, const NekDouble> &df =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    const Array<TwoD, const NekDouble> &df = m_geomFactors->GetDerivFactors();
 
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vmul(nqtot, &df[3 * dir][0], 1, inarray.data(), 1, tmp2.data(),
                     1);
@@ -703,9 +699,6 @@ void TetExp::v_GetTracePhysMap(const int face, Array<OneD, int> &outarray)
 void TetExp::v_ComputeTraceNormal(const int face)
 {
     int i;
-    const SpatialDomains::GeomFactorsSharedPtr &geomFactors =
-        GetGeom()->GetMetricInfo();
-
     LibUtilities::PointsKeyVector ptsKeys = GetPointsKeys();
     for (int i = 0; i < ptsKeys.size(); ++i)
     {
@@ -717,10 +710,11 @@ void TetExp::v_ComputeTraceNormal(const int face)
         }
     }
 
-    SpatialDomains::GeomType type = geomFactors->GetGtype();
+    SpatialDomains::GeomType type = m_geomFactors->GetGtype();
     const Array<TwoD, const NekDouble> &df =
-        geomFactors->GetDerivFactors(ptsKeys);
-    const Array<OneD, const NekDouble> &jac = geomFactors->GetJac(ptsKeys);
+        m_geomFactors->ComputeDerivFactors(ptsKeys);
+    const Array<OneD, const NekDouble> &jac =
+        m_geomFactors->ComputeJac(ptsKeys);
 
     LibUtilities::BasisKey tobasis0 = GetTraceBasisKey(face, 0);
     LibUtilities::BasisKey tobasis1 = GetTraceBasisKey(face, 1);
@@ -988,9 +982,9 @@ void TetExp::v_SVVLaplacianFilter(Array<OneD, NekDouble> &array,
     int nq = GetTotPoints();
 
     // Calculate sqrt of the Jacobian
-    Array<OneD, const NekDouble> jac = m_metricinfo->GetJac(GetPointsKeys());
+    Array<OneD, const NekDouble> jac = m_geomFactors->GetJac();
     Array<OneD, NekDouble> sqrt_jac(nq);
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vsqrt(nq, jac, 1, sqrt_jac, 1);
     }
@@ -1213,8 +1207,7 @@ void TetExp::v_ComputeLaplacianMetric()
     Array<OneD, NekDouble> wsp8(alloc + 1 * nqtot); // wsp8
     Array<OneD, NekDouble> wsp9(alloc + 2 * nqtot); // wsp9
 
-    const Array<TwoD, const NekDouble> &df =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    const Array<TwoD, const NekDouble> &df = m_geomFactors->GetDerivFactors();
     const Array<OneD, const NekDouble> &z0 = m_base[0]->GetZ();
     const Array<OneD, const NekDouble> &z1 = m_base[1]->GetZ();
     const Array<OneD, const NekDouble> &z2 = m_base[2]->GetZ();
@@ -1244,7 +1237,7 @@ void TetExp::v_ComputeLaplacianMetric()
     // Step 3. Construct combined metric terms for physical space to
     // collapsed coordinate system.
     // Order of construction optimised to minimise temporary storage
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         // wsp4
         Vmath::Vadd(nqtot, &df[1][0], 1, &df[2][0], 1, &wsp4[0], 1);
@@ -1380,8 +1373,7 @@ void TetExp::v_NormalTraceDerivFactors(
     int nquad1 = GetNumPoints(1);
     int nquad2 = GetNumPoints(2);
 
-    const Array<TwoD, const NekDouble> &df =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    const Array<TwoD, const NekDouble> &df = m_geomFactors->GetDerivFactors();
 
     if (d0factors.size() != 4)
     {
@@ -1427,7 +1419,7 @@ void TetExp::v_NormalTraceDerivFactors(
     int ncoords = normal_0.size();
 
     // first gather together standard cartesian inner products
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         // face 0
         for (int i = 0; i < nquad0 * nquad1; ++i)

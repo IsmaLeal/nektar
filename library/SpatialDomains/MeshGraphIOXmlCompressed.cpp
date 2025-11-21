@@ -449,7 +449,7 @@ void MeshGraphIOXmlCompressed::v_ReadCurves()
         int edgeid = edginfo[i].entityid;
         LibUtilities::PointsType ptype;
 
-        curvedEdges[edgeid] = MemoryManager<Curve>::AllocateSharedPtr(
+        curvedEdges[edgeid] = ObjPoolManager<Curve>::AllocateUniquePtr(
             edgeid, ptype = (LibUtilities::PointsType)edginfo[i].ptype);
 
         // load points
@@ -470,7 +470,7 @@ void MeshGraphIOXmlCompressed::v_ReadCurves()
         int faceid = facinfo[i].entityid;
         LibUtilities::PointsType ptype;
 
-        curvedFaces[faceid] = MemoryManager<Curve>::AllocateSharedPtr(
+        curvedFaces[faceid] = ObjPoolManager<Curve>::AllocateUniquePtr(
             faceid, ptype = (LibUtilities::PointsType)facinfo[i].ptype);
 
         int offset = facinfo[i].ptoffset;
@@ -539,7 +539,7 @@ void MeshGraphIOXmlCompressed::v_ReadEdges()
         {
             m_meshGraph->AddGeom(
                 indx, ObjPoolManager<SegGeom>::AllocateUniquePtr(
-                          indx, spaceDimension, vertices, it->second));
+                          indx, spaceDimension, vertices, it->second.get()));
         }
     }
 }
@@ -618,7 +618,7 @@ void MeshGraphIOXmlCompressed::v_ReadFaces()
                 {
                     m_meshGraph->AddGeom(
                         indx, ObjPoolManager<TriGeom>::AllocateUniquePtr(
-                                  indx, edges, it->second));
+                                  indx, edges, it->second.get()));
                 }
             }
         }
@@ -652,7 +652,7 @@ void MeshGraphIOXmlCompressed::v_ReadFaces()
                 {
                     m_meshGraph->AddGeom(
                         indx, ObjPoolManager<QuadGeom>::AllocateUniquePtr(
-                                  indx, edges, it->second));
+                                  indx, edges, it->second.get()));
                 }
             }
         }
@@ -727,8 +727,9 @@ void MeshGraphIOXmlCompressed::v_ReadElements1D()
             else
             {
                 m_meshGraph->AddGeom(
-                    indx, ObjPoolManager<SegGeom>::AllocateUniquePtr(
-                              indx, spaceDimension, vertices, it->second));
+                    indx,
+                    ObjPoolManager<SegGeom>::AllocateUniquePtr(
+                        indx, spaceDimension, vertices, it->second.get()));
             }
         }
         /// Keep looking for additional segments
@@ -812,7 +813,7 @@ void MeshGraphIOXmlCompressed::v_ReadElements2D()
                 {
                     m_meshGraph->AddGeom(
                         indx, ObjPoolManager<TriGeom>::AllocateUniquePtr(
-                                  indx, edges, it->second));
+                                  indx, edges, it->second.get()));
                 }
             }
         }
@@ -846,7 +847,7 @@ void MeshGraphIOXmlCompressed::v_ReadElements2D()
                 {
                     m_meshGraph->AddGeom(
                         indx, ObjPoolManager<QuadGeom>::AllocateUniquePtr(
-                                  indx, edges, it->second));
+                                  indx, edges, it->second.get()));
                 }
             }
         }
@@ -1462,12 +1463,75 @@ void MeshGraphIOXmlCompressed::v_WriteTets(TiXmlElement *elmtTag,
     elmtTag->LinkEndChild(x);
 }
 
+void WriteCurvedEdge(CurveUniquePtr &curve, int key,
+                     std::vector<MeshCurvedInfo> &edgeInfo, int &edgeCnt,
+                     int &ptOffset, int &newIdx, MeshCurvedPts &curvedPts)
+{
+    MeshCurvedInfo cinfo;
+    cinfo.id       = edgeCnt++;
+    cinfo.entityid = key;
+    cinfo.npoints  = curve->m_points.size();
+    cinfo.ptype    = curve->m_ptype;
+    cinfo.ptid     = 0;
+    cinfo.ptoffset = ptOffset;
+
+    edgeInfo.push_back(cinfo);
+
+    for (int j = 0; j < curve->m_points.size(); j++)
+    {
+        MeshVertex v;
+        v.id = newIdx;
+        v.x  = curve->m_points[j]->x();
+        v.y  = curve->m_points[j]->y();
+        v.z  = curve->m_points[j]->z();
+        curvedPts.pts.push_back(v);
+        curvedPts.index.push_back(newIdx);
+        newIdx++;
+    }
+    ptOffset += cinfo.npoints;
+}
+void WriteCurvedFace(CurveUniquePtr &curve, int key,
+                     std::vector<MeshCurvedInfo> &faceInfo, int &faceCnt,
+                     int &ptOffset, int &newIdx, MeshCurvedPts &curvedPts)
+{
+    MeshCurvedInfo cinfo;
+    cinfo.id       = faceCnt++;
+    cinfo.entityid = key;
+    cinfo.npoints  = curve->m_points.size();
+    cinfo.ptype    = curve->m_ptype;
+    cinfo.ptid     = 0;
+    cinfo.ptoffset = ptOffset;
+
+    faceInfo.push_back(cinfo);
+
+    for (int j = 0; j < curve->m_points.size(); j++)
+    {
+        MeshVertex v;
+        v.id = newIdx;
+        v.x  = curve->m_points[j]->x();
+        v.y  = curve->m_points[j]->y();
+        v.z  = curve->m_points[j]->z();
+        curvedPts.pts.push_back(v);
+        curvedPts.index.push_back(newIdx);
+        newIdx++;
+    }
+    ptOffset += cinfo.npoints;
+}
 void MeshGraphIOXmlCompressed::v_WriteCurves(TiXmlElement *geomTag,
-                                             CurveMap &edges, CurveMap &faces)
+                                             CurveMap &edges, CurveMap &faces,
+                                             std::vector<int> *keysToWriteEdges,
+                                             std::vector<int> *keysToWriteFaces)
 {
     if (edges.size() == 0 && faces.size() == 0)
     {
         return;
+    }
+    else if (keysToWriteEdges != nullptr && keysToWriteFaces != nullptr)
+    {
+        if (keysToWriteEdges->size() == 0 && keysToWriteFaces->size() == 0)
+        {
+            return;
+        }
     }
 
     TiXmlElement *curveTag = new TiXmlElement("CURVED");
@@ -1481,56 +1545,38 @@ void MeshGraphIOXmlCompressed::v_WriteCurves(TiXmlElement *geomTag,
     int edgeCnt  = 0;
     int faceCnt  = 0;
 
-    for (auto &i : edges)
+    if (keysToWriteEdges == nullptr)
     {
-        MeshCurvedInfo cinfo;
-        cinfo.id       = edgeCnt++;
-        cinfo.entityid = i.first;
-        cinfo.npoints  = i.second->m_points.size();
-        cinfo.ptype    = i.second->m_ptype;
-        cinfo.ptid     = 0;
-        cinfo.ptoffset = ptOffset;
-
-        edgeInfo.push_back(cinfo);
-
-        for (int j = 0; j < i.second->m_points.size(); j++)
+        for (auto &i : edges)
         {
-            MeshVertex v;
-            v.id = newIdx;
-            v.x  = i.second->m_points[j]->x();
-            v.y  = i.second->m_points[j]->y();
-            v.z  = i.second->m_points[j]->z();
-            curvedPts.pts.push_back(v);
-            curvedPts.index.push_back(newIdx);
-            newIdx++;
+            WriteCurvedEdge(i.second, i.first, edgeInfo, edgeCnt, ptOffset,
+                            newIdx, curvedPts);
         }
-        ptOffset += cinfo.npoints;
+    }
+    else
+    {
+        for (int key : *keysToWriteEdges)
+        {
+            WriteCurvedEdge(edges[key], key, edgeInfo, edgeCnt, ptOffset,
+                            newIdx, curvedPts);
+        }
     }
 
-    for (auto &i : faces)
+    if (keysToWriteFaces == nullptr)
     {
-        MeshCurvedInfo cinfo;
-        cinfo.id       = faceCnt++;
-        cinfo.entityid = i.first;
-        cinfo.npoints  = i.second->m_points.size();
-        cinfo.ptype    = i.second->m_ptype;
-        cinfo.ptid     = 0;
-        cinfo.ptoffset = ptOffset;
-
-        faceInfo.push_back(cinfo);
-
-        for (int j = 0; j < i.second->m_points.size(); j++)
+        for (auto &i : faces)
         {
-            MeshVertex v;
-            v.id = newIdx;
-            v.x  = i.second->m_points[j]->x();
-            v.y  = i.second->m_points[j]->y();
-            v.z  = i.second->m_points[j]->z();
-            curvedPts.pts.push_back(v);
-            curvedPts.index.push_back(newIdx);
-            newIdx++;
+            WriteCurvedFace(i.second, i.first, faceInfo, faceCnt, ptOffset,
+                            newIdx, curvedPts);
         }
-        ptOffset += cinfo.npoints;
+    }
+    else
+    {
+        for (int key : *keysToWriteFaces)
+        {
+            WriteCurvedFace(faces[key], key, faceInfo, faceCnt, ptOffset,
+                            newIdx, curvedPts);
+        }
     }
 
     curveTag->SetAttribute("COMPRESSED",

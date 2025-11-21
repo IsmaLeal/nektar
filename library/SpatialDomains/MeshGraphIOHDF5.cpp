@@ -820,14 +820,14 @@ void MeshGraphIOHDF5::v_PartitionMesh(
 template <class T, typename DataType>
 void MeshGraphIOHDF5::ConstructGeomObject(
     [[maybe_unused]] GeomMapView<T> &geomMap, [[maybe_unused]] int id,
-    [[maybe_unused]] DataType *data, [[maybe_unused]] CurveSharedPtr curve)
+    [[maybe_unused]] DataType *data, [[maybe_unused]] Curve *curve)
 {
 }
 
 template <>
 void MeshGraphIOHDF5::ConstructGeomObject(
     [[maybe_unused]] GeomMapView<PointGeom> &geomMap, int id, NekDouble *data,
-    [[maybe_unused]] CurveSharedPtr curve)
+    [[maybe_unused]] Curve *curve)
 {
     m_meshGraph->CreatePointGeom(m_meshGraph->GetSpaceDimension(), id, data[0],
                                  data[1], data[2]);
@@ -836,7 +836,7 @@ void MeshGraphIOHDF5::ConstructGeomObject(
 template <>
 void MeshGraphIOHDF5::ConstructGeomObject(
     [[maybe_unused]] GeomMapView<SegGeom> &geomMap, int id, int *data,
-    CurveSharedPtr curve)
+    Curve *curve)
 {
     std::array<PointGeom *, 2> pts = {m_meshGraph->GetPointGeom(data[0]),
                                       m_meshGraph->GetPointGeom(data[1])};
@@ -848,7 +848,7 @@ void MeshGraphIOHDF5::ConstructGeomObject(
 template <>
 void MeshGraphIOHDF5::ConstructGeomObject(
     [[maybe_unused]] GeomMapView<TriGeom> &geomMap, int id, int *data,
-    CurveSharedPtr curve)
+    Curve *curve)
 {
     std::array<SegGeom *, 3> segs = {m_meshGraph->GetSegGeom(data[0]),
                                      m_meshGraph->GetSegGeom(data[1]),
@@ -859,7 +859,7 @@ void MeshGraphIOHDF5::ConstructGeomObject(
 template <>
 void MeshGraphIOHDF5::ConstructGeomObject(
     [[maybe_unused]] GeomMapView<QuadGeom> &geomMap, int id, int *data,
-    CurveSharedPtr curve)
+    Curve *curve)
 {
     std::array<SegGeom *, 4> segs = {
         m_meshGraph->GetSegGeom(data[0]), m_meshGraph->GetSegGeom(data[1]),
@@ -870,7 +870,7 @@ void MeshGraphIOHDF5::ConstructGeomObject(
 template <>
 void MeshGraphIOHDF5::ConstructGeomObject(
     [[maybe_unused]] GeomMapView<TetGeom> &geomMap, int id, int *data,
-    [[maybe_unused]] CurveSharedPtr curve)
+    [[maybe_unused]] Curve *curve)
 {
     std::array<TriGeom *, 4> faces = {
         m_meshGraph->GetTriGeom(data[0]), m_meshGraph->GetTriGeom(data[1]),
@@ -883,7 +883,7 @@ void MeshGraphIOHDF5::ConstructGeomObject(
 template <>
 void MeshGraphIOHDF5::ConstructGeomObject(
     [[maybe_unused]] GeomMapView<PyrGeom> &geomMap, int id, int *data,
-    [[maybe_unused]] CurveSharedPtr curve)
+    [[maybe_unused]] Curve *curve)
 {
     std::array<Geometry2D *, 5> faces = {m_meshGraph->GetGeometry2D(data[0]),
                                          m_meshGraph->GetGeometry2D(data[1]),
@@ -898,7 +898,7 @@ void MeshGraphIOHDF5::ConstructGeomObject(
 template <>
 void MeshGraphIOHDF5::ConstructGeomObject(
     [[maybe_unused]] GeomMapView<PrismGeom> &geomMap, int id, int *data,
-    [[maybe_unused]] CurveSharedPtr curve)
+    [[maybe_unused]] Curve *curve)
 {
     std::array<Geometry2D *, 5> faces = {m_meshGraph->GetGeometry2D(data[0]),
                                          m_meshGraph->GetGeometry2D(data[1]),
@@ -913,7 +913,7 @@ void MeshGraphIOHDF5::ConstructGeomObject(
 template <>
 void MeshGraphIOHDF5::ConstructGeomObject(
     [[maybe_unused]] GeomMapView<HexGeom> &geomMap, int id, int *data,
-    [[maybe_unused]] CurveSharedPtr curve)
+    [[maybe_unused]] Curve *curve)
 {
     std::array<QuadGeom *, 6> faces = {
         m_meshGraph->GetQuadGeom(data[0]), m_meshGraph->GetQuadGeom(data[1]),
@@ -932,7 +932,7 @@ void MeshGraphIOHDF5::FillGeomMap(GeomMapView<T> &geomMap,
 {
     const int nGeomData = GetGeomDataDim(geomMap);
     const int nRows     = geomData.size() / nGeomData;
-    CurveSharedPtr empty;
+    Curve *empty        = nullptr;
 
     // Construct geometry object.
     if (curveMap.size() > 0)
@@ -941,7 +941,8 @@ void MeshGraphIOHDF5::FillGeomMap(GeomMapView<T> &geomMap,
         {
             auto cIt = curveMap.find(ids[i]);
             ConstructGeomObject(geomMap, ids[i], &geomData[cnt],
-                                cIt == curveMap.end() ? empty : cIt->second);
+                                cIt == curveMap.end() ? empty
+                                                      : cIt->second.get());
         }
     }
     else
@@ -1075,7 +1076,7 @@ void MeshGraphIOHDF5::ReadCurveMap(CurveMap &curveMap, std::string dsName,
     // Construct curves. We'll populate nodes in a minute!
     for (int i = 0, cnt = 0, cnt2 = 0; i < curveInfo.size() / 3; ++i, cnt += 3)
     {
-        CurveSharedPtr curve = MemoryManager<Curve>::AllocateSharedPtr(
+        CurveUniquePtr curve = ObjPoolManager<Curve>::AllocateUniquePtr(
             newIds[i], (LibUtilities::PointsType)curveInfo[cnt + 1]);
 
         curve->m_points.resize(curveInfo[cnt]);
@@ -1099,7 +1100,7 @@ void MeshGraphIOHDF5::ReadCurveMap(CurveMap &curveMap, std::string dsName,
         curvePtOffset[newIds[i]] = 3 * cnt2;
         cnt2 += curveInfo[cnt];
 
-        curveMap[newIds[i]] = curve;
+        curveMap[newIds[i]] = std::move(curve);
     }
 
     curveInfo.clear();
@@ -1117,7 +1118,7 @@ void MeshGraphIOHDF5::ReadCurveMap(CurveMap &curveMap, std::string dsName,
     // Go back and populate data from nodes.
     for (auto &cIt : curvePtOffset)
     {
-        CurveSharedPtr curve = curveMap[cIt.first];
+        Curve *curve = curveMap[cIt.first].get();
 
         // Create nodes.
         int cnt = cIt.second;

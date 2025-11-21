@@ -223,14 +223,12 @@ Array<OneD, NekDouble> ProcessCFL::GetMaxStdVelocity(
 
         Array<TwoD, const NekDouble> gmat = m_f->m_exp[strip * nfields + 0]
                                                 ->GetExp(el)
-                                                ->GetGeom()
-                                                ->GetMetricInfo()
-                                                ->GetDerivFactors(ptsKeys);
+                                                ->GetGeomFactors()
+                                                ->GetDerivFactors();
 
         if (m_f->m_exp[strip * nfields + 0]
                 ->GetExp(el)
-                ->GetGeom()
-                ->GetMetricInfo()
+                ->GetGeomFactors()
                 ->GetGtype() == SpatialDomains::eDeformed)
         {
             for (int j = 0; j < nvel; ++j)

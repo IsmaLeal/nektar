@@ -45,11 +45,21 @@
 #include <array>
 #include <unordered_map>
 
+namespace Nektar
+{
+// Forward declarations for allocation pools that are defined within
+// MeshGraph.cpp compilation unit.
+template <>
+PoolAllocator<SpatialDomains::GeomFactors>
+    ObjPoolManager<SpatialDomains::GeomFactors>::m_alloc;
+} // namespace Nektar
+
 namespace Nektar::SpatialDomains
 {
 
 class Geometry; // Forward declaration for typedef.
 typedef unique_ptr_objpool<Geometry> GeometryUniquePtr;
+typedef unique_ptr_objpool<GeomFactors> GeomFactorsUniquePtr;
 
 class Geometry1D;
 class Geometry2D;
@@ -57,9 +67,9 @@ class Geometry2D;
 class PointGeom;
 
 struct Curve;
-typedef std::shared_ptr<Curve> CurveSharedPtr;
-typedef std::unordered_map<int, CurveSharedPtr> CurveMap;
-static CurveMap NullCurveMap;
+typedef unique_ptr_objpool<Curve> CurveUniquePtr;
+typedef std::map<int, CurveUniquePtr> CurveMap;
+// static CurveMap NullCurveMap;
 
 /// \brief Less than operator to sort Geometry objects by global id when sorting
 /// STL containers.
@@ -83,11 +93,8 @@ public:
 
     SPATIAL_DOMAINS_EXPORT inline int GetCoordim() const;
     SPATIAL_DOMAINS_EXPORT inline void SetCoordim(int coordim);
-
-    SPATIAL_DOMAINS_EXPORT inline GeomFactorsSharedPtr GetGeomFactors();
-    SPATIAL_DOMAINS_EXPORT GeomFactorsSharedPtr GetRefGeomFactors(
-        const Array<OneD, const LibUtilities::BasisSharedPtr> &tbasis);
-    SPATIAL_DOMAINS_EXPORT inline GeomFactorsSharedPtr GetMetricInfo();
+    SPATIAL_DOMAINS_EXPORT GeomFactorsUniquePtr
+    GenGeomFactors(LibUtilities::PointsKeyVector &keyTgt);
     SPATIAL_DOMAINS_EXPORT LibUtilities::ShapeType GetShapeType(void);
 
     //---------------------------------------
@@ -163,6 +170,7 @@ public:
                                                               int j) const;
     SPATIAL_DOMAINS_EXPORT inline int GetDir(const int i,
                                              const int j = 0) const;
+    SPATIAL_DOMAINS_EXPORT inline GeomType CalcGeomType();
 
     SPATIAL_DOMAINS_EXPORT inline void Reset(CurveMap &curvedEdges,
                                              CurveMap &curvedFaces);
@@ -171,34 +179,21 @@ public:
 
     SPATIAL_DOMAINS_EXPORT inline void Setup();
 
-    /// Handles generation of geometry factors.
-    void GenGeomFactors();
-
 protected:
-    SPATIAL_DOMAINS_EXPORT static GeomFactorsSharedPtr ValidateRegGeomFactor(
-        GeomFactorsSharedPtr geomFactor);
-    static GeomFactorsVector m_regGeomFactorsManager;
-
     /// Coordinate dimension of this geometry object.
     int m_coordim;
-    /// Geometric factors.
-    GeomFactorsSharedPtr m_geomFactors;
-    /// State of the geometric factors
-    GeomState m_geomFactorsState;
     /// \f$\chi\f$ mapping containing isoparametric transformation.
     StdRegions::StdExpansionSharedPtr m_xmap;
     /// Enumeration to dictate whether coefficients are filled.
     GeomState m_state;
     /// Wether or not the setup routines have been run
     bool m_setupState;
-    /// Type of geometry.
-    GeomType m_geomType;
     /// Type of shape.
     LibUtilities::ShapeType m_shapeType;
     /// Global ID
     int m_globalID;
     /// Array containing expansion coefficients of @p m_xmap
-    Array<OneD, Array<OneD, NekDouble>> m_coeffs;
+    std::vector<Array<OneD, NekDouble>> m_coeffs;
     /// Array containing bounding box
     Array<OneD, NekDouble> m_boundingBox;
     Array<OneD, Array<OneD, NekDouble>> m_isoParameter;
@@ -219,6 +214,8 @@ protected:
     virtual int v_GetNumFaces() const;
     virtual int v_GetShapeDim() const;
 
+    virtual GeomFactorsUniquePtr v_GenGeomFactors(
+        LibUtilities::PointsKeyVector &keyTgt);
     virtual StdRegions::StdExpansionSharedPtr v_GetXmap() const;
     virtual void v_FillGeom();
 
@@ -240,9 +237,10 @@ protected:
     virtual int v_GetEdgeNormalToFaceVert(const int i, const int j) const;
     virtual int v_GetDir(const int faceidx, const int facedir) const;
 
+    virtual GeomType v_CalcGeomType();
     virtual void v_Reset(CurveMap &curvedEdges, CurveMap &curvedFaces);
+
     virtual void v_Setup();
-    virtual void v_GenGeomFactors() = 0;
 
     inline void SetUpCoeffs(const int nCoeffs);
     virtual void v_CalculateInverseIsoParam();
@@ -291,29 +289,23 @@ inline void Geometry::SetCoordim(int dim)
 }
 
 /**
- * @brief Get the geometric factors for this object, generating them if
- * required.
- */
-inline GeomFactorsSharedPtr Geometry::GetGeomFactors()
-{
-    GenGeomFactors();
-    return ValidateRegGeomFactor(m_geomFactors);
-}
-
-/**
- * @brief Get the geometric factors for this object.
- */
-inline GeomFactorsSharedPtr Geometry::GetMetricInfo()
-{
-    return m_geomFactors;
-}
-
-/**
  * @brief Get the geometric shape type of this object.
  */
 inline LibUtilities::ShapeType Geometry::GetShapeType()
 {
     return m_shapeType;
+}
+
+/**
+ * A geometric shape is considered regular if it has constant geometric
+ * information, and deformed if this information changes throughout the
+ * shape.
+ * @returns             The type of geometry.
+ * @see GeomType
+ */
+inline GeomType Geometry::CalcGeomType()
+{
+    return v_CalcGeomType();
 }
 
 /**
@@ -430,6 +422,15 @@ inline int Geometry::GetNumFaces() const
 inline int Geometry::GetShapeDim() const
 {
     return v_GetShapeDim();
+}
+
+/**
+ * @brief Used by Expansion to generate associated GeomFactors.
+ */
+inline GeomFactorsUniquePtr Geometry::GenGeomFactors(
+    LibUtilities::PointsKeyVector &keyTgt)
+{
+    return v_GenGeomFactors(keyTgt);
 }
 
 /**
@@ -688,22 +689,11 @@ inline void Geometry::Setup()
 }
 
 /**
- * @brief Generate the geometric factors (i.e. derivatives of \f$\chi\f$) and
- * related metrics.
- *
- * @see SpatialDomains::GeomFactors
- */
-inline void Geometry::GenGeomFactors()
-{
-    return v_GenGeomFactors();
-}
-
-/**
  * @brief Initialise the Geometry::m_coeffs array.
  */
 inline void Geometry::SetUpCoeffs(const int nCoeffs)
 {
-    m_coeffs = Array<OneD, Array<OneD, NekDouble>>(m_coordim);
+    m_coeffs = std::vector<Array<OneD, NekDouble>>(m_coordim);
 
     for (int i = 0; i < m_coordim; ++i)
     {

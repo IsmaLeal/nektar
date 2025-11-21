@@ -293,8 +293,8 @@ SpatialDomains::Geometry2D *Face::GetGeom(int coordDim,
             std::array<SpatialDomains::SegGeom *, 3> tedge = {
                 edges[0], edges[1], edges[2]};
 
-            SpatialDomains::CurveSharedPtr c =
-                MemoryManager<SpatialDomains::Curve>::AllocateSharedPtr(
+            SpatialDomains::CurveUniquePtr c =
+                ObjPoolManager<SpatialDomains::Curve>::AllocateUniquePtr(
                     m_id, m_curveType);
 
             for (int j = 0; j < m_vertexList.size(); j++)
@@ -328,14 +328,15 @@ SpatialDomains::Geometry2D *Face::GetGeom(int coordDim,
 
             auto tri =
                 ObjPoolManager<SpatialDomains::TriGeom>::AllocateUniquePtr(
-                    m_id, tedge, c);
+                    m_id, tedge, c.get());
             ret = tri.get();
             holder.m_triVec.push_back(std::move(tri));
+            holder.m_curveVec.push_back(std::move(c));
         }
         else
         {
-            SpatialDomains::CurveSharedPtr c =
-                MemoryManager<SpatialDomains::Curve>::AllocateSharedPtr(
+            SpatialDomains::CurveUniquePtr c =
+                ObjPoolManager<SpatialDomains::Curve>::AllocateUniquePtr(
                     m_id, m_curveType);
 
             ASSERTL0(m_vertexList.size() == 4,
@@ -394,9 +395,10 @@ SpatialDomains::Geometry2D *Face::GetGeom(int coordDim,
 
             auto quad =
                 ObjPoolManager<SpatialDomains::QuadGeom>::AllocateUniquePtr(
-                    m_id, edges, c);
+                    m_id, edges, c.get());
             ret = quad.get();
             holder.m_quadVec.push_back(std::move(quad));
+            holder.m_curveVec.push_back(std::move(c));
         }
     }
     else

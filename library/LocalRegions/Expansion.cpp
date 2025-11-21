@@ -44,19 +44,20 @@ Expansion::Expansion(SpatialDomains::Geometry *pGeom)
     : m_indexMapManager(
           std::bind(&Expansion::CreateIndexMap, this, std::placeholders::_1),
           std::string("ExpansionIndexMap")),
-      m_geom(pGeom), m_metricinfo(m_geom->GetGeomFactors()),
-      m_elementTraceLeft(-1), m_elementTraceRight(-1)
+      m_geom(pGeom), m_elementTraceLeft(-1), m_elementTraceRight(-1)
 {
-    if (!m_metricinfo)
+    GenGeomFactors();
+
+    if (!m_geomFactors)
     {
         return;
     }
 
-    if (!m_metricinfo->IsValid())
+    if (!m_geomFactors->IsValid())
     {
         int nDim    = m_base.size();
         string type = "regular";
-        if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+        if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
         {
             type = "deformed";
         }
@@ -73,8 +74,11 @@ Expansion::Expansion(SpatialDomains::Geometry *pGeom)
 
 Expansion::Expansion(const Expansion &pSrc)
     : StdExpansion(pSrc), m_indexMapManager(pSrc.m_indexMapManager),
-      m_geom(pSrc.m_geom), m_metricinfo(pSrc.m_metricinfo)
+      m_geom(pSrc.m_geom)
 {
+    m_geomFactors =
+        ObjPoolManager<SpatialDomains::GeomFactors>::AllocateUniquePtr(
+            *(pSrc.m_geomFactors));
 }
 
 Expansion::~Expansion()
@@ -175,7 +179,7 @@ void Expansion::Reset()
     m_metrics.clear();
 
     // Regenerate geometry factors
-    m_metricinfo = m_geom->GetGeomFactors();
+    GenGeomFactors();
 }
 
 IndexMapValuesSharedPtr Expansion::CreateIndexMap(const IndexMapKey &ikey)
@@ -243,11 +247,6 @@ IndexMapValuesSharedPtr Expansion::CreateIndexMap(const IndexMapKey &ikey)
     return returnval;
 }
 
-const SpatialDomains::GeomFactorsSharedPtr &Expansion::GetMetricInfo() const
-{
-    return m_metricinfo;
-}
-
 const NormalVector &Expansion::GetTraceNormal(const int id)
 {
     std::map<int, NormalVector>::const_iterator x;
@@ -273,7 +272,7 @@ DNekScalBlkMatSharedPtr Expansion::CreateStaticCondMatrix(const MatrixKey &mkey)
 {
     DNekScalBlkMatSharedPtr returnval;
 
-    ASSERTL2(m_metricinfo->GetGtype() != SpatialDomains::eNoGeomType,
+    ASSERTL2(m_geomFactors->GetGtype() != SpatialDomains::eNoGeomType,
              "Geometric information is not set up");
 
     // set up block matrix system
@@ -291,7 +290,7 @@ DNekScalBlkMatSharedPtr Expansion::CreateStaticCondMatrix(const MatrixKey &mkey)
         // this can only use stdregions statically condensed system
         // for mass matrix
         case StdRegions::eMass:
-            if ((m_metricinfo->GetGtype() == SpatialDomains::eDeformed) ||
+            if ((m_geomFactors->GetGtype() == SpatialDomains::eDeformed) ||
                 (mkey.GetNVarCoeff()))
             {
                 factor = 1.0;
@@ -299,7 +298,7 @@ DNekScalBlkMatSharedPtr Expansion::CreateStaticCondMatrix(const MatrixKey &mkey)
             }
             else
             {
-                factor = (m_metricinfo->GetJac(GetPointsKeys()))[0];
+                factor = (m_geomFactors->GetJac())[0];
                 goto UseStdRegionsMatrix;
             }
             break;
@@ -465,18 +464,17 @@ void Expansion::ComputeLaplacianMetric()
 
 void Expansion::ComputeQuadratureMetric()
 {
-    unsigned int nqtot              = GetTotPoints();
-    SpatialDomains::GeomType type   = m_metricinfo->GetGtype();
-    LibUtilities::PointsKeyVector p = GetPointsKeys();
+    unsigned int nqtot            = GetTotPoints();
+    SpatialDomains::GeomType type = m_geomFactors->GetGtype();
     if (type == SpatialDomains::eRegular ||
         type == SpatialDomains::eMovingRegular)
     {
         m_metrics[eMetricQuadrature] =
-            Array<OneD, NekDouble>(nqtot, m_metricinfo->GetJac(p)[0]);
+            Array<OneD, NekDouble>(nqtot, m_geomFactors->GetJac()[0]);
     }
     else
     {
-        m_metrics[eMetricQuadrature] = m_metricinfo->GetJac(p);
+        m_metrics[eMetricQuadrature] = m_geomFactors->GetJac();
     }
 
     v_MultiplyByStdQuadratureMetric(m_metrics[eMetricQuadrature],
@@ -698,7 +696,7 @@ void Expansion::ComputeGmatcdotMF(const Array<TwoD, const NekDouble> &df,
         dfdir[j] = Array<OneD, NekDouble>(nqtot, 0.0);
         for (int k = 0; k < coordim; k++)
         {
-            if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+            if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
             {
                 Vmath::Vvtvp(nqtot, &df[shapedim * k + j][0], 1,
                              &direction[k * nqtot], 1, &dfdir[j][0], 1,

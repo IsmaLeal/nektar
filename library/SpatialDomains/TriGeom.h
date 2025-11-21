@@ -60,9 +60,9 @@ public:
 
     SPATIAL_DOMAINS_EXPORT TriGeom();
     SPATIAL_DOMAINS_EXPORT TriGeom(const TriGeom &in);
-    SPATIAL_DOMAINS_EXPORT TriGeom(
-        const int id, std::array<SegGeom *, kNedges> edges,
-        const CurveSharedPtr curve = CurveSharedPtr());
+    SPATIAL_DOMAINS_EXPORT TriGeom(const int id,
+                                   std::array<SegGeom *, kNedges> edges,
+                                   Curve *curve = nullptr);
     SPATIAL_DOMAINS_EXPORT ~TriGeom() override = default;
 
     /// Get the orientation of face1.
@@ -78,12 +78,15 @@ public:
 protected:
     SPATIAL_DOMAINS_EXPORT NekDouble v_GetCoord(
         const int i, const Array<OneD, const NekDouble> &Lcoord) override;
-    SPATIAL_DOMAINS_EXPORT void v_GenGeomFactors() override;
+    GeomType v_CalcGeomType() override;
+    GeomFactorsUniquePtr v_GenGeomFactors(
+        LibUtilities::PointsKeyVector &keyTgt) override;
     SPATIAL_DOMAINS_EXPORT void v_FillGeom() override;
     SPATIAL_DOMAINS_EXPORT int v_GetDir(const int faceidx,
                                         const int facedir) const override;
     SPATIAL_DOMAINS_EXPORT void v_Reset(CurveMap &curvedEdges,
                                         CurveMap &curvedFaces) override;
+
     SPATIAL_DOMAINS_EXPORT void v_Setup() override;
 
     int v_AllLeftCheck(const Array<OneD, const NekDouble> &gloCoord) override;

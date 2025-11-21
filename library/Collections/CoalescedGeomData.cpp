@@ -64,7 +64,7 @@ const Array<OneD, const NekDouble> &CoalescedGeomData::GetJac(
                     dynamic_cast<const LocalRegions::Expansion *>(sep);
 
                 const Array<OneD, const NekDouble> jac =
-                    lep->GetMetricInfo()->GetJac(ptsKeys);
+                    lep->GetGeomFactors()->GetJac();
 
                 Vmath::Vcopy(npts, &jac[0], 1, &newjac[cnt], 1);
 
@@ -84,7 +84,7 @@ const Array<OneD, const NekDouble> &CoalescedGeomData::GetJac(
                     dynamic_cast<const LocalRegions::Expansion *>(sep);
 
                 const Array<OneD, const NekDouble> jac =
-                    lep->GetMetricInfo()->GetJac(ptsKeys);
+                    lep->GetGeomFactors()->GetJac();
 
                 newjac[i] = jac[0];
             }
@@ -191,9 +191,9 @@ const Array<OneD, const NekDouble> &CoalescedGeomData::GetJacWithStdWeights(
                 dynamic_cast<const LocalRegions::Expansion *>(sep);
 
             const Array<OneD, const NekDouble> jac =
-                lep->GetMetricInfo()->GetJac(ptsKeys);
+                lep->GetGeomFactors()->GetJac();
 
-            if (lep->GetMetricInfo()->GetGtype() == SpatialDomains::eDeformed)
+            if (lep->GetGeomFactors()->GetGtype() == SpatialDomains::eDeformed)
             {
                 Vmath::Vcopy(npts, &jac[0], 1, &newjac[cnt], 1);
             }
@@ -246,7 +246,7 @@ const Array<TwoD, const NekDouble> &CoalescedGeomData::GetDerivFactors(
                 dynamic_cast<const LocalRegions::Expansion *>(sep);
 
             const Array<TwoD, const NekDouble> Dfac =
-                lep->GetMetricInfo()->GetDerivFactors(ptsKeys);
+                lep->GetGeomFactors()->GetDerivFactors();
 
             if (IsDeformed(pCollExp))
             {
@@ -362,7 +362,7 @@ bool CoalescedGeomData::IsDeformed(
     const StdRegions::StdExpansion *sep = &(*pCollExp[0]);
     const LocalRegions::Expansion *lep =
         dynamic_cast<const LocalRegions::Expansion *>(sep);
-    return lep->GetMetricInfo()->GetGtype() == SpatialDomains::eDeformed;
+    return lep->GetGeomFactors()->GetGtype() == SpatialDomains::eDeformed;
 }
 
 } // namespace Nektar::Collections

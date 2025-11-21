@@ -50,18 +50,21 @@ class Geometry2D : public Geometry
 {
 public:
     SPATIAL_DOMAINS_EXPORT Geometry2D();
-    SPATIAL_DOMAINS_EXPORT Geometry2D(const int coordim, CurveSharedPtr curve);
+    SPATIAL_DOMAINS_EXPORT Geometry2D(const int coordim, Curve *curve);
     SPATIAL_DOMAINS_EXPORT ~Geometry2D() override = default;
 
     SPATIAL_DOMAINS_EXPORT static const int kDim = 2;
-
-    SPATIAL_DOMAINS_EXPORT CurveSharedPtr GetCurve()
+    SPATIAL_DOMAINS_EXPORT Curve *GetCurve()
     {
         return m_curve;
     }
+    SPATIAL_DOMAINS_EXPORT void SetCurve(Curve *curvePtr)
+    {
+        m_curve = curvePtr;
+    }
 
 protected:
-    CurveSharedPtr m_curve;
+    Curve *m_curve;
     Array<OneD, int> m_manifold;
     Array<OneD, Array<OneD, NekDouble>> m_edgeNormal;
 

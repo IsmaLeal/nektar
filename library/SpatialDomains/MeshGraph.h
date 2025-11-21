@@ -83,6 +83,12 @@ PoolAllocator<SpatialDomains::PrismGeom>
 template <>
 PoolAllocator<SpatialDomains::HexGeom>
     ObjPoolManager<SpatialDomains::HexGeom>::m_alloc;
+template <>
+PoolAllocator<SpatialDomains::GeomFactors>
+    ObjPoolManager<SpatialDomains::GeomFactors>::m_alloc;
+template <>
+PoolAllocator<SpatialDomains::Curve>
+    ObjPoolManager<SpatialDomains::Curve>::m_alloc;
 
 namespace SpatialDomains
 {
@@ -104,6 +110,8 @@ typedef unique_ptr_objpool<PrismGeom> PrismGeomUniquePtr;
 typedef unique_ptr_objpool<HexGeom> HexGeomUniquePtr;
 typedef unique_ptr_objpool<Geometry2D> Geometry2DUniquePtr;
 typedef unique_ptr_objpool<Geometry3D> Geometry3DUniquePtr;
+typedef unique_ptr_objpool<GeomFactors> GeomFactorsUniquePtr;
+typedef unique_ptr_objpool<Curve> CurveUniquePtr;
 
 // Minimal owner of Geom objects not owned by a MeshGraph.
 class EntityHolder
@@ -117,6 +125,7 @@ public:
     std::vector<PyrGeomUniquePtr> m_pyrVec;
     std::vector<PrismGeomUniquePtr> m_prismVec;
     std::vector<HexGeomUniquePtr> m_hexVec;
+    std::vector<CurveUniquePtr> m_curveVec;
 };
 
 // Composite type def
@@ -609,7 +618,7 @@ public:
 
     SPATIAL_DOMAINS_EXPORT SegGeom *CreateSegGeom(
         int id, int coordim, std::array<PointGeom *, SegGeom::kNverts> vertex,
-        const CurveSharedPtr curve = CurveSharedPtr())
+        Curve *curve = nullptr)
     {
         auto geom = ObjPoolManager<SegGeom>::AllocateUniquePtr(id, coordim,
                                                                vertex, curve);
@@ -620,7 +629,7 @@ public:
 
     SPATIAL_DOMAINS_EXPORT QuadGeom *CreateQuadGeom(
         int id, std::array<SegGeom *, QuadGeom::kNedges> edges,
-        const CurveSharedPtr curve = CurveSharedPtr())
+        Curve *curve = nullptr)
     {
         auto geom =
             ObjPoolManager<QuadGeom>::AllocateUniquePtr(id, edges, curve);
@@ -631,7 +640,7 @@ public:
 
     SPATIAL_DOMAINS_EXPORT TriGeom *CreateTriGeom(
         int id, std::array<SegGeom *, TriGeom::kNedges> edges,
-        const CurveSharedPtr curve = CurveSharedPtr())
+        Curve *curve = nullptr)
     {
         auto geom =
             ObjPoolManager<TriGeom>::AllocateUniquePtr(id, edges, curve);

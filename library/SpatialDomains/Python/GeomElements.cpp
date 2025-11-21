@@ -36,6 +36,7 @@
 #include <SpatialDomains/Python/SpatialDomains.h>
 
 #include <SpatialDomains/HexGeom.h>
+#include <SpatialDomains/MeshGraph.h>
 #include <SpatialDomains/PointGeom.h>
 #include <SpatialDomains/PrismGeom.h>
 #include <SpatialDomains/PyrGeom.h>
@@ -69,7 +70,7 @@ unique_ptr_objpool<T> Geometry_Init(int id, py::list &facets)
 
 template <class T, class S>
 unique_ptr_objpool<T> Geometry_Init_Curved(int id, py::list &facets,
-                                           CurveSharedPtr curve)
+                                           Curve *curve)
 {
     std::array<S *, T::kNfacets> geomArr;
 
@@ -103,7 +104,7 @@ template <class T, class S> void export_Geom_3d(py::module &m, const char *name)
 }
 
 unique_ptr_objpool<SegGeom> SegGeom_Init(int id, int coordim, py::list &points,
-                                         CurveSharedPtr curve)
+                                         Curve *curve)
 {
     std::array<PointGeom *, 2> geomArr;
 
@@ -157,9 +158,9 @@ void export_GeomElements(py::module &m)
     // Segment geometries
     py::classh<SegGeom, Geometry>(m, "SegGeom")
         .def(py::init<>(&SegGeom_Init), py::arg("id"), py::arg("coordim"),
-             py::arg("points") = py::list(),
-             py::arg("curve")  = CurveSharedPtr())
-        .def("GetCurve", &SegGeom::GetCurve);
+             py::arg("points") = py::list(), py::arg("curve") = nullptr)
+        .def("GetCurve", &SegGeom::GetCurve,
+             py::return_value_policy::reference);
 
     export_Geom_2d<TriGeom, SegGeom>(m, "TriGeom");
     export_Geom_2d<QuadGeom, SegGeom>(m, "QuadGeom");

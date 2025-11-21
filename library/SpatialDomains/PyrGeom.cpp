@@ -75,68 +75,67 @@ PyrGeom::PyrGeom(int id, std::array<Geometry2D *, kNfaces> faces)
     SetUpFaceOrientation();
 }
 
-void PyrGeom::v_GenGeomFactors()
+GeomType PyrGeom::v_CalcGeomType()
 {
     if (!m_setupState)
     {
-        PyrGeom::v_Setup();
+        v_Setup();
+    }
+    v_FillGeom();
+
+    GeomType Gtype = eRegular;
+
+    // check to see if expansions are linear
+    if (m_xmap->GetBasisNumModes(0) != 2 || m_xmap->GetBasisNumModes(1) != 2 ||
+        m_xmap->GetBasisNumModes(2) != 2)
+    {
+        Gtype = eDeformed;
     }
 
-    if (m_geomFactorsState != ePtsFilled)
+    // check to see if all quadrilateral faces are parallelograms
+    if (Gtype == eRegular)
     {
-        GeomType Gtype = eRegular;
-
-        v_FillGeom();
-
-        // check to see if expansions are linear
-        m_straightEdge = 1;
-        if (m_xmap->GetBasisNumModes(0) != 2 ||
-            m_xmap->GetBasisNumModes(1) != 2 ||
-            m_xmap->GetBasisNumModes(2) != 2)
+        m_isoParameter = Array<OneD, Array<OneD, NekDouble>>(3);
+        for (int i = 0; i < 3; ++i)
         {
-            Gtype          = eDeformed;
-            m_straightEdge = 0;
-        }
+            m_isoParameter[i]    = Array<OneD, NekDouble>(5, 0.);
+            NekDouble A          = (*m_verts[0])(i);
+            NekDouble B          = (*m_verts[1])(i);
+            NekDouble C          = (*m_verts[2])(i);
+            NekDouble D          = (*m_verts[3])(i);
+            NekDouble E          = (*m_verts[4])(i);
+            m_isoParameter[i][0] = 0.25 * (-A + B + C + D + E + E);
 
-        // check to see if all quadrilateral faces are parallelograms
-        if (Gtype == eRegular)
-        {
-            m_isoParameter = Array<OneD, Array<OneD, NekDouble>>(3);
-            for (int i = 0; i < 3; ++i)
+            m_isoParameter[i][1] = 0.25 * (-A + B + C - D); // xi1
+            m_isoParameter[i][2] = 0.25 * (-A - B + C + D); // xi2
+            m_isoParameter[i][3] = 0.5 * (-A + E);          // xi3
+
+            m_isoParameter[i][4] = 0.25 * (A - B + C - D); // xi1*xi2
+            NekDouble tmp        = fabs(m_isoParameter[i][1]) +
+                            fabs(m_isoParameter[i][2]) +
+                            fabs(m_isoParameter[i][3]);
+            if (fabs(m_isoParameter[i][4]) > tmp * NekConstants::kNekZeroTol)
             {
-                m_isoParameter[i]    = Array<OneD, NekDouble>(5, 0.);
-                NekDouble A          = (*m_verts[0])(i);
-                NekDouble B          = (*m_verts[1])(i);
-                NekDouble C          = (*m_verts[2])(i);
-                NekDouble D          = (*m_verts[3])(i);
-                NekDouble E          = (*m_verts[4])(i);
-                m_isoParameter[i][0] = 0.25 * (-A + B + C + D + E + E);
-
-                m_isoParameter[i][1] = 0.25 * (-A + B + C - D); // xi1
-                m_isoParameter[i][2] = 0.25 * (-A - B + C + D); // xi2
-                m_isoParameter[i][3] = 0.5 * (-A + E);          // xi3
-
-                m_isoParameter[i][4] = 0.25 * (A - B + C - D); // xi1*xi2
-                NekDouble tmp        = fabs(m_isoParameter[i][1]) +
-                                fabs(m_isoParameter[i][2]) +
-                                fabs(m_isoParameter[i][3]);
-                if (fabs(m_isoParameter[i][4]) >
-                    tmp * NekConstants::kNekZeroTol)
-                {
-                    Gtype = eDeformed;
-                }
+                Gtype = eDeformed;
             }
         }
-
-        if (Gtype == eRegular)
-        {
-            v_CalculateInverseIsoParam();
-        }
-
-        m_geomFactors = MemoryManager<GeomFactors>::AllocateSharedPtr(
-            Gtype, m_coordim, m_xmap, m_coeffs);
-        m_geomFactorsState = ePtsFilled;
     }
+
+    if (Gtype == eRegular)
+    {
+        v_CalculateInverseIsoParam();
+    }
+
+    return Gtype;
+}
+
+GeomFactorsUniquePtr PyrGeom::v_GenGeomFactors(
+    LibUtilities::PointsKeyVector &keyTgt)
+{
+    GeomType Gtype = CalcGeomType();
+
+    return ObjPoolManager<GeomFactors>::AllocateUniquePtr(
+        Gtype, m_coordim, m_xmap, m_coeffs, keyTgt);
 }
 
 int PyrGeom::v_GetDir(const int faceidx, const int facedir) const
@@ -672,6 +671,16 @@ void PyrGeom::v_Setup()
         }
         SetUpXmap();
         SetUpCoeffs(m_xmap->GetNcoeffs());
+
+        // check to see if expansions are linear
+        m_straightEdge = 1;
+        if (m_xmap->GetBasisNumModes(0) != 2 ||
+            m_xmap->GetBasisNumModes(1) != 2 ||
+            m_xmap->GetBasisNumModes(2) != 2)
+        {
+            m_straightEdge = 0;
+        }
+
         m_setupState = true;
     }
 }

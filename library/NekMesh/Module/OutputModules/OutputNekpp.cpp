@@ -496,7 +496,7 @@ void OutputNekpp::TransferCurves(MeshGraphSharedPtr graph)
     {
         if (it->m_edgeNodes.size() > 0)
         {
-            CurveSharedPtr curve = MemoryManager<Curve>::AllocateSharedPtr(
+            CurveUniquePtr curve = ObjPoolManager<Curve>::AllocateUniquePtr(
                 it->m_id, it->m_curveType);
             vector<NodeSharedPtr> ns;
             it->GetCurvedNodes(ns);
@@ -510,7 +510,7 @@ void OutputNekpp::TransferCurves(MeshGraphSharedPtr graph)
                 curveNodes.push_back(std::move(vert));
             }
 
-            edges[it->m_id] = curve;
+            edges[it->m_id] = std::move(curve);
             edgecnt++;
         }
     }
@@ -524,7 +524,7 @@ void OutputNekpp::TransferCurves(MeshGraphSharedPtr graph)
             el->GetCurvedNodes(ns);
             if (ns.size() > 2)
             {
-                CurveSharedPtr curve = MemoryManager<Curve>::AllocateSharedPtr(
+                CurveUniquePtr curve = ObjPoolManager<Curve>::AllocateUniquePtr(
                     el->GetId(), el->GetCurveType());
 
                 for (int i = 0; i < ns.size(); i++)
@@ -537,7 +537,7 @@ void OutputNekpp::TransferCurves(MeshGraphSharedPtr graph)
                     curveNodes.push_back(std::move(vert));
                 }
 
-                edges[el->GetId()] = curve;
+                edges[el->GetId()] = std::move(curve);
                 edgecnt++;
             }
         }
@@ -551,7 +551,7 @@ void OutputNekpp::TransferCurves(MeshGraphSharedPtr graph)
     {
         if (it->m_faceNodes.size() > 0)
         {
-            CurveSharedPtr curve = MemoryManager<Curve>::AllocateSharedPtr(
+            CurveUniquePtr curve = ObjPoolManager<Curve>::AllocateUniquePtr(
                 it->m_id, it->m_curveType);
             vector<NodeSharedPtr> ns;
             it->GetCurvedNodes(ns);
@@ -565,7 +565,7 @@ void OutputNekpp::TransferCurves(MeshGraphSharedPtr graph)
                 curveNodes.push_back(std::move(vert));
             }
 
-            faces[it->m_id] = curve;
+            faces[it->m_id] = std::move(curve);
             facecnt++;
         }
     }
@@ -583,8 +583,8 @@ void OutputNekpp::TransferCurves(MeshGraphSharedPtr graph)
                 el->GetCurvedNodes(ns);
                 if (ns.size() > 4)
                 {
-                    CurveSharedPtr curve =
-                        MemoryManager<Curve>::AllocateSharedPtr(
+                    CurveUniquePtr curve =
+                        ObjPoolManager<Curve>::AllocateUniquePtr(
                             el->GetId(), el->GetCurveType());
 
                     for (int i = 0; i < ns.size(); i++)
@@ -597,7 +597,7 @@ void OutputNekpp::TransferCurves(MeshGraphSharedPtr graph)
                         curveNodes.push_back(std::move(vert));
                     }
 
-                    faces[el->GetId()] = curve;
+                    faces[el->GetId()] = std::move(curve);
                     facecnt++;
                 }
             }

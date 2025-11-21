@@ -190,7 +190,8 @@ BOOST_AUTO_TEST_CASE(TestHexBwdTrans_StdMat_VariableP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -267,7 +268,8 @@ BOOST_AUTO_TEST_CASE(TestHexBwdTrans_IterPerExp_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -337,7 +339,8 @@ BOOST_AUTO_TEST_CASE(TestHexBwdTrans_IterPerExp_VariableP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -412,7 +415,8 @@ BOOST_AUTO_TEST_CASE(TestHexBwdTrans_IterPerExp_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -496,7 +500,8 @@ BOOST_AUTO_TEST_CASE(TestHexBwdTrans_NoCollection_VariableP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -571,7 +576,8 @@ BOOST_AUTO_TEST_CASE(TestHexBwdTrans_SumFac_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -650,7 +656,8 @@ BOOST_AUTO_TEST_CASE(TestHexBwdTrans_SumFac_UniformP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -729,7 +736,8 @@ BOOST_AUTO_TEST_CASE(TestHexBwdTrans_SumFac_VariableP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -815,7 +823,8 @@ BOOST_AUTO_TEST_CASE(TestHexBwdTrans_SumFac_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -901,7 +910,8 @@ BOOST_AUTO_TEST_CASE(TestHexBwdTrans_MatrixFree_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -972,7 +982,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_StdMat_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1048,7 +1059,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_MatrixFree_UniformP_Undeformed)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1127,7 +1139,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_MatrixFree_UniformP_Deformed)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1207,7 +1220,8 @@ BOOST_AUTO_TEST_CASE(
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1286,7 +1300,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_StdMat_VariableP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1370,7 +1385,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_NoCollection_VariableP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1454,7 +1470,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_SumFac_VariableP_CollAll)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1537,7 +1554,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_SumFac_VariableP_CollDir02)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1620,7 +1638,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_SumFac_VariableP_CollDir12)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1703,7 +1722,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_StdMat_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1798,7 +1818,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_IterPerExp_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1893,7 +1914,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_SumFac_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -1972,7 +1994,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_SumFac_VariableP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -2058,7 +2081,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_SumFac_UniformP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -2147,7 +2171,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTBase_SumFac_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -2245,7 +2270,8 @@ BOOST_AUTO_TEST_CASE(
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -2343,7 +2369,8 @@ BOOST_AUTO_TEST_CASE(
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -2440,7 +2467,8 @@ BOOST_AUTO_TEST_CASE(TestHexPhysDeriv_IterPerExp_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -2516,7 +2544,8 @@ BOOST_AUTO_TEST_CASE(TestHexPhysDeriv_MatrixFree_UniformP_Undeformed)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -2595,7 +2624,8 @@ BOOST_AUTO_TEST_CASE(TestHexPhysDeriv_MatrixFree_UniformP_Deformed)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -2674,7 +2704,8 @@ BOOST_AUTO_TEST_CASE(TestHexPhysDeriv_IterPerExp_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -2770,7 +2801,8 @@ BOOST_AUTO_TEST_CASE(TestHexPhysDeriv_NoCollection_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -2867,7 +2899,8 @@ BOOST_AUTO_TEST_CASE(TestHexPhysDeriv_StdMat_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -2943,7 +2976,8 @@ BOOST_AUTO_TEST_CASE(TestHexPhysDeriv_StdMat_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -3039,7 +3073,8 @@ BOOST_AUTO_TEST_CASE(TestHexPhysDeriv_SumFac_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -3115,7 +3150,8 @@ BOOST_AUTO_TEST_CASE(TestHexPhysDeriv_SumFac_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -3211,7 +3247,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTDerivBase_Iterperexp_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -3301,7 +3338,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTDerivBase_MatrixFree_UniformP_Undeformed)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -3392,7 +3430,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTDerivBase_MatrixFree_UniformP_Deformed)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -3484,7 +3523,8 @@ BOOST_AUTO_TEST_CASE(
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -3575,7 +3615,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTDerivBase_IterPerExp_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -3691,7 +3732,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTDerivBase_StdMat_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -3781,7 +3823,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTDerivBase_StdMat_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -3898,7 +3941,8 @@ BOOST_AUTO_TEST_CASE(
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -4013,7 +4057,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTDerivBase_SumFac_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -4103,7 +4148,8 @@ BOOST_AUTO_TEST_CASE(TestHexIProductWRTDerivBase_SumFac_VariableP_MultiElmt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -4218,7 +4264,8 @@ BOOST_AUTO_TEST_CASE(TestHexHelmholtz_NoCollection_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -4315,7 +4362,8 @@ BOOST_AUTO_TEST_CASE(TestHexHelmholtz_IterPerExp_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -4412,7 +4460,8 @@ BOOST_AUTO_TEST_CASE(TestHexHelmholtz_IterPerExp_UniformP_ConstVarDiff)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -4515,7 +4564,8 @@ BOOST_AUTO_TEST_CASE(TestHexHelmholtz_MatrixFree_UniformP)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -4612,7 +4662,8 @@ BOOST_AUTO_TEST_CASE(TestHexHelmholtz_MatrixFree_UniformP_Deformed_OverInt)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;
@@ -4709,7 +4760,8 @@ BOOST_AUTO_TEST_CASE(TestHexHelmholtz_MatrixFree_UniformP_ConstVarDiff)
     std::vector<SpatialDomains::SegGeomUniquePtr> segVec;
     std::vector<SpatialDomains::QuadGeomUniquePtr> faceVec;
     SpatialDomains::HexGeomUniquePtr hexGeom =
-        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(), v6.get(), v7.get(), segVec, faceVec);
+        CreateHex(v0.get(), v1.get(), v2.get(), v3.get(), v4.get(), v5.get(),
+                  v6.get(), v7.get(), segVec, faceVec);
 
     Nektar::LibUtilities::PointsType quadPointsTypeDir1 =
         Nektar::LibUtilities::eGaussLobattoLegendre;

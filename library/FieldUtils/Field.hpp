@@ -108,20 +108,21 @@ struct Field
 
     LibUtilities::FieldMetaDataMap m_fieldMetaDataMap;
 
-    FIELD_UTILS_EXPORT void SetUpExp(boost::program_options::variables_map &vm)
+    FIELD_UTILS_EXPORT void SetUpExp(boost::program_options::variables_map &vm,
+                                     bool equispaced = false)
     {
         if (m_graph && !m_exp.size())
         {
-            CreateExp(vm, true);
+            CreateExp(vm, true, equispaced);
         }
         else if (m_graph && m_data.size())
         {
-            CreateExp(vm, false);
+            CreateExp(vm, false, equispaced);
         }
     }
 
     FIELD_UTILS_EXPORT void CreateExp(boost::program_options::variables_map &vm,
-                                      bool newExp)
+                                      bool newExp, bool equispaced = false)
     {
 
         bool fldfilegiven = (m_fielddef.size() != 0);
@@ -199,10 +200,18 @@ struct Field
             }
 
             // Adjust number of quadrature points
+            int nPointsNew = 0;
             if (vm.count("output-points"))
             {
-                int nPointsNew = vm["output-points"].as<int>();
-                m_graph->SetExpansionInfoToPointOrder(nPointsNew);
+                nPointsNew = vm["output-points"].as<int>();
+                if (!equispaced)
+                {
+                    m_graph->SetExpansionInfoToPointOrder(nPointsNew);
+                }
+            }
+            if (equispaced)
+            {
+                m_graph->SetExpansionInfoToEvenlySpacedPoints(nPointsNew);
             }
 
             if (m_verbose)

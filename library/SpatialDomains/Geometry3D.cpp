@@ -71,8 +71,8 @@ void Geometry3D::NewtonIterationForLocCoord(
     // |r,s|    > LcoordDIV stop the search
     const NekDouble LcoordDiv = 15.0;
 
-    Array<OneD, const NekDouble> Jac =
-        m_geomFactors->GetJac(m_xmap->GetPointsKeys());
+    LibUtilities::PointsKeyVector ptsKeys = m_xmap->GetPointsKeys();
+    Array<OneD, const NekDouble> Jac      = GenGeomFactors(ptsKeys)->GetJac();
 
     NekDouble ScaledTol =
         Vmath::Vsum(Jac.size(), Jac, 1) / ((NekDouble)Jac.size());
@@ -201,8 +201,8 @@ void Geometry3D::NewtonIterationForLocCoord(
     // |r,s|    > LcoordDIV stop the search
     const NekDouble LcoordDiv = 15.0;
 
-    Array<OneD, const NekDouble> Jac =
-        m_geomFactors->GetJac(m_xmap->GetPointsKeys());
+    LibUtilities::PointsKeyVector ptsKeys = m_xmap->GetPointsKeys();
+    Array<OneD, const NekDouble> Jac      = GenGeomFactors(ptsKeys)->GetJac();
 
     NekDouble ScaledTol =
         Vmath::Vsum(Jac.size(), Jac, 1) / ((NekDouble)Jac.size());
@@ -369,7 +369,7 @@ NekDouble Geometry3D::v_GetLocCoords(const Array<OneD, const NekDouble> &coords,
     tmpcoords[0] = coords[0];
     tmpcoords[1] = coords[1];
     tmpcoords[2] = coords[2];
-    if (GetMetricInfo()->GetGtype() == eRegular)
+    if (CalcGeomType() == eRegular)
     {
         tmpcoords[0] -= m_isoParameter[0][0];
         tmpcoords[1] -= m_isoParameter[1][0];

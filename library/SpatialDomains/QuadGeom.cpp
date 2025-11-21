@@ -57,7 +57,7 @@ QuadGeom::QuadGeom()
 }
 
 QuadGeom::QuadGeom(const int id, std::array<SegGeom *, kNedges> edges,
-                   const CurveSharedPtr curve)
+                   Curve *curve)
     : Geometry2D(edges[0]->GetVertex(0)->GetCoordim(), curve)
 {
     int j;
@@ -344,128 +344,128 @@ StdRegions::Orientation QuadGeom::GetFaceOrientation(
 /**
  * Set up GeoFac for this geometry using Coord quadrature distribution
  */
-void QuadGeom::v_GenGeomFactors()
+GeomType QuadGeom::v_CalcGeomType()
 {
     if (!m_setupState)
     {
         QuadGeom::v_Setup();
     }
+    QuadGeom::v_FillGeom();
 
-    if (m_geomFactorsState != ePtsFilled)
+    GeomType Gtype = eRegular;
+
+    // We will first check whether we have a regular or deformed
+    // geometry. We will define regular as those cases where the
+    // Jacobian and the metric terms of the derivative are constants
+    // (i.e. not coordinate dependent)
+
+    // Check to see if expansions are linear
+    // If not linear => deformed geometry
+    if ((m_xmap->GetBasisNumModes(0) != 2) ||
+        (m_xmap->GetBasisNumModes(1) != 2))
     {
-        GeomType Gtype = eRegular;
-
-        QuadGeom::v_FillGeom();
-
-        // We will first check whether we have a regular or deformed
-        // geometry. We will define regular as those cases where the
-        // Jacobian and the metric terms of the derivative are constants
-        // (i.e. not coordinate dependent)
-
-        // Check to see if expansions are linear
-        // If not linear => deformed geometry
-        m_straightEdge = 1;
-        if ((m_xmap->GetBasisNumModes(0) != 2) ||
-            (m_xmap->GetBasisNumModes(1) != 2))
-        {
-            Gtype          = eDeformed;
-            m_straightEdge = 0;
-        }
-
-        // For linear expansions, the mapping from standard to local
-        // element is given by the relation:
-        // x_i = 0.25 * [ ( x_i^A + x_i^B + x_i^C + x_i^D)       +
-        //                (-x_i^A + x_i^B + x_i^C - x_i^D)*xi_1  +
-        //                (-x_i^A - x_i^B + x_i^C + x_i^D)*xi_2  +
-        //                ( x_i^A - x_i^B + x_i^C - x_i^D)*xi_1*xi_2 ]
-        //
-        // The jacobian of the transformation and the metric terms
-        // dxi_i/dx_j, involve only terms of the form dx_i/dxi_j (both
-        // for coordim == 2 or 3). Inspecting the formula above, it can
-        // be appreciated that the derivatives dx_i/dxi_j will be
-        // constant, if the coefficient of the non-linear term is zero.
-        //
-        // That is why for regular geometry, we require
-        //
-        //     x_i^A - x_i^B + x_i^C - x_i^D = 0
-        //
-        // or equivalently
-        //
-        //     x_i^A - x_i^B = x_i^D - x_i^C
-        //
-        // This corresponds to quadrilaterals which are paralellograms.
-        m_manifold    = Array<OneD, int>(m_coordim);
-        m_manifold[0] = 0;
-        m_manifold[1] = 1;
-        if (m_coordim == 3)
-        {
-            PointGeom e01, e21, norm;
-            e01.Sub(*m_verts[0], *m_verts[1]);
-            e21.Sub(*m_verts[3], *m_verts[1]);
-            norm.Mult(e01, e21);
-            int tmpi   = 0;
-            double tmp = std::fabs(norm[0]);
-            if (tmp < fabs(norm[1]))
-            {
-                tmp  = fabs(norm[1]);
-                tmpi = 1;
-            }
-            if (tmp < fabs(norm[2]))
-            {
-                tmpi = 2;
-            }
-            m_manifold[0] = (tmpi + 1) % 3;
-            m_manifold[1] = (tmpi + 2) % 3;
-            m_manifold[2] = (tmpi + 3) % 3;
-        }
-
-        if (Gtype == eRegular)
-        {
-            Array<OneD, Array<OneD, NekDouble>> verts(m_verts.size());
-            for (int i = 0; i < m_verts.size(); ++i)
-            {
-                verts[i] = Array<OneD, NekDouble>(3);
-                m_verts[i]->GetCoords(verts[i]);
-            }
-            // a00 + a01 xi1 + a02 xi2 + a03 xi1 xi2
-            // a10 + a11 xi1 + a12 xi2 + a03 xi1 xi2
-            m_isoParameter = Array<OneD, Array<OneD, NekDouble>>(2);
-            for (int i = 0; i < 2; i++)
-            {
-                unsigned int d    = m_manifold[i];
-                m_isoParameter[i] = Array<OneD, NekDouble>(4, 0.);
-                // Karniadakis, Sherwin 2005, Appendix D
-                NekDouble A          = verts[0][d];
-                NekDouble B          = verts[1][d];
-                NekDouble D          = verts[2][d];
-                NekDouble C          = verts[3][d];
-                m_isoParameter[i][0] = 0.25 * (A + B + C + D);  // 1
-                m_isoParameter[i][1] = 0.25 * (-A + B - C + D); // xi1
-                m_isoParameter[i][2] = 0.25 * (-A - B + C + D); // xi2
-                m_isoParameter[i][3] = 0.25 * (A - B - C + D);  // xi1*xi2
-                NekDouble tmp =
-                    fabs(m_isoParameter[i][1]) + fabs(m_isoParameter[i][2]);
-                if (fabs(m_isoParameter[i][3]) >
-                    tmp * NekConstants::kNekZeroTol)
-                {
-                    Gtype = eDeformed;
-                }
-            }
-        }
-
-        if (Gtype == eRegular)
-        {
-            v_CalculateInverseIsoParam();
-        }
-        else if (m_straightEdge)
-        {
-            PreSolveStraightEdge();
-        }
-
-        m_geomFactors = MemoryManager<GeomFactors>::AllocateSharedPtr(
-            Gtype, m_coordim, m_xmap, m_coeffs);
-        m_geomFactorsState = ePtsFilled;
+        Gtype = eDeformed;
     }
+
+    // For linear expansions, the mapping from standard to local
+    // element is given by the relation:
+    // x_i = 0.25 * [ ( x_i^A + x_i^B + x_i^C + x_i^D)       +
+    //                (-x_i^A + x_i^B + x_i^C - x_i^D)*xi_1  +
+    //                (-x_i^A - x_i^B + x_i^C + x_i^D)*xi_2  +
+    //                ( x_i^A - x_i^B + x_i^C - x_i^D)*xi_1*xi_2 ]
+    //
+    // The jacobian of the transformation and the metric terms
+    // dxi_i/dx_j, involve only terms of the form dx_i/dxi_j (both
+    // for coordim == 2 or 3). Inspecting the formula above, it can
+    // be appreciated that the derivatives dx_i/dxi_j will be
+    // constant, if the coefficient of the non-linear term is zero.
+    //
+    // That is why for regular geometry, we require
+    //
+    //     x_i^A - x_i^B + x_i^C - x_i^D = 0
+    //
+    // or equivalently
+    //
+    //     x_i^A - x_i^B = x_i^D - x_i^C
+    //
+    // This corresponds to quadrilaterals which are paralellograms.
+    m_manifold    = Array<OneD, int>(m_coordim);
+    m_manifold[0] = 0;
+    m_manifold[1] = 1;
+    if (m_coordim == 3)
+    {
+        PointGeom e01, e21, norm;
+        e01.Sub(*m_verts[0], *m_verts[1]);
+        e21.Sub(*m_verts[3], *m_verts[1]);
+        norm.Mult(e01, e21);
+        int tmpi   = 0;
+        double tmp = std::fabs(norm[0]);
+        if (tmp < fabs(norm[1]))
+        {
+            tmp  = fabs(norm[1]);
+            tmpi = 1;
+        }
+        if (tmp < fabs(norm[2]))
+        {
+            tmpi = 2;
+        }
+        m_manifold[0] = (tmpi + 1) % 3;
+        m_manifold[1] = (tmpi + 2) % 3;
+        m_manifold[2] = (tmpi + 3) % 3;
+    }
+
+    if (Gtype == eRegular)
+    {
+        Array<OneD, Array<OneD, NekDouble>> verts(m_verts.size());
+        for (int i = 0; i < m_verts.size(); ++i)
+        {
+            verts[i] = Array<OneD, NekDouble>(3);
+            m_verts[i]->GetCoords(verts[i]);
+        }
+        // a00 + a01 xi1 + a02 xi2 + a03 xi1 xi2
+        // a10 + a11 xi1 + a12 xi2 + a03 xi1 xi2
+        m_isoParameter = Array<OneD, Array<OneD, NekDouble>>(2);
+        for (int i = 0; i < 2; i++)
+        {
+            unsigned int d    = m_manifold[i];
+            m_isoParameter[i] = Array<OneD, NekDouble>(4, 0.);
+            // Karniadakis, Sherwin 2005, Appendix D
+            NekDouble A          = verts[0][d];
+            NekDouble B          = verts[1][d];
+            NekDouble D          = verts[2][d];
+            NekDouble C          = verts[3][d];
+            m_isoParameter[i][0] = 0.25 * (A + B + C + D);  // 1
+            m_isoParameter[i][1] = 0.25 * (-A + B - C + D); // xi1
+            m_isoParameter[i][2] = 0.25 * (-A - B + C + D); // xi2
+            m_isoParameter[i][3] = 0.25 * (A - B - C + D);  // xi1*xi2
+            NekDouble tmp =
+                fabs(m_isoParameter[i][1]) + fabs(m_isoParameter[i][2]);
+            if (fabs(m_isoParameter[i][3]) > tmp * NekConstants::kNekZeroTol)
+            {
+                Gtype = eDeformed;
+            }
+        }
+    }
+
+    if (Gtype == eRegular)
+    {
+        v_CalculateInverseIsoParam();
+    }
+    else if (m_straightEdge)
+    {
+        PreSolveStraightEdge();
+    }
+
+    return Gtype;
+}
+
+GeomFactorsUniquePtr QuadGeom::v_GenGeomFactors(
+    LibUtilities::PointsKeyVector &keyTgt)
+{
+    GeomType Gtype = CalcGeomType();
+
+    return ObjPoolManager<GeomFactors>::AllocateUniquePtr(
+        Gtype, m_coordim, m_xmap, m_coeffs, keyTgt);
 }
 
 /**
@@ -609,7 +609,7 @@ void QuadGeom::v_Reset(CurveMap &curvedEdges, CurveMap &curvedFaces)
 
     if (it != curvedFaces.end())
     {
-        m_curve = it->second;
+        m_curve = it->second.get();
     }
 
     for (int i = 0; i < 4; ++i)
@@ -631,6 +631,15 @@ void QuadGeom::v_Setup()
         }
         SetUpXmap();
         SetUpCoeffs(m_xmap->GetNcoeffs());
+
+        // Check to see if expansions are linear
+        m_straightEdge = 1;
+        if ((m_xmap->GetBasisNumModes(0) != 2) ||
+            (m_xmap->GetBasisNumModes(1) != 2))
+        {
+            m_straightEdge = 0;
+        }
+
         m_setupState = true;
     }
 }

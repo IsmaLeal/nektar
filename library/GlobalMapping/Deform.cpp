@@ -143,8 +143,8 @@ void UpdateGeometry(SpatialDomains::MeshGraphSharedPtr graph,
                 }
 
                 // Update curve
-                SpatialDomains::CurveSharedPtr curve =
-                    MemoryManager<SpatialDomains::Curve>::AllocateSharedPtr(
+                SpatialDomains::CurveUniquePtr curve =
+                    ObjPoolManager<SpatialDomains::Curve>::AllocateUniquePtr(
                         edge->GetGlobalID(),
                         LibUtilities::eGaussLobattoLegendre);
 
@@ -160,7 +160,7 @@ void UpdateGeometry(SpatialDomains::MeshGraphSharedPtr graph,
                     curveNodes.push_back(std::move(vert));
                 }
 
-                curvedEdges[edge->GetGlobalID()] = curve;
+                curvedEdges[edge->GetGlobalID()] = std::move(curve);
                 updatedEdges.insert(edge->GetGlobalID());
             }
         }
@@ -276,9 +276,9 @@ void UpdateGeometry(SpatialDomains::MeshGraphSharedPtr graph,
                     if (updatedEdges.find(id) == updatedEdges.end())
                     {
                         SpatialDomains::Geometry1D *edge = face->GetEdge(k);
-                        SpatialDomains::CurveSharedPtr curve =
-                            MemoryManager<SpatialDomains::Curve>::
-                                AllocateSharedPtr(
+                        SpatialDomains::CurveUniquePtr curve =
+                            ObjPoolManager<SpatialDomains::Curve>::
+                                AllocateUniquePtr(
                                     edge->GetGlobalID(),
                                     LibUtilities::eGaussLobattoLegendre);
 
@@ -316,7 +316,7 @@ void UpdateGeometry(SpatialDomains::MeshGraphSharedPtr graph,
                             }
                         }
 
-                        curvedEdges[edge->GetGlobalID()] = curve;
+                        curvedEdges[edge->GetGlobalID()] = std::move(curve);
                         updatedEdges.insert(edge->GetGlobalID());
                     }
                 }
@@ -327,8 +327,8 @@ void UpdateGeometry(SpatialDomains::MeshGraphSharedPtr graph,
                         ? LibUtilities::eNodalTriElec
                         : LibUtilities::eGaussLobattoLegendre;
 
-                SpatialDomains::CurveSharedPtr curve =
-                    MemoryManager<SpatialDomains::Curve>::AllocateSharedPtr(
+                SpatialDomains::CurveUniquePtr curve =
+                    ObjPoolManager<SpatialDomains::Curve>::AllocateUniquePtr(
                         face->GetGlobalID(), pType);
 
                 if (face->GetShapeType() == LibUtilities::eTriangle)
@@ -389,7 +389,7 @@ void UpdateGeometry(SpatialDomains::MeshGraphSharedPtr graph,
                     }
                 }
 
-                curvedFaces[face->GetGlobalID()] = curve;
+                curvedFaces[face->GetGlobalID()] = std::move(curve);
                 updatedFaces.insert(face->GetGlobalID());
             }
         }

@@ -63,9 +63,9 @@ public:
     SPATIAL_DOMAINS_EXPORT static const int kNfacets = kNverts;
 
     SPATIAL_DOMAINS_EXPORT SegGeom();
-    SPATIAL_DOMAINS_EXPORT SegGeom(
-        int id, int coordim, std::array<PointGeom *, kNverts> vertex,
-        const CurveSharedPtr curve = CurveSharedPtr());
+    SPATIAL_DOMAINS_EXPORT SegGeom(int id, int coordim,
+                                   std::array<PointGeom *, kNverts> vertex,
+                                   Curve *curve = nullptr);
 
     SPATIAL_DOMAINS_EXPORT SegGeom(const SegGeom &in);
 
@@ -77,9 +77,13 @@ public:
     SPATIAL_DOMAINS_EXPORT static StdRegions::Orientation GetEdgeOrientation(
         const SegGeom &edge1, const SegGeom &edge2);
 
-    inline SPATIAL_DOMAINS_EXPORT CurveSharedPtr GetCurve()
+    inline SPATIAL_DOMAINS_EXPORT Curve *GetCurve()
     {
         return m_curve;
+    }
+    inline SPATIAL_DOMAINS_EXPORT void SetCurve(Curve *curvePtr)
+    {
+        m_curve = curvePtr;
     }
 
 protected:
@@ -88,7 +92,9 @@ protected:
 
     PointGeom *v_GetVertex(const int i) const override;
     virtual LibUtilities::ShapeType v_GetShapeType() const;
-    void v_GenGeomFactors() override;
+    GeomType v_CalcGeomType() override;
+    GeomFactorsUniquePtr v_GenGeomFactors(
+        LibUtilities::PointsKeyVector &keyTgt) override;
     void v_FillGeom() override;
     void v_Reset(CurveMap &curvedEdges, CurveMap &curvedFaces) override;
     void v_Setup() override;
@@ -100,7 +106,7 @@ protected:
 
 private:
     /// Boolean indicating whether object owns the data
-    CurveSharedPtr m_curve;
+    Curve *m_curve = nullptr;
 
     void SetUpXmap();
 };
