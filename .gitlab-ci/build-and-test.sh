@@ -12,6 +12,7 @@ echo "  - BUILD_TYPE              : $BUILD_TYPE"
 echo "  - BUILD_SIMD              : $BUILD_SIMD"
 echo "  - DISABLE_CWIPI           : $DISABLE_CWIPI"
 echo "  - DISABLE_MCA             : $DISABLE_MCA"
+echo "  - ENABLE_ALIGN_MEM        : $ENABLE_ALIGN_MEM"
 echo "  - EXPORT_COMPILE_COMMANDS : $EXPORT_COMPILE_COMMANDS"
 echo "  - NUM_CPUS                : $NUM_CPUS"
 echo "  - OS_VERSION              : $OS_VERSION"
@@ -54,6 +55,10 @@ elif [[ $BUILD_TYPE == "full" ]]; then
         CMAKEARGS+=("-DNEKTAR_ENABLE_SIMD_AVX2:BOOL=ON")
     elif [[ $BUILD_SIMD == "avx512" ]]; then
         CMAKEARGS+=("-DNEKTAR_ENABLE_SIMD_AVX512:BOOL=ON")
+    fi
+    if [[ $ENABLE_ALIGN_MEM == "true" ]]; then
+        CMAKEARGS+=("-DNEKTAR_USE_MEMORY_POOLS:BOOL=OFF")
+        CMAKEARGS+=("-DNEKTAR_USE_ALIGNED_MEM:BOOL=ON")
     fi
 elif [[ $BUILD_TYPE == "performance" ]]; then
     CMAKEARGS=(..

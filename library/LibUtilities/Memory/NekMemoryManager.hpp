@@ -100,7 +100,8 @@ public:
         GetMemoryPool().Deallocate(data, sizeof(DataType));
 #else
 #ifdef NEKTAR_USE_ALIGNED_MEM
-        boost::alignment::aligned_free(data);
+        data->~DataType();
+        free(data);
 #else
         delete data;
 #endif
@@ -148,8 +149,8 @@ public:
     template <typename... Args> static DataType *Allocate(const Args &...args)
     {
 #ifdef NEKTAR_USE_ALIGNED_MEM
-        void *ptr = boost::alignment::aligned_alloc(
-            tinysimd::simd<NekDouble>::alignment, sizeof(DataType));
+        void *ptr = aligned_alloc(tinysimd::simd<NekDouble>::alignment,
+                                  sizeof(DataType));
         return new (ptr) DataType(args...);
 #else
         return new DataType(args...);
@@ -196,9 +197,9 @@ public:
             GetMemoryPool().Allocate(NumberOfElements * sizeof(DataType)));
 #else // NEKTAR_MEMORY_POOL_ENABLED
 #ifdef NEKTAR_USE_ALIGNED_MEM
-        return static_cast<DataType *>(boost::alignment::aligned_alloc(
-            tinysimd::simd<NekDouble>::alignment,
-            NumberOfElements * sizeof(DataType)));
+        return static_cast<DataType *>(
+            aligned_alloc(tinysimd::simd<NekDouble>::alignment,
+                          NumberOfElements * sizeof(DataType)));
 #else
         return static_cast<DataType *>(
             ::operator new(NumberOfElements * sizeof(DataType)));
@@ -220,7 +221,7 @@ public:
         GetMemoryPool().Deallocate(array, sizeof(DataType) * NumberOfElements);
 #else // NEKTAR_MEMORY_POOL_ENABLED
 #ifdef NEKTAR_USE_ALIGNED_MEM
-        boost::alignment::aligned_free(array);
+        free(array);
 #else
         ::operator delete(array);
 #endif

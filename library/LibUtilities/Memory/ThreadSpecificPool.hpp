@@ -50,7 +50,6 @@
 #ifdef NEKTAR_USE_ALIGNED_MEM
 #include <LibUtilities/BasicConst/NektarUnivTypeDefs.hpp>
 #include <LibUtilities/SimdLib/tinysimd.hpp>
-#include <boost/align/aligned_alloc.hpp>
 #endif
 
 #include <cstring>
@@ -211,8 +210,7 @@ public:
         else if (bytes > m_upperBound)
         {
 #ifdef NEKTAR_USE_ALIGNED_MEM
-            return boost::alignment::aligned_alloc(
-                tinysimd::simd<NekDouble>::alignment, bytes);
+            return aligned_alloc(tinysimd::simd<NekDouble>::alignment, bytes);
 #else
             return ::operator new(bytes);
 #endif
@@ -241,7 +239,7 @@ public:
         else if (bytes > m_upperBound)
         {
 #ifdef NEKTAR_USE_ALIGNED_MEM
-            boost::alignment::aligned_free(p);
+            free(p);
 #else
             ::operator delete(p);
 #endif
