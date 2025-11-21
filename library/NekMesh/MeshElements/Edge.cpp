@@ -80,8 +80,8 @@ SpatialDomains::SegGeom *Edge::GetGeom(int coordDim,
     // Create a curve if high-order information exists.
     if (m_edgeNodes.size() > 0)
     {
-        SpatialDomains::CurveSharedPtr c =
-            MemoryManager<SpatialDomains::Curve>::AllocateSharedPtr(
+        SpatialDomains::CurveUniquePtr c =
+            ObjPoolManager<SpatialDomains::Curve>::AllocateUniquePtr(
                 m_id, m_curveType);
 
         c->m_points.push_back(p[0]);
@@ -92,7 +92,8 @@ SpatialDomains::SegGeom *Edge::GetGeom(int coordDim,
         c->m_points.push_back(p[1]);
 
         seg = ObjPoolManager<SpatialDomains::SegGeom>::AllocateUniquePtr(
-            m_id, coordDim, p, c);
+            m_id, coordDim, p, c.get());
+        holder.m_curveVec.push_back(std::move(c));
     }
     else
     {

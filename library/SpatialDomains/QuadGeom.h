@@ -58,9 +58,9 @@ public:
 
     SPATIAL_DOMAINS_EXPORT QuadGeom();
     SPATIAL_DOMAINS_EXPORT QuadGeom(const QuadGeom &in);
-    SPATIAL_DOMAINS_EXPORT QuadGeom(
-        const int id, std::array<SegGeom *, kNverts> edges,
-        const CurveSharedPtr curve = CurveSharedPtr());
+    SPATIAL_DOMAINS_EXPORT QuadGeom(const int id,
+                                    std::array<SegGeom *, kNverts> edges,
+                                    Curve *curve = nullptr);
     SPATIAL_DOMAINS_EXPORT ~QuadGeom() override = default;
 
     /// Get the orientation of face1.
@@ -78,12 +78,15 @@ public:
 protected:
     SPATIAL_DOMAINS_EXPORT NekDouble v_GetCoord(
         const int i, const Array<OneD, const NekDouble> &Lcoord) override;
-    SPATIAL_DOMAINS_EXPORT void v_GenGeomFactors() override;
+    GeomType v_CalcGeomType() override;
+    GeomFactorsUniquePtr v_GenGeomFactors(
+        LibUtilities::PointsKeyVector &keyTgt) override;
     SPATIAL_DOMAINS_EXPORT void v_FillGeom() override;
     SPATIAL_DOMAINS_EXPORT int v_GetDir(const int faceidx,
                                         const int facedir) const override;
     SPATIAL_DOMAINS_EXPORT void v_Reset(CurveMap &curvedEdges,
                                         CurveMap &curvedFaces) override;
+
     SPATIAL_DOMAINS_EXPORT void v_Setup() override;
     void PreSolveStraightEdge();
 

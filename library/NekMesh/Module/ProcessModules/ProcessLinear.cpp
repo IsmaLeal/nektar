@@ -235,8 +235,9 @@ bool ProcessLinear::Invalid(ElementSharedPtr el, NekDouble thr)
     // Create elemental geometry.
     SpatialDomains::Geometry *geom = el->GetGeom(m_mesh->m_spaceDim, holder);
 
+    LibUtilities::PointsKeyVector p = geom->GetXmap()->GetPointsKeys();
     // Generate geometric factors.
-    SpatialDomains::GeomFactorsSharedPtr gfac = geom->GetGeomFactors();
+    SpatialDomains::GeomFactorsUniquePtr gfac = geom->GenGeomFactors(p);
 
     if (!gfac->IsValid())
     {
@@ -253,9 +254,8 @@ bool ProcessLinear::Invalid(ElementSharedPtr el, NekDouble thr)
     ElementSharedPtr elL =
         GetElementFactory().CreateInstance(c.m_e, c, ns, el->GetTagList());
     SpatialDomains::Geometry *geomL = elL->GetGeom(m_mesh->m_spaceDim, holder);
-    SpatialDomains::GeomFactorsSharedPtr gfacL = geomL->GetGeomFactors();
+    SpatialDomains::GeomFactorsUniquePtr gfacL = geomL->GenGeomFactors(p);
 
-    LibUtilities::PointsKeyVector p     = geom->GetXmap()->GetPointsKeys();
     SpatialDomains::DerivStorage deriv  = gfac->GetDeriv(p);
     SpatialDomains::DerivStorage derivL = gfacL->GetDeriv(p);
     const int pts                       = deriv[0][0].size();

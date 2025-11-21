@@ -7,7 +7,7 @@ l[] = Extrude {1,0,0} {
       Point{1}; Layers{4};
 };
 s[] = Extrude {0,1,0} {
-      Line{l[1]}; Layers{4};
+      Line{l[1]}; Layers{4}; Recombine;
 };
 Physical Surface(0) = {5};
 Physical Line(1) = {1};
@@ -18,3 +18,4 @@ Recombine Surface {5};
 Recombine Surface {5};
 Recombine Surface {5};
 Recombine Surface {5};
+// Mesh.ElementOrder = 8;

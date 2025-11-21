@@ -110,7 +110,7 @@ ZoneBase::ZoneBase(MovementType type, int indx, int domainID,
 
                 seenEdges.insert(edge->GetGlobalID());
 
-                CurveSharedPtr curve = edge->GetCurve();
+                Curve *curve = edge->GetCurve();
                 if (!curve)
                 {
                     continue;
@@ -130,7 +130,7 @@ ZoneBase::ZoneBase(MovementType type, int indx, int domainID,
 
                 seenFaces.insert(face->GetGlobalID());
 
-                CurveSharedPtr curve = face->GetCurve();
+                Curve *curve = face->GetCurve();
                 if (!curve)
                 {
                     continue;

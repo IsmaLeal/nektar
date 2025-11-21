@@ -45,6 +45,9 @@ namespace Nektar::SpatialDomains
 class PyrGeom : public Geometry3D
 {
 public:
+    SPATIAL_DOMAINS_EXPORT PyrGeom();
+    SPATIAL_DOMAINS_EXPORT PyrGeom(int id, Geometry2D *faces[]);
+
     SPATIAL_DOMAINS_EXPORT static const int kNverts  = 5;
     SPATIAL_DOMAINS_EXPORT static const int kNedges  = 8;
     SPATIAL_DOMAINS_EXPORT static const int kNqfaces = 1;
@@ -53,13 +56,14 @@ public:
     SPATIAL_DOMAINS_EXPORT static const int kNfacets = kNfaces;
     SPATIAL_DOMAINS_EXPORT static const std::string XMLElementType;
 
-    SPATIAL_DOMAINS_EXPORT PyrGeom();
     SPATIAL_DOMAINS_EXPORT PyrGeom(int id,
                                    std::array<Geometry2D *, kNfaces> faces);
     SPATIAL_DOMAINS_EXPORT ~PyrGeom() override = default;
 
 protected:
-    void v_GenGeomFactors() override;
+    GeomType v_CalcGeomType() override;
+    GeomFactorsUniquePtr v_GenGeomFactors(
+        LibUtilities::PointsKeyVector &keyTgt) override;
     int v_GetEdgeNormalToFaceVert(const int i, const int j) const override;
     int v_GetDir(const int faceidx, const int facedir) const override;
     void v_Reset(CurveMap &curvedEdges, CurveMap &curvedFaces) override;

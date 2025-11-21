@@ -84,8 +84,8 @@ SpatialDomains::Geometry *Line::GetGeom(int coordDim,
 
     if (m_edge[0]->m_edgeNodes.size() > 0)
     {
-        SpatialDomains::CurveSharedPtr c =
-            MemoryManager<SpatialDomains::Curve>::AllocateSharedPtr(
+        SpatialDomains::CurveUniquePtr c =
+            ObjPoolManager<SpatialDomains::Curve>::AllocateUniquePtr(
                 m_id, m_edge[0]->m_curveType);
 
         c->m_points.push_back(p[0]);
@@ -97,7 +97,8 @@ SpatialDomains::Geometry *Line::GetGeom(int coordDim,
         c->m_points.push_back(p[1]);
 
         seg = ObjPoolManager<SpatialDomains::SegGeom>::AllocateUniquePtr(
-            m_id, 2, p, c);
+            m_id, 2, p, c.get());
+        holder.m_curveVec.push_back(std::move(c));
     }
     else
     {

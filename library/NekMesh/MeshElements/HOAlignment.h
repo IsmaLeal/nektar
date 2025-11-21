@@ -230,7 +230,8 @@ template <typename T> struct HOQuadrilateral
         {
             for (int j = 0; j < np / 2; ++j)
             {
-                swap(surfVerts[i * np + j], surfVerts[i * np + np - j - 1]);
+                std::swap(surfVerts[i * np + j],
+                          surfVerts[i * np + np - j - 1]);
             }
         }
     }
@@ -243,7 +244,8 @@ template <typename T> struct HOQuadrilateral
         {
             for (int i = 0; i < np / 2; ++i)
             {
-                swap(surfVerts[i * np + j], surfVerts[(np - i - 1) * np + j]);
+                std::swap(surfVerts[i * np + j],
+                          surfVerts[(np - i - 1) * np + j]);
             }
         }
     }

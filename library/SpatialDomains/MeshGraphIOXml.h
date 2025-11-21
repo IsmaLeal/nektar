@@ -125,7 +125,9 @@ protected:
     virtual void v_WriteTets(TiXmlElement *elmtTag,
                              std::vector<int> keysToWrite = std::vector<int>());
     virtual void v_WriteCurves(TiXmlElement *geomTag, CurveMap &edges,
-                               CurveMap &faces);
+                               CurveMap &faces,
+                               std::vector<int> *keysToWriteEdges = nullptr,
+                               std::vector<int> *keysToWriteFaces = nullptr);
     void WriteComposites(TiXmlElement *geomTag, CompositeMap &comps,
                          std::map<int, std::string> &compLabels);
     void WriteDomain(TiXmlElement *geomTag,

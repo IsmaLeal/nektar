@@ -91,7 +91,7 @@ private:
                      std::vector<int> &ids, std::vector<DataType> &geomData);
     template <class T, typename DataType>
     void ConstructGeomObject(GeomMapView<T> &geomMap, int id, DataType *data,
-                             CurveSharedPtr curve);
+                             Curve *curve);
 
     CompositeDescriptor CreateCompositeDescriptor(
         std::unordered_map<int, int> &id2row);

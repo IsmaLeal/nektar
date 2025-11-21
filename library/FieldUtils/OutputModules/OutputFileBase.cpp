@@ -60,8 +60,6 @@ OutputFileBase::~OutputFileBase()
 
 void OutputFileBase::v_Process(po::variables_map &vm)
 {
-    m_f->SetUpExp(vm);
-
     string filename = m_config["outfile"].as<string>();
 
     if (filename == "")
@@ -71,6 +69,8 @@ void OutputFileBase::v_Process(po::variables_map &vm)
 
     if (m_f->m_fieldPts != LibUtilities::NullPtsField)
     {
+        m_f->SetUpExp(vm);
+
         ASSERTL0(!m_f->m_writeBndFld, "Boundary can't be obtained from pts.");
         if (WriteFile(filename, vm))
         {
@@ -82,13 +82,38 @@ void OutputFileBase::v_Process(po::variables_map &vm)
             }
         }
     }
-    else if (m_f->m_exp.size())
+    else
     {
         // reset expansion definition to use equispaced points if required.
         if (m_requireEquiSpaced && (vm.count("no-equispaced") == 0) &&
-            m_f->m_exp[0]->GetNumElmts() != 0 && !m_equispacedSetup)
+            m_f->m_graph->GetNumElements() != 0 && !m_equispacedSetup)
         {
-            ConvertExpToEquispaced(vm);
+            if (m_f->m_exp.size())
+            {
+                ConvertExpToEquispaced(vm);
+            }
+            else
+            {
+                m_f->SetUpExp(vm, true);
+                m_equispacedSetup = true;
+            }
+        }
+        else
+        {
+            m_f->SetUpExp(vm);
+        }
+        if (!m_f->m_exp.size())
+        {
+            if (m_f->m_data.size())
+            {
+                ASSERTL0(!m_f->m_writeBndFld,
+                         "Boundary extraction requires xml file.");
+                if (WriteFile(filename, vm))
+                {
+                    v_OutputFromData(vm);
+                }
+            }
+            return;
         }
         if (m_f->m_writeBndFld)
         {
@@ -273,14 +298,6 @@ void OutputFileBase::v_Process(po::variables_map &vm)
                     PrintErrorFromExp();
                 }
             }
-        }
-    }
-    else if (m_f->m_data.size())
-    {
-        ASSERTL0(!m_f->m_writeBndFld, "Boundary extraction requires xml file.");
-        if (WriteFile(filename, vm))
-        {
-            v_OutputFromData(vm);
         }
     }
 }

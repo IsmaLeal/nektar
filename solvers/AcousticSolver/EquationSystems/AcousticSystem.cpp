@@ -479,14 +479,10 @@ Array<OneD, NekDouble> AcousticSystem::v_GetMaxStdVelocity(
         ptsKeys = m_fields[0]->GetExp(el)->GetPointsKeys();
 
         // Possible bug: not multiply by jacobian??
-        const SpatialDomains::GeomFactorsSharedPtr metricInfo =
-            m_fields[0]->GetExp(el)->GetGeom()->GetMetricInfo();
+        SpatialDomains::GeomFactors *metricInfo =
+            m_fields[0]->GetExp(el)->GetGeomFactors();
         const Array<TwoD, const NekDouble> &gmat =
-            m_fields[0]
-                ->GetExp(el)
-                ->GetGeom()
-                ->GetMetricInfo()
-                ->GetDerivFactors(ptsKeys);
+            metricInfo->GetDerivFactors();
 
         int nq = m_fields[0]->GetExp(el)->GetTotPoints();
 

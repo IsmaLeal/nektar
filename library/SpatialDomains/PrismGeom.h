@@ -45,6 +45,9 @@ namespace Nektar::SpatialDomains
 class PrismGeom : public Geometry3D
 {
 public:
+    SPATIAL_DOMAINS_EXPORT PrismGeom();
+    SPATIAL_DOMAINS_EXPORT PrismGeom(int id, Geometry2D *faces[]);
+
     SPATIAL_DOMAINS_EXPORT static const int kNverts  = 6;
     SPATIAL_DOMAINS_EXPORT static const int kNedges  = 9;
     SPATIAL_DOMAINS_EXPORT static const int kNqfaces = 3;
@@ -53,13 +56,14 @@ public:
     SPATIAL_DOMAINS_EXPORT static const int kNfacets = kNfaces;
     SPATIAL_DOMAINS_EXPORT static const std::string XMLElementType;
 
-    SPATIAL_DOMAINS_EXPORT PrismGeom();
     SPATIAL_DOMAINS_EXPORT PrismGeom(
         int id, std::array<Geometry2D *, PrismGeom::kNfaces> faces);
     SPATIAL_DOMAINS_EXPORT ~PrismGeom() override = default;
 
 protected:
-    void v_GenGeomFactors() override;
+    GeomType v_CalcGeomType() override;
+    GeomFactorsUniquePtr v_GenGeomFactors(
+        LibUtilities::PointsKeyVector &keyTgt) override;
     int v_GetVertexEdgeMap(const int i, const int j) const override;
     int v_GetVertexFaceMap(const int i, const int j) const override;
     int v_GetEdgeFaceMap(const int i, const int j) const override;

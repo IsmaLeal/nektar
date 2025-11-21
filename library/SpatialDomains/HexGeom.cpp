@@ -80,86 +80,85 @@ HexGeom::HexGeom(int id, std::array<QuadGeom *, kNfaces> faces)
     SetUpFaceOrientation();
 }
 
-void HexGeom::v_GenGeomFactors()
+GeomType HexGeom::v_CalcGeomType()
 {
     if (!m_setupState)
     {
-        HexGeom::v_Setup();
+        v_Setup();
+    }
+    v_FillGeom();
+
+    GeomType Gtype = eRegular;
+
+    // check to see if expansions are linear
+    if (m_xmap->GetBasisNumModes(0) != 2 || m_xmap->GetBasisNumModes(1) != 2 ||
+        m_xmap->GetBasisNumModes(2) != 2)
+    {
+        Gtype = eDeformed;
     }
 
-    if (m_geomFactorsState != ePtsFilled)
+    // check to see if all faces are parallelograms
+    if (Gtype == eRegular)
     {
-        GeomType Gtype = eRegular;
-
-        v_FillGeom();
-
-        // check to see if expansions are linear
-        m_straightEdge = 1;
-        if (m_xmap->GetBasisNumModes(0) != 2 ||
-            m_xmap->GetBasisNumModes(1) != 2 ||
-            m_xmap->GetBasisNumModes(2) != 2)
+        m_isoParameter = Array<OneD, Array<OneD, NekDouble>>(3);
+        for (int i = 0; i < 3; ++i)
         {
-            Gtype          = eDeformed;
-            m_straightEdge = 0;
-        }
+            m_isoParameter[i]    = Array<OneD, NekDouble>(8, 0.);
+            NekDouble A          = (*m_verts[0])(i);
+            NekDouble B          = (*m_verts[1])(i);
+            NekDouble C          = (*m_verts[2])(i);
+            NekDouble D          = (*m_verts[3])(i);
+            NekDouble E          = (*m_verts[4])(i);
+            NekDouble F          = (*m_verts[5])(i);
+            NekDouble G          = (*m_verts[6])(i);
+            NekDouble H          = (*m_verts[7])(i);
+            m_isoParameter[i][0] = 0.125 * (A + B + C + D + E + F + G + H); // 1
 
-        // check to see if all faces are parallelograms
-        if (Gtype == eRegular)
-        {
-            m_isoParameter = Array<OneD, Array<OneD, NekDouble>>(3);
-            for (int i = 0; i < 3; ++i)
+            m_isoParameter[i][1] =
+                0.125 * (-A + B + C - D - E + F + G - H); // xi1
+            m_isoParameter[i][2] =
+                0.125 * (-A - B + C + D - E - F + G + H); // xi2
+            m_isoParameter[i][3] =
+                0.125 * (-A - B - C - D + E + F + G + H); // xi3
+
+            m_isoParameter[i][4] =
+                0.125 * (A - B + C - D + E - F + G - H); // xi1*xi2
+            m_isoParameter[i][5] =
+                0.125 * (A + B - C - D - E - F + G + H); // xi2*xi3
+            m_isoParameter[i][6] =
+                0.125 * (A - B - C + D - E + F + G - H); // xi1*xi3
+
+            m_isoParameter[i][7] =
+                0.125 * (-A + B - C + D + E - F + G - H); // xi1*xi2*xi3
+            NekDouble tmp = fabs(m_isoParameter[i][1]) +
+                            fabs(m_isoParameter[i][2]) +
+                            fabs(m_isoParameter[i][3]);
+            tmp *= NekConstants::kNekZeroTol;
+            for (int d = 4; d < 8; ++d)
             {
-                m_isoParameter[i] = Array<OneD, NekDouble>(8, 0.);
-                NekDouble A       = (*m_verts[0])(i);
-                NekDouble B       = (*m_verts[1])(i);
-                NekDouble C       = (*m_verts[2])(i);
-                NekDouble D       = (*m_verts[3])(i);
-                NekDouble E       = (*m_verts[4])(i);
-                NekDouble F       = (*m_verts[5])(i);
-                NekDouble G       = (*m_verts[6])(i);
-                NekDouble H       = (*m_verts[7])(i);
-                m_isoParameter[i][0] =
-                    0.125 * (A + B + C + D + E + F + G + H); // 1
-
-                m_isoParameter[i][1] =
-                    0.125 * (-A + B + C - D - E + F + G - H); // xi1
-                m_isoParameter[i][2] =
-                    0.125 * (-A - B + C + D - E - F + G + H); // xi2
-                m_isoParameter[i][3] =
-                    0.125 * (-A - B - C - D + E + F + G + H); // xi3
-
-                m_isoParameter[i][4] =
-                    0.125 * (A - B + C - D + E - F + G - H); // xi1*xi2
-                m_isoParameter[i][5] =
-                    0.125 * (A + B - C - D - E - F + G + H); // xi2*xi3
-                m_isoParameter[i][6] =
-                    0.125 * (A - B - C + D - E + F + G - H); // xi1*xi3
-
-                m_isoParameter[i][7] =
-                    0.125 * (-A + B - C + D + E - F + G - H); // xi1*xi2*xi3
-                NekDouble tmp = fabs(m_isoParameter[i][1]) +
-                                fabs(m_isoParameter[i][2]) +
-                                fabs(m_isoParameter[i][3]);
-                tmp *= NekConstants::kNekZeroTol;
-                for (int d = 4; d < 8; ++d)
+                if (fabs(m_isoParameter[i][d]) > tmp)
                 {
-                    if (fabs(m_isoParameter[i][d]) > tmp)
-                    {
-                        Gtype = eDeformed;
-                    }
+                    Gtype = eDeformed;
                 }
             }
         }
-
-        if (Gtype == eRegular)
-        {
-            v_CalculateInverseIsoParam();
-        }
-
-        m_geomFactors = MemoryManager<GeomFactors>::AllocateSharedPtr(
-            Gtype, m_coordim, m_xmap, m_coeffs);
-        m_geomFactorsState = ePtsFilled;
     }
+
+    if (Gtype == eRegular)
+    {
+        v_CalculateInverseIsoParam();
+    }
+
+    return Gtype;
+}
+
+GeomFactorsUniquePtr HexGeom::v_GenGeomFactors(
+    LibUtilities::PointsKeyVector &keyTgt)
+{
+    GeomType Gtype = CalcGeomType();
+
+    return ObjPoolManager<GeomFactors>::AllocateUniquePtr(
+        Gtype, m_coordim, m_xmap, m_coeffs, keyTgt);
 }
 
 int HexGeom::v_GetVertexEdgeMap(const int i, const int j) const
@@ -708,6 +707,16 @@ void HexGeom::v_Setup()
         }
         SetUpXmap();
         SetUpCoeffs(m_xmap->GetNcoeffs());
+
+        // check to see if expansions are linear
+        m_straightEdge = 1;
+        if (m_xmap->GetBasisNumModes(0) != 2 ||
+            m_xmap->GetBasisNumModes(1) != 2 ||
+            m_xmap->GetBasisNumModes(2) != 2)
+        {
+            m_straightEdge = 0;
+        }
+
         m_setupState = true;
     }
 }

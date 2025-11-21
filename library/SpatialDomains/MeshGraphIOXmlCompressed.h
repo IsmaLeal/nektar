@@ -84,8 +84,9 @@ protected:
                                                 std::vector<int>()) override;
     void v_WriteTets(TiXmlElement *elmtTag, std::vector<int> keysToWrite =
                                                 std::vector<int>()) override;
-    void v_WriteCurves(TiXmlElement *geomTag, CurveMap &edges,
-                       CurveMap &faces) override;
+    void v_WriteCurves(TiXmlElement *geomTag, CurveMap &edges, CurveMap &faces,
+                       std::vector<int> *keysToWriteEdges = nullptr,
+                       std::vector<int> *keysToWriteFaces = nullptr) override;
 };
 
 } // namespace Nektar::SpatialDomains

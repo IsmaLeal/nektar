@@ -52,11 +52,9 @@ PyrExp::PyrExp(const LibUtilities::BasisKey &Ba,
                      Ba, Bb, Bc),
       StdPyrExp(Ba, Bb, Bc), Expansion(geom), Expansion3D(geom),
       m_matrixManager(
-          std::bind(&Expansion3D::CreateMatrix, this, std::placeholders::_1),
-          std::string("PyrExpMatrix")),
+          std::bind(&Expansion3D::CreateMatrix, this, std::placeholders::_1)),
       m_staticCondMatrixManager(std::bind(&Expansion::CreateStaticCondMatrix,
-                                          this, std::placeholders::_1),
-                                std::string("PyrExpStaticCondMatrix"))
+                                          this, std::placeholders::_1))
 {
 }
 
@@ -96,11 +94,11 @@ NekDouble PyrExp::v_Integral(const Array<OneD, const NekDouble> &inarray)
     int nquad0                       = m_base[0]->GetNumPoints();
     int nquad1                       = m_base[1]->GetNumPoints();
     int nquad2                       = m_base[2]->GetNumPoints();
-    Array<OneD, const NekDouble> jac = m_metricinfo->GetJac(GetPointsKeys());
+    Array<OneD, const NekDouble> jac = m_geomFactors->GetJac();
     Array<OneD, NekDouble> tmp(nquad0 * nquad1 * nquad2);
 
     // multiply inarray with Jacobian
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vmul(nquad0 * nquad1 * nquad2, &jac[0], 1,
                     (NekDouble *)&inarray[0], 1, &tmp[0], 1);
@@ -124,18 +122,17 @@ void PyrExp::v_PhysDeriv(const Array<OneD, const NekDouble> &inarray,
                          Array<OneD, NekDouble> &out_d1,
                          Array<OneD, NekDouble> &out_d2)
 {
-    int nquad0 = m_base[0]->GetNumPoints();
-    int nquad1 = m_base[1]->GetNumPoints();
-    int nquad2 = m_base[2]->GetNumPoints();
-    Array<TwoD, const NekDouble> gmat =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    int nquad0                        = m_base[0]->GetNumPoints();
+    int nquad1                        = m_base[1]->GetNumPoints();
+    int nquad2                        = m_base[2]->GetNumPoints();
+    Array<TwoD, const NekDouble> gmat = m_geomFactors->GetDerivFactors();
     Array<OneD, NekDouble> diff0(nquad0 * nquad1 * nquad2);
     Array<OneD, NekDouble> diff1(nquad0 * nquad1 * nquad2);
     Array<OneD, NekDouble> diff2(nquad0 * nquad1 * nquad2);
 
     StdPyrExp::v_PhysDeriv(inarray, diff0, diff1, diff2);
 
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         if (out_d0.size())
         {
@@ -408,10 +405,9 @@ void PyrExp::v_AlignVectorToCollapsedDir(
     Array<OneD, NekDouble> tmp3 = outarray[1];
     Array<OneD, NekDouble> tmp4 = outarray[2];
 
-    const Array<TwoD, const NekDouble> &df =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    const Array<TwoD, const NekDouble> &df = m_geomFactors->GetDerivFactors();
 
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vmul(nqtot, &df[3 * dir][0], 1, inarray.data(), 1, tmp2.data(),
                     1);
@@ -695,9 +691,6 @@ void PyrExp::v_GetTracePhysMap(const int face, Array<OneD, int> &outarray)
 
 void PyrExp::v_ComputeTraceNormal(const int face)
 {
-    const SpatialDomains::GeomFactorsSharedPtr &geomFactors =
-        GetGeom()->GetMetricInfo();
-
     LibUtilities::PointsKeyVector ptsKeys = GetPointsKeys();
     for (int i = 0; i < ptsKeys.size(); ++i)
     {
@@ -709,10 +702,11 @@ void PyrExp::v_ComputeTraceNormal(const int face)
         }
     }
 
-    SpatialDomains::GeomType type = geomFactors->GetGtype();
+    SpatialDomains::GeomType type = m_geomFactors->GetGtype();
     const Array<TwoD, const NekDouble> &df =
-        geomFactors->GetDerivFactors(ptsKeys);
-    const Array<OneD, const NekDouble> &jac = geomFactors->GetJac(ptsKeys);
+        m_geomFactors->ComputeDerivFactors(ptsKeys);
+    const Array<OneD, const NekDouble> &jac =
+        m_geomFactors->ComputeJac(ptsKeys);
 
     LibUtilities::BasisKey tobasis0 = GetTraceBasisKey(face, 0);
     LibUtilities::BasisKey tobasis1 = GetTraceBasisKey(face, 1);
@@ -982,9 +976,9 @@ void PyrExp::v_SVVLaplacianFilter(Array<OneD, NekDouble> &array,
     int nq = GetTotPoints();
 
     // Calculate sqrt of the Jacobian
-    Array<OneD, const NekDouble> jac = m_metricinfo->GetJac(GetPointsKeys());
+    Array<OneD, const NekDouble> jac = m_geomFactors->GetJac();
     Array<OneD, NekDouble> sqrt_jac(nq);
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vsqrt(nq, jac, 1, sqrt_jac, 1);
     }
@@ -1102,8 +1096,7 @@ void PyrExp::v_ComputeLaplacianMetric()
     Array<OneD, NekDouble> wsp5(nqtot, alloc + 7 * nqtot);
     Array<OneD, NekDouble> wsp6(nqtot, alloc + 8 * nqtot);
 
-    const Array<TwoD, const NekDouble> &df =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    const Array<TwoD, const NekDouble> &df = m_geomFactors->GetDerivFactors();
     const Array<OneD, const NekDouble> &z0 = m_base[0]->GetZ();
     const Array<OneD, const NekDouble> &z1 = m_base[1]->GetZ();
     const Array<OneD, const NekDouble> &z2 = m_base[2]->GetZ();
@@ -1132,7 +1125,7 @@ void PyrExp::v_ComputeLaplacianMetric()
     // Step 3. Construct combined metric terms for physical space to
     // collapsed coordinate system.
     // Order of construction optimised to minimise temporary storage
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         // f_{1k}
         Vmath::Vvtvvtp(nqtot, &df[0][0], 1, &h0[0], 1, &df[2][0], 1, &h1[0], 1,
@@ -1333,8 +1326,7 @@ void PyrExp::v_NormalTraceDerivFactors(
     int nquad1 = GetNumPoints(1);
     int nquad2 = GetNumPoints(2);
 
-    const Array<TwoD, const NekDouble> &df =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    const Array<TwoD, const NekDouble> &df = m_geomFactors->GetDerivFactors();
 
     if (d0factors.size() != 5)
     {
@@ -1385,7 +1377,7 @@ void PyrExp::v_NormalTraceDerivFactors(
     int ncoords = normal_0.size();
 
     // first gather together standard cartesian inner products
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         // face 0
         for (int i = 0; i < nquad0 * nquad1; ++i)

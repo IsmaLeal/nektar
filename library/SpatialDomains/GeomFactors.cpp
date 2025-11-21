@@ -35,15 +35,6 @@
 #include <LibUtilities/Foundations/Interp.h>
 #include <SpatialDomains/GeomFactors.h>
 
-namespace Nektar
-{
-
-template <>
-PoolAllocator<SpatialDomains::GeomFactors>
-    ObjPoolManager<SpatialDomains::GeomFactors>::m_alloc{};
-
-}
-
 namespace Nektar::SpatialDomains
 {
 
@@ -91,12 +82,15 @@ namespace Nektar::SpatialDomains
  * @param   coordim     Specifies the dimension of the coordinate
  *                      system.
  * @param   Coords      Coordinate maps of the element.
+ * @param   keyTgt      Points at which to compute stored Jacobian
+ *                      and derivative factors
  */
 GeomFactors::GeomFactors(const GeomType gtype, const int coordim,
                          const StdRegions::StdExpansionSharedPtr &xmap,
-                         const Array<OneD, Array<OneD, NekDouble>> &coords)
+                         const std::vector<Array<OneD, NekDouble>> &coords,
+                         const LibUtilities::PointsKeyVector &keyTgt)
     : m_type(gtype), m_expDim(xmap->GetShapeDimension()), m_coordDim(coordim),
-      m_valid(true), m_xmap(xmap), m_coords(coords)
+      m_valid(true), m_keyTgt(keyTgt), m_xmap(xmap), m_coords(coords)
 {
     CheckIfValid();
 }
@@ -107,7 +101,8 @@ GeomFactors::GeomFactors(const GeomType gtype, const int coordim,
  */
 GeomFactors::GeomFactors(const GeomFactors &S)
     : m_type(S.m_type), m_expDim(S.m_expDim), m_coordDim(S.m_coordDim),
-      m_valid(S.m_valid), m_xmap(S.m_xmap), m_coords(S.m_coords)
+      m_valid(S.m_valid), m_xmap(S.m_xmap), m_coords(S.m_coords),
+      m_jac(S.m_jac), m_derivFactor(S.m_derivFactor)
 {
 }
 

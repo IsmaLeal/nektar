@@ -57,7 +57,7 @@ TriGeom::TriGeom()
 }
 
 TriGeom::TriGeom(const int id, std::array<SegGeom *, kNedges> edges,
-                 const CurveSharedPtr curve)
+                 Curve *curve)
     : Geometry2D(edges[0]->GetVertex(0)->GetCoordim(), curve)
 {
     int j;
@@ -308,82 +308,85 @@ StdRegions::Orientation TriGeom::GetFaceOrientation(
     return StdRegions::eNoOrientation;
 }
 
-void TriGeom::v_GenGeomFactors()
+GeomType TriGeom::v_CalcGeomType()
 {
     if (!m_setupState)
     {
         TriGeom::v_Setup();
     }
+    TriGeom::v_FillGeom();
 
-    if (m_geomFactorsState != ePtsFilled)
+    GeomType Gtype = eRegular;
+
+    // check to see if expansions are linear
+    if (m_xmap->GetBasisNumModes(0) != 2 || m_xmap->GetBasisNumModes(1) != 2)
     {
-        GeomType Gtype = eRegular;
-
-        TriGeom::v_FillGeom();
-
-        // check to see if expansions are linear
-        m_straightEdge = 1;
-        if (m_xmap->GetBasisNumModes(0) != 2 ||
-            m_xmap->GetBasisNumModes(1) != 2)
-        {
-            Gtype          = eDeformed;
-            m_straightEdge = 0;
-        }
-
-        m_manifold    = Array<OneD, int>(m_coordim);
-        m_manifold[0] = 0;
-        m_manifold[1] = 1;
-        if (m_coordim == 3)
-        {
-            PointGeom e01, e21, norm;
-            e01.Sub(*m_verts[0], *m_verts[1]);
-            e21.Sub(*m_verts[2], *m_verts[1]);
-            norm.Mult(e01, e21);
-            int tmpi   = 0;
-            double tmp = std::fabs(norm[0]);
-            if (tmp < fabs(norm[1]))
-            {
-                tmp  = fabs(norm[1]);
-                tmpi = 1;
-            }
-            if (tmp < fabs(norm[2]))
-            {
-                tmpi = 2;
-            }
-            m_manifold[0] = (tmpi + 1) % 3;
-            m_manifold[1] = (tmpi + 2) % 3;
-            m_manifold[2] = (tmpi + 3) % 3;
-        }
-        if (Gtype == eRegular)
-        {
-            Array<OneD, Array<OneD, NekDouble>> verts(m_verts.size());
-            for (int i = 0; i < m_verts.size(); ++i)
-            {
-                verts[i] = Array<OneD, NekDouble>(3);
-                m_verts[i]->GetCoords(verts[i]);
-            }
-            // a00 + a01 xi1 + a02 xi2
-            // a10 + a11 xi1 + a12 xi2
-            m_isoParameter = Array<OneD, Array<OneD, NekDouble>>(2);
-            for (int i = 0; i < 2; ++i)
-            {
-                unsigned int d       = m_manifold[i];
-                m_isoParameter[i]    = Array<OneD, NekDouble>(3, 0.);
-                NekDouble A          = verts[0][d];
-                NekDouble B          = verts[1][d];
-                NekDouble C          = verts[2][d];
-                m_isoParameter[i][0] = 0.5 * (B + C);  // 1
-                m_isoParameter[i][1] = 0.5 * (-A + B); // xi1
-                m_isoParameter[i][2] = 0.5 * (-A + C); // xi2
-            }
-            v_CalculateInverseIsoParam();
-        }
-
-        m_geomFactors = MemoryManager<GeomFactors>::AllocateSharedPtr(
-            Gtype, m_coordim, m_xmap, m_coeffs);
-
-        m_geomFactorsState = ePtsFilled;
+        Gtype = eDeformed;
     }
+
+    m_manifold    = Array<OneD, int>(m_coordim);
+    m_manifold[0] = 0;
+    m_manifold[1] = 1;
+    if (m_coordim == 3)
+    {
+        PointGeom e01, e21, norm;
+        e01.Sub(*m_verts[0], *m_verts[1]);
+        e21.Sub(*m_verts[2], *m_verts[1]);
+        norm.Mult(e01, e21);
+        int tmpi   = 0;
+        double tmp = std::fabs(norm[0]);
+        if (tmp < fabs(norm[1]))
+        {
+            tmp  = fabs(norm[1]);
+            tmpi = 1;
+        }
+        if (tmp < fabs(norm[2]))
+        {
+            tmpi = 2;
+        }
+        m_manifold[0] = (tmpi + 1) % 3;
+        m_manifold[1] = (tmpi + 2) % 3;
+        m_manifold[2] = (tmpi + 3) % 3;
+    }
+    if (Gtype == eRegular)
+    {
+        Array<OneD, Array<OneD, NekDouble>> verts(m_verts.size());
+        for (int i = 0; i < m_verts.size(); ++i)
+        {
+            verts[i] = Array<OneD, NekDouble>(3);
+            m_verts[i]->GetCoords(verts[i]);
+        }
+        // a00 + a01 xi1 + a02 xi2
+        // a10 + a11 xi1 + a12 xi2
+        m_isoParameter = Array<OneD, Array<OneD, NekDouble>>(2);
+        for (int i = 0; i < 2; ++i)
+        {
+            unsigned int d       = m_manifold[i];
+            m_isoParameter[i]    = Array<OneD, NekDouble>(3, 0.);
+            NekDouble A          = verts[0][d];
+            NekDouble B          = verts[1][d];
+            NekDouble C          = verts[2][d];
+            m_isoParameter[i][0] = 0.5 * (B + C);  // 1
+            m_isoParameter[i][1] = 0.5 * (-A + B); // xi1
+            m_isoParameter[i][2] = 0.5 * (-A + C); // xi2
+        }
+    }
+
+    if (Gtype == eRegular)
+    {
+        v_CalculateInverseIsoParam();
+    }
+
+    return Gtype;
+}
+
+GeomFactorsUniquePtr TriGeom::v_GenGeomFactors(
+    LibUtilities::PointsKeyVector &keyTgt)
+{
+    GeomType Gtype = CalcGeomType();
+
+    return ObjPoolManager<GeomFactors>::AllocateUniquePtr(
+        Gtype, m_coordim, m_xmap, m_coeffs, keyTgt);
 }
 
 /**
@@ -442,7 +445,7 @@ void TriGeom::v_FillGeom()
             // consistent with curved edges?
             for (i = 0; i < kNedges; ++i)
             {
-                CurveSharedPtr edgeCurve = m_edges[i]->GetCurve();
+                Curve *edgeCurve = m_edges[i]->GetCurve();
 
                 ASSERTL0(edgeCurve->m_points.size() == nEdgePts,
                          "Number of edge points does not correspond "
@@ -613,7 +616,7 @@ void TriGeom::v_Reset(CurveMap &curvedEdges, CurveMap &curvedFaces)
 
     if (it != curvedFaces.end())
     {
-        m_curve = it->second;
+        m_curve = it->second.get();
     }
 
     for (int i = 0; i < 3; ++i)
@@ -635,6 +638,15 @@ void TriGeom::v_Setup()
         }
         SetUpXmap();
         SetUpCoeffs(m_xmap->GetNcoeffs());
+
+        // check to see if expansions are linear
+        m_straightEdge = 1;
+        if (m_xmap->GetBasisNumModes(0) != 2 ||
+            m_xmap->GetBasisNumModes(1) != 2)
+        {
+            m_straightEdge = 0;
+        }
+
         m_setupState = true;
     }
 }

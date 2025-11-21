@@ -41,16 +41,12 @@
 namespace Nektar::SpatialDomains
 {
 
-// static class property
-GeomFactorsVector Geometry::m_regGeomFactorsManager;
-
 /**
  * @brief Default constructor.
  */
 Geometry::Geometry()
-    : m_coordim(0), m_geomFactorsState(eNotFilled), m_state(eNotFilled),
-      m_setupState(false), m_shapeType(LibUtilities::eNoShapeType),
-      m_globalID(-1), m_straightEdge(0)
+    : m_coordim(0), m_state(eNotFilled), m_setupState(false),
+      m_shapeType(LibUtilities::eNoShapeType), m_globalID(-1), m_straightEdge(0)
 {
 }
 
@@ -58,32 +54,9 @@ Geometry::Geometry()
  * @brief Constructor when supplied a coordinate dimension.
  */
 Geometry::Geometry(const int coordim)
-    : m_coordim(coordim), m_geomFactorsState(eNotFilled), m_state(eNotFilled),
-      m_setupState(false), m_shapeType(LibUtilities::eNoShapeType),
-      m_globalID(-1), m_straightEdge(0)
+    : m_coordim(coordim), m_state(eNotFilled), m_setupState(false),
+      m_shapeType(LibUtilities::eNoShapeType), m_globalID(-1), m_straightEdge(0)
 {
-}
-
-/**
- * @brief Check to see if a geometric factor has already been created that
- * contains the same regular information.
- *
- * The principle behind this is that many regular (i.e. constant Jacobian)
- * elements have identicial geometric factors. Memory may therefore be reduced
- * by storing only the unique factors.
- *
- * @param geomFactor  The GeomFactor to check.
- *
- * @return Either the cached GeomFactor or @p geomFactor.
- *
- * @todo Currently this method is disabled since the lookup is very expensive.
- */
-GeomFactorsSharedPtr Geometry::ValidateRegGeomFactor(
-    GeomFactorsSharedPtr geomFactor)
-{
-    GeomFactorsSharedPtr returnval = geomFactor;
-
-    return returnval;
 }
 
 bool SortByGlobalId(const Geometry *&lhs, const Geometry *&rhs)
@@ -208,6 +181,27 @@ int Geometry::v_GetShapeDim() const
     return 0;
 }
 
+/**
+ * Calculates the GeomType (deformed, regular etc).
+ */
+GeomType Geometry::v_CalcGeomType()
+{
+    NEKERROR(ErrorUtil::efatal,
+             "This function is only valid for shape type geometries");
+    return eNoGeomType;
+}
+
+/**
+ * @copydoc Geometry::GenGeomFactors()
+ */
+GeomFactorsUniquePtr Geometry::v_GenGeomFactors(
+    [[maybe_unused]] LibUtilities::PointsKeyVector &keyTgt)
+{
+    NEKERROR(ErrorUtil::efatal,
+             "This function is only valid for shape type geometries");
+    return GeomFactorsUniquePtr();
+}
+
 int Geometry::v_AllLeftCheck(
     [[maybe_unused]] const Array<OneD, const NekDouble> &gloCoord)
 {
@@ -256,7 +250,7 @@ bool Geometry::v_ContainsPoint(const Array<OneD, const NekDouble> &gloCoord,
         m_xmap->LocCoordToLocCollapsed(locCoord, eta);
         if (ClampLocCoords(eta, tol))
         {
-            if (GetMetricInfo()->GetGtype() == eRegular)
+            if (CalcGeomType() == eRegular)
             {
                 dist = std::numeric_limits<double>::max();
             }
@@ -372,13 +366,8 @@ void Geometry::v_FillGeom()
 void Geometry::v_Reset([[maybe_unused]] CurveMap &curvedEdges,
                        [[maybe_unused]] CurveMap &curvedFaces)
 {
-
     // Reset state
-    m_state            = eNotFilled;
-    m_geomFactorsState = eNotFilled;
-
-    // Junk geometric factors
-    m_geomFactors = GeomFactorsSharedPtr();
+    m_state = eNotFilled;
 }
 
 void Geometry::v_Setup()
@@ -427,7 +416,7 @@ std::array<NekDouble, 6> Geometry::GetBoundingBox()
     }
     // If element is deformed loop over quadrature points
     NekDouble marginFactor = NekConstants::kGeomFactorsTol;
-    if (GetGeomFactors()->GetGtype() != eRegular)
+    if (CalcGeomType() != eRegular)
     {
         marginFactor = 0.1;
         const int nq = GetXmap()->GetTotPoints();
@@ -494,7 +483,7 @@ int Geometry::PreliminaryCheck(const Array<OneD, const NekDouble> &gloCoord)
     }
 
     // regular element check
-    if (GetMetricInfo()->GetGtype() == eRegular)
+    if (CalcGeomType() == eRegular)
     {
         return 0;
     }

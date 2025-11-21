@@ -40,7 +40,6 @@
 
 namespace Nektar::HexExpTests
 {
-
 SpatialDomains::SegGeomUniquePtr CreateSegGeom(unsigned int id,
                                                SpatialDomains::PointGeom *v0,
                                                SpatialDomains::PointGeom *v1)
@@ -248,13 +247,8 @@ BOOST_AUTO_TEST_CASE(TestPointExpThatIsStdRegion)
     BOOST_CHECK_CLOSE(c0, -1.0, epsilon);
     BOOST_CHECK_CLOSE(c0_arr[0], -1.0, epsilon);
 
-    // Get geometry type and check that it is always Regular
-    auto gtype = pointExp->GetMetricInfo()->GetGtype();
-    BOOST_CHECK_EQUAL(gtype, SpatialDomains::eRegular);
-
-    // Get jacobian and check it is equal to one
-    auto jac = pointExp->GetMetricInfo()->GetJac(pointExp->GetPointsKeys());
-    BOOST_CHECK_CLOSE(jac[0], 1.0, epsilon);
+    // Get GeomFactors and check it's a nullptr for pointExp
+    BOOST_CHECK_EQUAL(pointExp->GetGeomFactors(), nullptr);
 }
 
 } // namespace Nektar::HexExpTests

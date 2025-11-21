@@ -112,8 +112,8 @@ void MeshGraph::SetPartition(SpatialDomains::MeshGraphSharedPtr graph)
     m_spaceDimension = graph->GetSpaceDimension();
 
     m_pointGeoms  = std::move(graph->m_pointGeoms);
-    m_curvedFaces = graph->GetCurvedFaces();
-    m_curvedEdges = graph->GetCurvedEdges();
+    m_curvedFaces = std::move(graph->GetCurvedFaces());
+    m_curvedEdges = std::move(graph->GetCurvedEdges());
 
     m_segGeoms   = std::move(graph->m_segGeoms);
     m_triGeoms   = std::move(graph->m_triGeoms);
@@ -2585,8 +2585,7 @@ ExpansionInfoMapShPtr MeshGraph::SetUpExpansionInfoMap(void)
             // regular elements first
             for (auto &x : compIter.second->m_geomVec)
             {
-                if (x->GetGeomFactors()->GetGtype() !=
-                    SpatialDomains::eDeformed)
+                if (x->CalcGeomType() != SpatialDomains::eDeformed)
                 {
                     LibUtilities::BasisKeyVector def;
                     ExpansionInfoShPtr expansionElementShPtr =
@@ -2598,8 +2597,7 @@ ExpansionInfoMapShPtr MeshGraph::SetUpExpansionInfoMap(void)
             // deformed elements
             for (auto &x : compIter.second->m_geomVec)
             {
-                if (x->GetGeomFactors()->GetGtype() ==
-                    SpatialDomains::eDeformed)
+                if (x->CalcGeomType() == SpatialDomains::eDeformed)
                 {
                     LibUtilities::BasisKeyVector def;
                     ExpansionInfoShPtr expansionElementShPtr =

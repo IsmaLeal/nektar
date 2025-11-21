@@ -34,11 +34,17 @@
 
 #include <LibUtilities/Python/NekPyConfig.hpp>
 #include <SpatialDomains/Curve.hpp>
+#include <SpatialDomains/MeshGraph.h>
 
 using namespace Nektar;
 using namespace Nektar::SpatialDomains;
 
-py::list Curve_GetPoints(CurveSharedPtr curve)
+unique_ptr_objpool<Curve> Curve_Init(int curveID, LibUtilities::PointsType type)
+{
+    return ObjPoolManager<Curve>::AllocateUniquePtr(curveID, type);
+}
+
+py::list Curve_GetPoints(Curve *curve)
 {
     py::list ret;
     for (auto &pt : curve->m_points)
@@ -48,7 +54,7 @@ py::list Curve_GetPoints(CurveSharedPtr curve)
     return ret;
 }
 
-void Curve_SetPoints(CurveSharedPtr curve, py::list &pts)
+void Curve_SetPoints(Curve *curve, py::list &pts)
 {
     auto n = pts.size();
 
@@ -60,9 +66,9 @@ void Curve_SetPoints(CurveSharedPtr curve, py::list &pts)
 
 void export_Curve(py::module &m)
 {
-    py::class_<Curve, std::shared_ptr<Curve>>(m, "Curve")
+    py::classh<Curve>(m, "Curve")
 
-        .def(py::init<int, LibUtilities::PointsType>())
+        .def(py::init<>(&Curve_Init), py::arg("curveID"), py::arg("type"))
 
         .def_readwrite("curveID", &Curve::m_curveID)
         .def_readwrite("ptype", &Curve::m_ptype)

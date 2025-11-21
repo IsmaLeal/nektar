@@ -58,11 +58,9 @@ SegExp::SegExp(const LibUtilities::BasisKey &Ba,
       StdExpansion1D(Ba.GetNumModes(), Ba), StdRegions::StdSegExp(Ba),
       Expansion(geom), Expansion1D(geom),
       m_matrixManager(
-          std::bind(&SegExp::CreateMatrix, this, std::placeholders::_1),
-          std::string("SegExpMatrix")),
+          std::bind(&SegExp::CreateMatrix, this, std::placeholders::_1)),
       m_staticCondMatrixManager(std::bind(&Expansion::CreateStaticCondMatrix,
-                                          this, std::placeholders::_1),
-                                std::string("SegExpStaticCondMatrix"))
+                                          this, std::placeholders::_1))
 {
 }
 
@@ -98,12 +96,12 @@ SegExp::SegExp(const SegExp &S)
 NekDouble SegExp::v_Integral(const Array<OneD, const NekDouble> &inarray)
 {
     int nquad0                       = m_base[0]->GetNumPoints();
-    Array<OneD, const NekDouble> jac = m_metricinfo->GetJac(GetPointsKeys());
+    Array<OneD, const NekDouble> jac = m_geomFactors->GetJac();
     NekDouble ival;
     Array<OneD, NekDouble> tmp(nquad0);
 
     // multiply inarray with Jacobian
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vmul(nquad0, jac, 1, inarray, 1, tmp, 1);
     }
@@ -147,14 +145,13 @@ void SegExp::v_PhysDeriv(const Array<OneD, const NekDouble> &inarray,
                          Array<OneD, NekDouble> &out_d1,
                          Array<OneD, NekDouble> &out_d2)
 {
-    int nquad0 = m_base[0]->GetNumPoints();
-    Array<TwoD, const NekDouble> gmat =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    int nquad0                        = m_base[0]->GetNumPoints();
+    Array<TwoD, const NekDouble> gmat = m_geomFactors->GetDerivFactors();
     Array<OneD, NekDouble> diff(nquad0);
 
     // StdExpansion1D::PhysTensorDeriv(inarray,diff);
     PhysTensorDeriv(inarray, diff);
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         if (out_d0.size())
         {
@@ -215,8 +212,8 @@ void SegExp::v_PhysDeriv_s(const Array<OneD, const NekDouble> &inarray,
             PhysTensorDeriv(inarray, diff);
 
             // get dS/de= (Jac)^-1
-            Array<OneD, NekDouble> Jac = m_metricinfo->GetJac(GetPointsKeys());
-            if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+            Array<OneD, NekDouble> Jac = m_geomFactors->GetJac();
+            if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
             {
                 // calculate the derivative as (dU/de)*(Jac)^-1
                 Vmath::Vdiv(nquad0, diff, 1, Jac, 1, out_ds, 1);
@@ -240,10 +237,9 @@ void SegExp::v_PhysDeriv_s(const Array<OneD, const NekDouble> &inarray,
 void SegExp::v_PhysDeriv_n(const Array<OneD, const NekDouble> &inarray,
                            Array<OneD, NekDouble> &out_dn)
 {
-    int nquad0 = m_base[0]->GetNumPoints();
-    Array<TwoD, const NekDouble> gmat =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
-    int coordim = m_geom->GetCoordim();
+    int nquad0                        = m_base[0]->GetNumPoints();
+    Array<TwoD, const NekDouble> gmat = m_geomFactors->GetDerivFactors();
+    int coordim                       = m_geom->GetCoordim();
     Array<OneD, NekDouble> out_dn_tmp(nquad0, 0.0);
     switch (coordim)
     {
@@ -263,7 +259,7 @@ void SegExp::v_PhysDeriv_n(const Array<OneD, const NekDouble> &inarray,
             // @TODO: this routine no longer makes sense, since normals are not
             // unique on
             //        an edge
-            //        normals = GetMetricInfo()->GetNormal();
+            //        normals = GetGeomFactors()->GetNormal();
             for (int i = 0; i < nquad0; i++)
             {
                 cout << "nx= " << normals[0][i] << "  ny=" << normals[1][i]
@@ -533,11 +529,11 @@ void SegExp::v_IProductWRTBase(const Array<OneD, const NekDouble> &base,
                                Array<OneD, NekDouble> &outarray, int coll_check)
 {
     int nquad0                       = m_base[0]->GetNumPoints();
-    Array<OneD, const NekDouble> jac = m_metricinfo->GetJac(GetPointsKeys());
+    Array<OneD, const NekDouble> jac = m_geomFactors->GetJac();
     Array<OneD, NekDouble> tmp(nquad0);
 
     // multiply inarray with Jacobian
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vmul(nquad0, jac, 1, inarray, 1, tmp, 1);
     }
@@ -556,13 +552,12 @@ void SegExp::v_IProductWRTDerivBase(const int dir,
     ASSERTL1((dir == 2) ? m_geom->GetCoordim() == 3 : true,
              "input dir is out of range");
 
-    int nquad = m_base[0]->GetNumPoints();
-    const Array<TwoD, const NekDouble> &gmat =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    int nquad                                = m_base[0]->GetNumPoints();
+    const Array<TwoD, const NekDouble> &gmat = m_geomFactors->GetDerivFactors();
 
     Array<OneD, NekDouble> tmp1(nquad);
 
-    if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+    if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
     {
         Vmath::Vmul(nquad, gmat[dir], 1, inarray, 1, tmp1, 1);
     }
@@ -833,13 +828,10 @@ void SegExp::v_ExtractDataToCoeffs(
 void SegExp::v_ComputeTraceNormal(const int vertex)
 {
     int i;
-    const SpatialDomains::GeomFactorsSharedPtr &geomFactors =
-        GetGeom()->GetMetricInfo();
-    SpatialDomains::GeomType type = geomFactors->GetGtype();
-    const Array<TwoD, const NekDouble> &gmat =
-        geomFactors->GetDerivFactors(GetPointsKeys());
-    int nqe       = 1;
-    int vCoordDim = GetCoordim();
+    SpatialDomains::GeomType type            = m_geomFactors->GetGtype();
+    const Array<TwoD, const NekDouble> &gmat = m_geomFactors->GetDerivFactors();
+    int nqe                                  = 1;
+    int vCoordDim                            = GetCoordim();
 
     m_traceNormals[vertex] = Array<OneD, Array<OneD, NekDouble>>(vCoordDim);
     Array<OneD, Array<OneD, NekDouble>> &normal = m_traceNormals[vertex];
@@ -903,9 +895,8 @@ void SegExp::v_LaplacianMatrixOp(
     Array<OneD, NekDouble> &outarray,
     [[maybe_unused]] const StdRegions::StdMatrixKey &mkey)
 {
-    int nquad = m_base[0]->GetNumPoints();
-    const Array<TwoD, const NekDouble> &gmat =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    int nquad                                = m_base[0]->GetNumPoints();
+    const Array<TwoD, const NekDouble> &gmat = m_geomFactors->GetDerivFactors();
 
     Array<OneD, NekDouble> physValues(nquad);
     Array<OneD, NekDouble> dPhysValuesdx(nquad);
@@ -920,7 +911,7 @@ void SegExp::v_LaplacianMatrixOp(
             PhysDeriv(physValues, dPhysValuesdx);
 
             // multiply with the proper geometric factors
-            if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+            if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
             {
                 Vmath::Vmul(nquad, &gmat[0][0], 1, dPhysValuesdx.data(), 1,
                             dPhysValuesdx.data(), 1);
@@ -938,7 +929,7 @@ void SegExp::v_LaplacianMatrixOp(
             PhysDeriv(physValues, dPhysValuesdx, dPhysValuesdy);
 
             // multiply with the proper geometric factors
-            if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+            if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
             {
                 Vmath::Vmul(nquad, &gmat[0][0], 1, dPhysValuesdx.data(), 1,
                             dPhysValuesdx.data(), 1);
@@ -961,7 +952,7 @@ void SegExp::v_LaplacianMatrixOp(
             PhysDeriv(physValues, dPhysValuesdx, dPhysValuesdy, dPhysValuesdz);
 
             // multiply with the proper geometric factors
-            if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+            if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
             {
                 Vmath::Vmul(nquad, &gmat[0][0], 1, dPhysValuesdx.data(), 1,
                             dPhysValuesdx.data(), 1);
@@ -1000,9 +991,8 @@ void SegExp::v_HelmholtzMatrixOp(const Array<OneD, const NekDouble> &inarray,
                                  Array<OneD, NekDouble> &outarray,
                                  const StdRegions::StdMatrixKey &mkey)
 {
-    int nquad = m_base[0]->GetNumPoints();
-    const Array<TwoD, const NekDouble> &gmat =
-        m_metricinfo->GetDerivFactors(GetPointsKeys());
+    int nquad                                = m_base[0]->GetNumPoints();
+    const Array<TwoD, const NekDouble> &gmat = m_geomFactors->GetDerivFactors();
     const NekDouble lambda = mkey.GetConstFactor(StdRegions::eFactorLambda);
 
     Array<OneD, NekDouble> physValues(nquad);
@@ -1022,7 +1012,7 @@ void SegExp::v_HelmholtzMatrixOp(const Array<OneD, const NekDouble> &inarray,
             PhysDeriv(physValues, dPhysValuesdx);
 
             // multiply with the proper geometric factors
-            if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+            if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
             {
                 Vmath::Vmul(nquad, &gmat[0][0], 1, dPhysValuesdx.data(), 1,
                             dPhysValuesdx.data(), 1);
@@ -1040,7 +1030,7 @@ void SegExp::v_HelmholtzMatrixOp(const Array<OneD, const NekDouble> &inarray,
             PhysDeriv(physValues, dPhysValuesdx, dPhysValuesdy);
 
             // multiply with the proper geometric factors
-            if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+            if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
             {
                 Vmath::Vmul(nquad, &gmat[0][0], 1, dPhysValuesdx.data(), 1,
                             dPhysValuesdx.data(), 1);
@@ -1063,7 +1053,7 @@ void SegExp::v_HelmholtzMatrixOp(const Array<OneD, const NekDouble> &inarray,
             PhysDeriv(physValues, dPhysValuesdx, dPhysValuesdy, dPhysValuesdz);
 
             // multiply with the proper geometric factors
-            if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+            if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
             {
                 Vmath::Vmul(nquad, &gmat[0][0], 1, dPhysValuesdx.data(), 1,
                             dPhysValuesdx.data(), 1);
@@ -1130,14 +1120,14 @@ DNekScalMatSharedPtr SegExp::CreateMatrix(const MatrixKey &mkey)
     NekDouble fac;
     LibUtilities::PointsKeyVector ptsKeys = GetPointsKeys();
 
-    ASSERTL2(m_metricinfo->GetGtype() != SpatialDomains::eNoGeomType,
+    ASSERTL2(m_geomFactors->GetGtype() != SpatialDomains::eNoGeomType,
              "Geometric information is not set up");
 
     switch (mkey.GetMatrixType())
     {
         case StdRegions::eMass:
         {
-            if ((m_metricinfo->GetGtype() == SpatialDomains::eDeformed) ||
+            if ((m_geomFactors->GetGtype() == SpatialDomains::eDeformed) ||
                 (mkey.GetNVarCoeff()))
             {
                 fac = 1.0;
@@ -1145,14 +1135,14 @@ DNekScalMatSharedPtr SegExp::CreateMatrix(const MatrixKey &mkey)
             }
             else
             {
-                fac = (m_metricinfo->GetJac(ptsKeys))[0];
+                fac = (m_geomFactors->GetJac())[0];
                 goto UseStdRegionsMatrix;
             }
         }
         break;
         case StdRegions::eInvMass:
         {
-            if ((m_metricinfo->GetGtype() == SpatialDomains::eDeformed) ||
+            if ((m_geomFactors->GetGtype() == SpatialDomains::eDeformed) ||
                 (mkey.GetNVarCoeff()))
             {
                 NekDouble one = 1.0;
@@ -1166,7 +1156,7 @@ DNekScalMatSharedPtr SegExp::CreateMatrix(const MatrixKey &mkey)
             }
             else
             {
-                fac = 1.0 / (m_metricinfo->GetJac(ptsKeys))[0];
+                fac = 1.0 / (m_geomFactors->GetJac())[0];
                 goto UseStdRegionsMatrix;
             }
         }
@@ -1175,7 +1165,7 @@ DNekScalMatSharedPtr SegExp::CreateMatrix(const MatrixKey &mkey)
         case StdRegions::eWeakDeriv1:
         case StdRegions::eWeakDeriv2:
         {
-            if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed ||
+            if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed ||
                 mkey.GetNVarCoeff())
             {
                 fac = 1.0;
@@ -1211,8 +1201,8 @@ DNekScalMatSharedPtr SegExp::CreateMatrix(const MatrixKey &mkey)
                                     mkey.GetShapeType(), *this);
 
                 DNekMatSharedPtr WeakDerivStd = GetStdMatrix(deriv0key);
-                fac = m_metricinfo->GetDerivFactors(ptsKeys)[dir][0] *
-                      m_metricinfo->GetJac(ptsKeys)[0];
+                fac = m_geomFactors->GetDerivFactors()[dir][0] *
+                      m_geomFactors->GetJac()[0];
 
                 returnval = MemoryManager<DNekScalMat>::AllocateSharedPtr(
                     fac, WeakDerivStd);
@@ -1221,7 +1211,7 @@ DNekScalMatSharedPtr SegExp::CreateMatrix(const MatrixKey &mkey)
         break;
         case StdRegions::eLaplacian:
         {
-            if (m_metricinfo->GetGtype() == SpatialDomains::eDeformed)
+            if (m_geomFactors->GetGtype() == SpatialDomains::eDeformed)
             {
                 fac = 1.0;
                 goto UseLocRegionsMatrix;
@@ -1232,17 +1222,17 @@ DNekScalMatSharedPtr SegExp::CreateMatrix(const MatrixKey &mkey)
                 fac         = 0.0;
                 for (int i = 0; i < coordim; ++i)
                 {
-                    fac += m_metricinfo->GetDerivFactors(ptsKeys)[i][0] *
-                           m_metricinfo->GetDerivFactors(ptsKeys)[i][0];
+                    fac += m_geomFactors->GetDerivFactors()[i][0] *
+                           m_geomFactors->GetDerivFactors()[i][0];
                 }
-                fac *= m_metricinfo->GetJac(ptsKeys)[0];
+                fac *= m_geomFactors->GetJac()[0];
                 goto UseStdRegionsMatrix;
             }
         }
         break;
         case StdRegions::eLinearAdvection:
         {
-            if ((m_metricinfo->GetGtype() == SpatialDomains::eDeformed) ||
+            if ((m_geomFactors->GetGtype() == SpatialDomains::eDeformed) ||
                 (mkey.GetNVarCoeff()))
             {
                 fac = 1.0;
@@ -1250,7 +1240,7 @@ DNekScalMatSharedPtr SegExp::CreateMatrix(const MatrixKey &mkey)
             }
             else
             {
-                fac = (m_metricinfo->GetJac(ptsKeys))[0];
+                fac = (m_geomFactors->GetJac())[0];
                 goto UseStdRegionsMatrix;
             }
         }

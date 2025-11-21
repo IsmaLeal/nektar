@@ -142,9 +142,8 @@ void AdvectionFR::SetupMetrics(
                 jac               = pFields[0]
                           ->GetExp(n)
                           ->as<LocalRegions::Expansion1D>()
-                          ->GetGeom1D()
-                          ->GetMetricInfo()
-                          ->GetJac(ptsKeys);
+                          ->GetGeomFactors()
+                          ->GetJac();
                 for (i = 0; i < nLocalSolutionPts; ++i)
                 {
                     m_jac[i + phys_offset] = jac[0];
@@ -195,21 +194,18 @@ void AdvectionFR::SetupMetrics(
                 jac = pFields[0]
                           ->GetExp(n)
                           ->as<LocalRegions::Expansion2D>()
-                          ->GetGeom2D()
-                          ->GetMetricInfo()
-                          ->GetJac(ptsKeys);
+                          ->GetGeomFactors()
+                          ->GetJac();
                 gmat = pFields[0]
                            ->GetExp(n)
                            ->as<LocalRegions::Expansion2D>()
-                           ->GetGeom2D()
-                           ->GetMetricInfo()
-                           ->GetDerivFactors(ptsKeys);
+                           ->GetGeomFactors()
+                           ->GetDerivFactors();
 
                 if (pFields[0]
                         ->GetExp(n)
                         ->as<LocalRegions::Expansion2D>()
-                        ->GetGeom2D()
-                        ->GetMetricInfo()
+                        ->GetGeomFactors()
                         ->GetGtype() == SpatialDomains::eDeformed)
                 {
                     for (i = 0; i < nLocalSolutionPts; ++i)

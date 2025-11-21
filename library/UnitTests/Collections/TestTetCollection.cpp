@@ -41,7 +41,6 @@
 
 namespace Nektar::TetCollectionTests
 {
-
 SpatialDomains::SegGeomUniquePtr CreateSegGeom(unsigned int id,
                                                SpatialDomains::PointGeom *v0,
                                                SpatialDomains::PointGeom *v1)

@@ -178,9 +178,6 @@ void ALEHelper::MoveMesh(const NekDouble &time,
         return;
     }
 
-    auto curvedEdges = m_fieldsALE[0]->GetGraph()->GetCurvedEdges();
-    auto curvedFaces = m_fieldsALE[0]->GetGraph()->GetCurvedFaces();
-
     LibUtilities::Timer timer;
     timer.Start();
     m_fieldsALE[0]->GetGraph()->GetMovement()->PerformMovement(
@@ -288,8 +285,8 @@ void ALETranslate::v_ResetMatricesNormal(
     [[maybe_unused]] Array<OneD, Array<OneD, NekDouble>> &traceNormals,
     Array<OneD, MultiRegions::ExpListSharedPtr> &fields)
 {
-    auto curvedEdges = fields[0]->GetGraph()->GetCurvedEdges();
-    auto curvedFaces = fields[0]->GetGraph()->GetCurvedFaces();
+    auto &curvedEdges = fields[0]->GetGraph()->GetCurvedEdges();
+    auto &curvedFaces = fields[0]->GetGraph()->GetCurvedFaces();
 
     // The order of the resets below is v important to avoid errors
     if (m_meshDistorted)
@@ -401,8 +398,8 @@ void ALERotate::v_ResetMatricesNormal(
     Array<OneD, MultiRegions::ExpListSharedPtr> &fields)
 {
 
-    auto curvedEdges = fields[0]->GetGraph()->GetCurvedEdges();
-    auto curvedFaces = fields[0]->GetGraph()->GetCurvedFaces();
+    auto &curvedEdges = fields[0]->GetGraph()->GetCurvedEdges();
+    auto &curvedFaces = fields[0]->GetGraph()->GetCurvedFaces();
 
     // The order of the resets below is v important to avoid errors
     if (m_meshDistorted)

@@ -54,12 +54,10 @@ class GeomFactors;
 SPATIAL_DOMAINS_EXPORT bool operator==(const GeomFactors &lhs,
                                        const GeomFactors &rhs);
 
-/// Pointer to a GeomFactors object.
-typedef std::shared_ptr<GeomFactors> GeomFactorsSharedPtr;
 /// A vector of GeomFactor pointers.
-typedef std::vector<GeomFactorsSharedPtr> GeomFactorsVector;
+typedef std::vector<GeomFactors *> GeomFactorsVector;
 /// An unordered set of GeomFactor pointers.
-typedef std::unordered_set<GeomFactorsSharedPtr> GeomFactorsSet;
+typedef std::unordered_set<GeomFactors *> GeomFactorsSet;
 /// Storage type for derivative of mapping.
 typedef Array<OneD, Array<OneD, Array<OneD, NekDouble>>> DerivStorage;
 
@@ -70,12 +68,14 @@ class GeomFactors
 {
 public:
     /// Constructor for GeomFactors class.
-    GeomFactors(const GeomType gtype, const int coordim,
-                const StdRegions::StdExpansionSharedPtr &xmap,
-                const Array<OneD, Array<OneD, NekDouble>> &coords);
+    SPATIAL_DOMAINS_EXPORT GeomFactors(
+        const GeomType gtype, const int coordim,
+        const StdRegions::StdExpansionSharedPtr &xmap,
+        const std::vector<Array<OneD, NekDouble>> &coords,
+        const LibUtilities::PointsKeyVector &keyTgt);
 
     /// Copy constructor.
-    GeomFactors(const GeomFactors &S);
+    SPATIAL_DOMAINS_EXPORT GeomFactors(const GeomFactors &S);
 
     /// Tests if two GeomFactors classes are equal.
     SPATIAL_DOMAINS_EXPORT friend bool operator==(const GeomFactors &lhs,
@@ -89,9 +89,11 @@ public:
     /// \f$\frac{\partial \chi_i}{\partial \xi_j}\f$.
     inline DerivStorage GetDeriv(const LibUtilities::PointsKeyVector &keyTgt);
 
-    /// Return the Jacobian of the mapping and cache the result.
-    inline const Array<OneD, const NekDouble> GetJac(
-        const LibUtilities::PointsKeyVector &keyTgt);
+    /// Return the Jacobian of the mapping.
+    inline const Array<OneD, const NekDouble> GetJac();
+    /// Compute the Jacobian of the mapping.
+    SPATIAL_DOMAINS_EXPORT Array<OneD, NekDouble> ComputeJac(
+        const LibUtilities::PointsKeyVector &keyTgt) const;
 
     /// Return the Laplacian coefficients \f$g_{ij}\f$.
     inline const Array<TwoD, const NekDouble> GetGmat(
@@ -99,8 +101,11 @@ public:
 
     /// Return the derivative of the reference coordinates with respect
     /// to the mapping, \f$\frac{\partial \xi_i}{\partial \chi_j}\f$.
-    inline const Array<TwoD, const NekDouble> GetDerivFactors(
-        const LibUtilities::PointsKeyVector &keyTgt);
+    inline const Array<TwoD, const NekDouble> GetDerivFactors();
+    /// Compute the derivative of the reference coordinates with respect
+    /// to the mapping, \f$\frac{\partial \xi_i}{\partial \chi_j}\f$.
+    SPATIAL_DOMAINS_EXPORT Array<TwoD, NekDouble> ComputeDerivFactors(
+        const LibUtilities::PointsKeyVector &keyTgt) const;
 
     /// Returns moving frames
     inline void GetMovingFrames(const LibUtilities::PointsKeyVector &keyTgt,
@@ -129,6 +134,8 @@ protected:
     int m_coordDim;
     /// Validity of element (Jacobian positive)
     bool m_valid;
+    /// Default points at which to compute jacobian and derivative factors
+    LibUtilities::PointsKeyVector m_keyTgt;
 
     /// Principle tangent direction for MMF.
     enum GeomMMF m_MMFDir;
@@ -136,12 +143,15 @@ protected:
     /// Stores information about the expansion.
     StdRegions::StdExpansionSharedPtr m_xmap;
     /// Stores coordinates of the geometry.
-    Array<OneD, Array<OneD, NekDouble>> m_coords;
-    /// Jacobian vector cache
-    std::map<LibUtilities::PointsKeyVector, Array<OneD, NekDouble>> m_jacCache;
-    /// DerivFactors vector cache
-    std::map<LibUtilities::PointsKeyVector, Array<TwoD, NekDouble>>
-        m_derivFactorCache;
+    std::vector<Array<OneD, NekDouble>> m_coords;
+    /// Jacobian vector
+    Array<OneD, NekDouble> m_jac;
+    /// DerivFactors vector
+    Array<TwoD, NekDouble> m_derivFactor;
+    /// Indicates whether stored jacobian has been populated
+    bool m_jacComputed = false;
+    /// Indicates whether stored derivative factors have been populated
+    bool m_derivFacComputed = false;
     /// Return the Xmap;
     inline StdRegions::StdExpansionSharedPtr &GetXmap();
 
@@ -152,17 +162,8 @@ private:
     SPATIAL_DOMAINS_EXPORT DerivStorage
     ComputeDeriv(const LibUtilities::PointsKeyVector &keyTgt) const;
 
-    /// Return the Jacobian of the mapping and cache the result.
-    SPATIAL_DOMAINS_EXPORT Array<OneD, NekDouble> ComputeJac(
-        const LibUtilities::PointsKeyVector &keyTgt) const;
-
     /// Computes the Laplacian coefficients \f$g_{ij}\f$.
     SPATIAL_DOMAINS_EXPORT Array<TwoD, NekDouble> ComputeGmat(
-        const LibUtilities::PointsKeyVector &keyTgt) const;
-
-    /// Return the derivative of the reference coordinates with respect
-    /// to the mapping, \f$\frac{\partial \xi_i}{\partial \chi_j}\f$.
-    SPATIAL_DOMAINS_EXPORT Array<TwoD, NekDouble> ComputeDerivFactors(
         const LibUtilities::PointsKeyVector &keyTgt) const;
 
     SPATIAL_DOMAINS_EXPORT void ComputeMovingFrames(
@@ -199,7 +200,7 @@ private:
 /// GeomFactors::GetHash.
 struct GeomFactorsHash
 {
-    std::size_t operator()(GeomFactorsSharedPtr const &p) const
+    std::size_t operator()(GeomFactors *const &p) const
     {
         return p->GetHash();
     }
@@ -218,27 +219,20 @@ inline DerivStorage GeomFactors::GetDeriv(
 }
 
 /**
- * Returns cached value if available, otherwise computes Jacobian and
- * stores result in cache.
+ * Returns Jacobian.
  *
- * @param   keyTgt      Target point distributions.
  * @returns             Jacobian evaluated at target point
  *                      distributions.
  * @see                 GeomFactors::ComputeJac
  */
-inline const Array<OneD, const NekDouble> GeomFactors::GetJac(
-    const LibUtilities::PointsKeyVector &keyTgt)
+inline const Array<OneD, const NekDouble> GeomFactors::GetJac()
 {
-    auto x = m_jacCache.find(keyTgt);
-
-    if (x != m_jacCache.end())
+    if (!m_jacComputed)
     {
-        return x->second;
+        m_jac         = ComputeJac(m_keyTgt);
+        m_jacComputed = true;
     }
-
-    m_jacCache[keyTgt] = ComputeJac(keyTgt);
-
-    return m_jacCache[keyTgt];
+    return m_jac;
 }
 
 /**
@@ -254,27 +248,20 @@ inline const Array<TwoD, const NekDouble> GeomFactors::GetGmat(
 }
 
 /**
- * Returns cached value if available, otherwise computes derivative
- * factors and stores result in cache.
+ * Returns derivative factors.
  *
- * @param   keyTgt      Target point distributions.
  * @returns             Derivative factors evaluated at target point
  *                      distributions.
  * @see                 GeomFactors::ComputeDerivFactors
  */
-inline const Array<TwoD, const NekDouble> GeomFactors::GetDerivFactors(
-    const LibUtilities::PointsKeyVector &keyTgt)
+inline const Array<TwoD, const NekDouble> GeomFactors::GetDerivFactors()
 {
-    auto x = m_derivFactorCache.find(keyTgt);
-
-    if (x != m_derivFactorCache.end())
+    if (!m_derivFacComputed)
     {
-        return x->second;
+        m_derivFactor      = ComputeDerivFactors(m_keyTgt);
+        m_derivFacComputed = true;
     }
-
-    m_derivFactorCache[keyTgt] = ComputeDerivFactors(keyTgt);
-
-    return m_derivFactorCache[keyTgt];
+    return m_derivFactor;
 }
 
 inline void GeomFactors::GetMovingFrames(
@@ -325,7 +312,7 @@ inline bool GeomFactors::IsValid() const
 inline size_t GeomFactors::GetHash()
 {
     LibUtilities::PointsKeyVector ptsKeys  = m_xmap->GetPointsKeys();
-    const Array<OneD, const NekDouble> jac = GetJac(ptsKeys);
+    const Array<OneD, const NekDouble> jac = ComputeJac(ptsKeys);
 
     size_t hash = 0;
     hash_combine(hash, (int)m_type, m_expDim, m_coordDim);

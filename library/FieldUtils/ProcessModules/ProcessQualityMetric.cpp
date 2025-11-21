@@ -388,13 +388,13 @@ inline vector<DNekMat> MappingIdealToRef(SpatialDomains::Geometry *geom,
 Array<OneD, NekDouble> ProcessQualityMetric::GetQ(
     LocalRegions::ExpansionSharedPtr e, bool s)
 {
-    SpatialDomains::Geometry *geom            = e->GetGeom();
-    StdRegions::StdExpansionSharedPtr chi     = e->GetGeom()->GetXmap();
-    LibUtilities::PointsKeyVector p           = chi->GetPointsKeys();
-    LibUtilities::PointsKeyVector pElem       = e->GetPointsKeys();
-    SpatialDomains::GeomFactorsSharedPtr gfac = geom->GetGeomFactors();
-    const int expDim                          = chi->GetNumBases();
-    int nElemPts                              = 1;
+    SpatialDomains::Geometry *geom        = e->GetGeom();
+    StdRegions::StdExpansionSharedPtr chi = e->GetGeom()->GetXmap();
+    LibUtilities::PointsKeyVector p       = chi->GetPointsKeys();
+    LibUtilities::PointsKeyVector pElem   = e->GetPointsKeys();
+    SpatialDomains::GeomFactors *gfac     = e->GetGeomFactors();
+    const int expDim                      = chi->GetNumBases();
+    int nElemPts                          = 1;
 
     vector<LibUtilities::BasisKey> basisKeys;
     bool needsInterp = false;

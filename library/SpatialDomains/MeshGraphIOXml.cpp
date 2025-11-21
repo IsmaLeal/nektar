@@ -980,7 +980,7 @@ void MeshGraphIOXml::v_ReadCurves()
             ASSERTL0(err == TIXML_SUCCESS,
                      "Unable to read curve attribute NUMPOINTS.");
 
-            auto curve = MemoryManager<Curve>::AllocateSharedPtr(edgeid, type);
+            auto curve = ObjPoolManager<Curve>::AllocateUniquePtr(edgeid, type);
 
             // Read points (x, y, z)
             NekDouble xval, yval, zval;
@@ -1028,7 +1028,7 @@ void MeshGraphIOXml::v_ReadCurves()
                      "in list (edgeid = " +
                          std::to_string(edgeid));
 
-            curvedEdges[edgeid] = curve;
+            curvedEdges[edgeid] = std::move(curve);
 
             edgelement = edgelement->NextSiblingElement("E");
 
@@ -1096,7 +1096,7 @@ void MeshGraphIOXml::v_ReadCurves()
             s >> numPts;
 
             curvedFaces[faceid] =
-                MemoryManager<Curve>::AllocateSharedPtr(faceid, type);
+                ObjPoolManager<Curve>::AllocateUniquePtr(faceid, type);
 
             ASSERTL0(numPts >= 3, "NUMPOINTS for face must be greater than 2");
 
@@ -1306,9 +1306,9 @@ void MeshGraphIOXml::v_ReadEdges()
                     else
                     {
                         m_meshGraph->AddGeom(
-                            indx,
-                            ObjPoolManager<SegGeom>::AllocateUniquePtr(
-                                indx, spaceDimension, vertices, it->second));
+                            indx, ObjPoolManager<SegGeom>::AllocateUniquePtr(
+                                      indx, spaceDimension, vertices,
+                                      it->second.get()));
                     }
                 }
             }
@@ -1405,7 +1405,7 @@ void MeshGraphIOXml::v_ReadFaces()
                 {
                     m_meshGraph->AddGeom(
                         indx, ObjPoolManager<TriGeom>::AllocateUniquePtr(
-                                  indx, edges, it->second));
+                                  indx, edges, it->second.get()));
                 }
             }
             catch (...)
@@ -1452,7 +1452,7 @@ void MeshGraphIOXml::v_ReadFaces()
                 {
                     m_meshGraph->AddGeom(
                         indx, ObjPoolManager<QuadGeom>::AllocateUniquePtr(
-                                  indx, edges, it->second));
+                                  indx, edges, it->second.get()));
                 }
             }
             catch (...)
@@ -1550,8 +1550,9 @@ void MeshGraphIOXml::v_ReadElements1D()
             else
             {
                 m_meshGraph->AddGeom(
-                    indx, ObjPoolManager<SegGeom>::AllocateUniquePtr(
-                              indx, spaceDimension, vertices, it->second));
+                    indx,
+                    ObjPoolManager<SegGeom>::AllocateUniquePtr(
+                        indx, spaceDimension, vertices, it->second.get()));
             }
         }
         catch (...)
@@ -1649,7 +1650,7 @@ void MeshGraphIOXml::v_ReadElements2D()
                 {
                     m_meshGraph->AddGeom(
                         indx, ObjPoolManager<TriGeom>::AllocateUniquePtr(
-                                  indx, edges, it->second));
+                                  indx, edges, it->second.get()));
                 }
             }
             catch (...)
@@ -1697,7 +1698,7 @@ void MeshGraphIOXml::v_ReadElements2D()
                 {
                     m_meshGraph->AddGeom(
                         indx, ObjPoolManager<QuadGeom>::AllocateUniquePtr(
-                                  indx, edges, it->second));
+                                  indx, edges, it->second.get()));
                 }
             }
             catch (...)
@@ -2830,55 +2831,84 @@ void MeshGraphIOXml::v_WriteTets(TiXmlElement *elmtTag,
     }
 }
 
-void MeshGraphIOXml::v_WriteCurves(TiXmlElement *geomTag, CurveMap &edges,
-                                   CurveMap &faces)
+void WriteCurvedEdge(CurveUniquePtr &curve, TiXmlElement *curveTag,
+                     int &curveId)
 {
-    TiXmlElement *curveTag = new TiXmlElement("CURVED");
-    CurveMap::iterator curveIt;
-    int curveId = 0;
+    TiXmlElement *c = new TiXmlElement("E");
+    std::stringstream s;
+    s.precision(8);
 
-    for (curveIt = edges.begin(); curveIt != edges.end(); ++curveIt)
+    for (int j = 0; j < curve->m_points.size(); ++j)
     {
-        CurveSharedPtr curve = curveIt->second;
-        TiXmlElement *c      = new TiXmlElement("E");
-        std::stringstream s;
-        s.precision(8);
-
-        for (int j = 0; j < curve->m_points.size(); ++j)
-        {
-            PointGeom *p = curve->m_points[j];
-            s << std::scientific << (*p)(0) << " " << (*p)(1) << " " << (*p)(2)
-              << "   ";
-        }
-
-        c->SetAttribute("ID", curveId++);
-        c->SetAttribute("EDGEID", curve->m_curveID);
-        c->SetAttribute("NUMPOINTS", curve->m_points.size());
-        c->SetAttribute("TYPE", LibUtilities::kPointsTypeStr[curve->m_ptype]);
-        c->LinkEndChild(new TiXmlText(s.str()));
-        curveTag->LinkEndChild(c);
+        PointGeom *p = curve->m_points[j];
+        s << std::scientific << (*p)(0) << " " << (*p)(1) << " " << (*p)(2)
+          << "   ";
     }
 
-    for (curveIt = faces.begin(); curveIt != faces.end(); ++curveIt)
+    c->SetAttribute("ID", curveId++);
+    c->SetAttribute("EDGEID", curve->m_curveID);
+    c->SetAttribute("NUMPOINTS", curve->m_points.size());
+    c->SetAttribute("TYPE", LibUtilities::kPointsTypeStr[curve->m_ptype]);
+    c->LinkEndChild(new TiXmlText(s.str()));
+    curveTag->LinkEndChild(c);
+}
+void WriteCurvedFace(CurveUniquePtr &curve, TiXmlElement *curveTag,
+                     int &curveId)
+{
+    TiXmlElement *c = new TiXmlElement("F");
+    std::stringstream s;
+    s.precision(8);
+
+    for (int j = 0; j < curve->m_points.size(); ++j)
     {
-        CurveSharedPtr curve = curveIt->second;
-        TiXmlElement *c      = new TiXmlElement("F");
-        std::stringstream s;
-        s.precision(8);
+        PointGeom *p = curve->m_points[j];
+        s << std::scientific << (*p)(0) << " " << (*p)(1) << " " << (*p)(2)
+          << "   ";
+    }
 
-        for (int j = 0; j < curve->m_points.size(); ++j)
+    c->SetAttribute("ID", curveId++);
+    c->SetAttribute("FACEID", curve->m_curveID);
+    c->SetAttribute("NUMPOINTS", curve->m_points.size());
+    c->SetAttribute("TYPE", LibUtilities::kPointsTypeStr[curve->m_ptype]);
+    c->LinkEndChild(new TiXmlText(s.str()));
+    curveTag->LinkEndChild(c);
+}
+void MeshGraphIOXml::v_WriteCurves(TiXmlElement *geomTag, CurveMap &edges,
+                                   CurveMap &faces,
+                                   std::vector<int> *keysToWriteEdges,
+                                   std::vector<int> *keysToWriteFaces)
+{
+    TiXmlElement *curveTag = new TiXmlElement("CURVED");
+    int curveId            = 0;
+
+    if (keysToWriteEdges == nullptr)
+    {
+        for (auto &i : edges)
         {
-            PointGeom *p = curve->m_points[j];
-            s << std::scientific << (*p)(0) << " " << (*p)(1) << " " << (*p)(2)
-              << "   ";
+            WriteCurvedEdge(i.second, curveTag, curveId);
         }
+    }
+    else
+    {
+        for (int key : *keysToWriteEdges)
+        {
+            WriteCurvedEdge(edges[key], curveTag, curveId);
+        }
+    }
 
-        c->SetAttribute("ID", curveId++);
-        c->SetAttribute("FACEID", curve->m_curveID);
-        c->SetAttribute("NUMPOINTS", curve->m_points.size());
-        c->SetAttribute("TYPE", LibUtilities::kPointsTypeStr[curve->m_ptype]);
-        c->LinkEndChild(new TiXmlText(s.str()));
-        curveTag->LinkEndChild(c);
+    if (keysToWriteFaces == nullptr)
+    {
+        for (auto &i : faces)
+        {
+            WriteCurvedFace(i.second, curveTag, curveId);
+        }
+    }
+    else
+    {
+        for (int key : *keysToWriteFaces)
+        {
+            WriteCurvedFace(faces[key], curveTag, curveId);
+        }
     }
 
     geomTag->LinkEndChild(curveTag);
@@ -3129,8 +3159,8 @@ void MeshGraphIOXml::WriteXMLGeometry(
         std::vector<int> localQuadKeys;
         std::vector<int> localEdgeKeys;
         std::vector<int> localVertKeys;
-        CurveMap localCurveEdge;
-        CurveMap localCurveFace;
+        std::vector<int> localCurveEdgeKeys;
+        std::vector<int> localCurveFaceKeys;
 
         std::vector<std::set<unsigned int>> entityIds(4);
         entityIds[meshDimension] = elements[i];
@@ -3339,25 +3369,26 @@ void MeshGraphIOXml::WriteXMLGeometry(
         {
             if (curvedFaces.count(j))
             {
-                localCurveFace[j] = curvedFaces[j];
+                localCurveFaceKeys.push_back(j);
             }
         }
         for (auto &j : localQuadKeys)
         {
             if (curvedFaces.count(j))
             {
-                localCurveFace[j] = curvedFaces[j];
+                localCurveFaceKeys.push_back(j);
             }
         }
         for (auto &j : localEdgeKeys)
         {
             if (curvedEdges.count(j))
             {
-                localCurveEdge[j] = curvedEdges[j];
+                localCurveEdgeKeys.push_back(j);
             }
         }
 
-        v_WriteCurves(geomTag, localCurveEdge, localCurveFace);
+        v_WriteCurves(geomTag, curvedEdges, curvedFaces, &localCurveEdgeKeys,
+                      &localCurveFaceKeys);
 
         CompositeMap localComp;
         std::map<int, std::string> localCompLabels;

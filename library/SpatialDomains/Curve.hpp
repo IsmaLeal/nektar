@@ -56,9 +56,6 @@ struct Curve
     /// Points distribution of this curve.
     LibUtilities::PointsType m_ptype;
 };
-
-typedef std::shared_ptr<Curve> CurveSharedPtr;
-typedef std::unordered_map<int, CurveSharedPtr> CurveMap;
 } // namespace Nektar::SpatialDomains
 
 #endif

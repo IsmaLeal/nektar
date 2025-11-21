@@ -67,7 +67,7 @@ SegGeom::SegGeom()
 }
 
 SegGeom::SegGeom(int id, int coordim, std::array<PointGeom *, kNverts> vertex,
-                 const CurveSharedPtr curve)
+                 Curve *curve)
     : Geometry1D(coordim)
 {
     m_shapeType = LibUtilities::eSegment;
@@ -140,9 +140,8 @@ SegGeomUniquePtr SegGeom::GenerateOneSpaceDimGeom(EntityHolder1D &holder)
         m_xmap->GetBase();
     LibUtilities::PointsKeyVector v;
     v.push_back(base[0]->GetPointsKey());
-    v_GenGeomFactors();
 
-    const Array<OneD, const NekDouble> jac = m_geomFactors->GetJac(v);
+    const Array<OneD, const NekDouble> jac = v_GenGeomFactors(v)->GetJac();
 
     NekDouble len = 0.0;
     if (jac.size() == 1)
@@ -230,27 +229,30 @@ StdRegions::Orientation SegGeom::GetEdgeOrientation(const SegGeom &edge1,
     return returnval;
 }
 
-void SegGeom::v_GenGeomFactors()
+GeomType SegGeom::v_CalcGeomType()
 {
     if (!m_setupState)
     {
         SegGeom::v_Setup();
     }
+    SegGeom::v_FillGeom();
 
-    if (m_geomFactorsState != ePtsFilled)
+    SpatialDomains::GeomType gType = eRegular;
+
+    if (m_xmap->GetBasisNumModes(0) != 2)
     {
-        SpatialDomains::GeomType gType = eRegular;
-        SegGeom::v_FillGeom();
-
-        if (m_xmap->GetBasisNumModes(0) != 2)
-        {
-            gType = eDeformed;
-        }
-
-        m_geomFactors = MemoryManager<GeomFactors>::AllocateSharedPtr(
-            gType, m_coordim, m_xmap, m_coeffs);
-        m_geomFactorsState = ePtsFilled;
+        gType = eDeformed;
     }
+
+    return gType;
+}
+
+GeomFactorsUniquePtr SegGeom::v_GenGeomFactors(
+    LibUtilities::PointsKeyVector &keyTgt)
+{
+    GeomType Gtype = CalcGeomType();
+    return ObjPoolManager<GeomFactors>::AllocateUniquePtr(
+        Gtype, m_coordim, m_xmap, m_coeffs, keyTgt);
 }
 
 void SegGeom::v_FillGeom()
@@ -328,7 +330,7 @@ void SegGeom::v_Reset(CurveMap &curvedEdges, CurveMap &curvedFaces)
 
     if (it != curvedEdges.end())
     {
-        m_curve = it->second;
+        m_curve = it->second.get();
     }
 
     SetUpXmap();
@@ -365,7 +367,8 @@ int SegGeom::v_GetNumVerts() const
 NekDouble SegGeom::v_FindDistance(const Array<OneD, const NekDouble> &xs,
                                   Array<OneD, NekDouble> &xiOut)
 {
-    if (m_geomFactors->GetGtype() == eRegular)
+    GeomType Gtype = CalcGeomType();
+    if (Gtype == eRegular)
     {
         xiOut = Array<OneD, NekDouble>(1, 0.0);
 
@@ -384,7 +387,7 @@ NekDouble SegGeom::v_FindDistance(const Array<OneD, const NekDouble> &xs,
     }
     // If deformed edge then the inverse mapping is non-linear so need to
     // numerically solve for the local coordinate
-    else if (m_geomFactors->GetGtype() == eDeformed)
+    else if (Gtype == eDeformed)
     {
         Array<OneD, NekDouble> xi(1, 0.0);
 
