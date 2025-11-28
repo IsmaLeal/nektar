@@ -8,6 +8,7 @@ v5.10.0
 - Fix memory leaks when using aligned memory (!2299)
 - Fix docker 29 breaking API change (!2298)
 - Curves and GeomFactors as unique pointers (!2191)
+- Complete support for SSE2, fix SVE compilation, and update SIMD compilation flag (!2308)
 
 
 v5.9.0

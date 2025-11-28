@@ -91,6 +91,9 @@ BOOST_AUTO_TEST_CASE(SimdLibDouble_width_alignment)
 #if defined(USING_SCALAR)
     std::cout << "scalar double" << std::endl;
 #endif
+#if defined(USING_SSE2)
+    std::cout << "sse2 double" << std::endl;
+#endif
 #if defined(USING_AVX2)
     std::cout << "avx2 double" << std::endl;
 #endif

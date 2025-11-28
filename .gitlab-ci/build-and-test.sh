@@ -52,9 +52,9 @@ elif [[ $BUILD_TYPE == "full" ]]; then
         CMAKEARGS+=("-DNEKTAR_USE_CWIPI:BOOL=ON")
     fi
     if [[ $BUILD_SIMD == "avx2" ]]; then
-        CMAKEARGS+=("-DNEKTAR_ENABLE_SIMD_AVX2:BOOL=ON")
+        CMAKEARGS+=("-DNEKTAR_ENABLE_SIMD:STRING=AVX2")
     elif [[ $BUILD_SIMD == "avx512" ]]; then
-        CMAKEARGS+=("-DNEKTAR_ENABLE_SIMD_AVX512:BOOL=ON")
+        CMAKEARGS+=("-DNEKTAR_ENABLE_SIMD:STRING=AVX512")
     fi
     if [[ $ENABLE_ALIGN_MEM == "true" ]]; then
         CMAKEARGS+=("-DNEKTAR_USE_MEMORY_POOLS:BOOL=OFF")
