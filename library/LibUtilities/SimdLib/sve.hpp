@@ -245,7 +245,14 @@ template <typename T> struct sveInt32
     // unary ops
     inline void operator+=(sveInt32 rhs)
     {
-        _data = svadd_x(svptrue_b32(), _data, rhs._data);
+        if constexpr (std::is_signed_v<T>)
+        {
+            _data = svadd_s32_x(svptrue_b32(), _data, rhs._data);
+        }
+        else
+        {
+            _data = svadd_u32_x(svptrue_b32(), _data, rhs._data);
+        }
     }
 
     inline void operator-=(sveInt32 rhs)
@@ -267,12 +274,26 @@ template <typename T> struct sveInt32
 template <typename T>
 inline sveInt32<T> operator+(sveInt32<T> lhs, sveInt32<T> rhs)
 {
-    return svadd_x(svptrue_b32(), lhs._data, rhs._data);
+    if constexpr (std::is_signed_v<T>)
+    {
+        return svadd_s32_x(svptrue_b32(), lhs._data, rhs._data);
+    }
+    else
+    {
+        return svadd_u32_x(svptrue_b32(), lhs._data, rhs._data);
+    }
 }
 
 template <typename T> inline sveInt32<T> operator+(sveInt32<T> lhs, T rhs)
 {
-    return svadd_x(svptrue_b32(), lhs._data, sveInt32<T>(rhs)._data);
+    if constexpr (std::is_signed_v<T>)
+    {
+        return svadd_s32_x(svptrue_b32(), lhs._data, sveInt32<T>(rhs)._data);
+    }
+    else
+    {
+        return svadd_u32_x(svptrue_b32(), lhs._data, sveInt32<T>(rhs)._data);
+    }
 }
 
 template <typename T>
@@ -420,57 +441,127 @@ template <typename T> struct sveInt64
     // unary ops
     inline void operator+=(sveInt64 rhs)
     {
-        _data = svadd_x(svptrue_b64(), _data, rhs._data);
+        if constexpr (std::is_signed_v<T>)
+        {
+            _data = svadd_s64_x(svptrue_b64(), _data, rhs._data);
+        }
+        else
+        {
+            _data = svadd_u64_x(svptrue_b64(), _data, rhs._data);
+        }
     }
 
     inline void operator-=(sveInt64 rhs)
     {
-        _data = svsub_x(svptrue_b64(), _data, rhs._data);
+        if constexpr (std::is_signed_v<T>)
+        {
+            _data = svsub_s64_x(svptrue_b64(), _data, rhs._data);
+        }
+        else
+        {
+            _data = svsub_u64_x(svptrue_b64(), _data, rhs._data);
+        }
     }
 
     inline void operator*=(sveInt64 rhs)
     {
-        _data = svmul_x(svptrue_b64(), _data, rhs._data);
+        if constexpr (std::is_signed_v<T>)
+        {
+            _data = svmul_s64_x(svptrue_b64(), _data, rhs._data);
+        }
+        else
+        {
+            _data = svmul_u64_x(svptrue_b64(), _data, rhs._data);
+        }
     }
 
     inline void operator/=(sveInt64 rhs)
     {
-        _data = svdiv_x(svptrue_b64(), _data, rhs._data);
+        if constexpr (std::is_signed_v<T>)
+        {
+            _data = svdiv_s64_x(svptrue_b64(), _data, rhs._data);
+        }
+        else
+        {
+            _data = svdiv_u64_x(svptrue_b64(), _data, rhs._data);
+        }
     }
 };
 
 template <typename T>
 inline sveInt64<T> operator+(sveInt64<T> lhs, sveInt64<T> rhs)
 {
-    return svadd_x(svptrue_b64(), lhs._data, rhs._data);
+    if constexpr (std::is_signed_v<T>)
+    {
+        return svadd_s64_x(svptrue_b64(), lhs._data, rhs._data);
+    }
+    else
+    {
+        return svadd_u64_x(svptrue_b64(), lhs._data, rhs._data);
+    }
 }
 
 template <typename T> inline sveInt64<T> operator+(sveInt64<T> lhs, T rhs)
 {
-    return svadd_x(svptrue_b64(), lhs._data, sveInt64<T>(rhs)._data);
+    if constexpr (std::is_signed_v<T>)
+    {
+        return svadd_s64_x(svptrue_b64(), lhs._data, sveInt64<T>(rhs)._data);
+    }
+    else
+    {
+        return svadd_u64_x(svptrue_b64(), lhs._data, sveInt64<T>(rhs)._data);
+    }
 }
 
 template <typename T>
 inline sveInt64<T> operator-(sveInt64<T> lhs, sveInt64<T> rhs)
 {
-    return svsub_x(svptrue_b64(), lhs._data, rhs._data);
+    if constexpr (std::is_signed_v<T>)
+    {
+        return svsub_s64_x(svptrue_b64(), lhs._data, rhs._data);
+    }
+    else
+    {
+        return svsub_u64_x(svptrue_b64(), lhs._data, rhs._data);
+    }
 }
 
 template <typename T>
 inline sveInt64<T> operator*(sveInt64<T> lhs, sveInt64<T> rhs)
 {
-    return svmul_x(svptrue_b64(), lhs._data, rhs._data);
+    if constexpr (std::is_signed_v<T>)
+    {
+        return svmul_s64_x(svptrue_b64(), lhs._data, rhs._data);
+    }
+    else
+    {
+        return svmul_u64_x(svptrue_b64(), lhs._data, rhs._data);
+    }
 }
 
 template <typename T>
 inline sveInt64<T> operator/(sveInt64<T> lhs, sveInt64<T> rhs)
 {
-    return svdiv_x(svptrue_b64(), lhs._data, rhs._data);
+    if constexpr (std::is_signed_v<T>)
+    {
+        return svdiv_s64_x(svptrue_b64(), lhs._data, rhs._data);
+    }
+    else
+    {
+        return svdiv_u64_x(svptrue_b64(), lhs._data, rhs._data);
+    }
 }
 
 template <typename T> inline sveInt64<T> abs(sveInt64<T> in)
 {
-    return svabs_x(svptrue_b64(), in._data);
+    if constexpr (std::is_signed_v<T>)
+    {
+        return svabs_s64_x(svptrue_b64(), in._data);
+    }
+    else
+    {
+        return svabs_u64_x(svptrue_b64(), in._data);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -540,20 +631,36 @@ struct sveFloat32
     template <typename T>
     inline void gather(scalarType const *p, const sveInt32<T> &indices)
     {
-        _data = svld1_gather_index(svptrue_b32(), p, indices._data);
+        if constexpr (std::is_signed_v<T>)
+        {
+            _data = svld1_gather_s32index_f32(svptrue_b32(), p, indices._data);
+        }
+        else
+        {
+            _data = svld1_gather_u32index_f32(svptrue_b32(), p, indices._data);
+        }
     }
 
     template <typename T>
     inline void scatter(scalarType *out, const sveInt32<T> &indices) const
     {
-        svst1_scatter_index(svptrue_b32(), out, indices._data, _data);
+        if constexpr (std::is_signed_v<T>)
+        {
+            svst1_scatter_s32index_f32(svptrue_b32(), out, indices._data,
+                                       _data);
+        }
+        else
+        {
+            svst1_scatter_u32index_f32(svptrue_b32(), out, indices._data,
+                                       _data);
+        }
     }
 
     // fma
     // this = this + a * b
     inline void fma(const sveFloat32 &a, const sveFloat32 &b)
     {
-        _data = svmad_x(svptrue_b32(), a._data, b._data, _data);
+        _data = svmad_f32_x(svptrue_b32(), a._data, b._data, _data);
     }
 
     // subscript
@@ -575,53 +682,69 @@ struct sveFloat32
     // unary ops
     inline void operator+=(sveFloat32 rhs)
     {
-        _data = svadd_x(svptrue_b32(), _data, rhs._data);
+        _data = svadd_f32_x(svptrue_b32(), _data, rhs._data);
     }
 
     inline void operator-=(sveFloat32 rhs)
     {
-        _data = svsub_x(svptrue_b32(), _data, rhs._data);
+        _data = svsub_f32_x(svptrue_b32(), _data, rhs._data);
     }
 
     inline void operator*=(sveFloat32 rhs)
     {
-        _data = svmul_x(svptrue_b32(), _data, rhs._data);
+        _data = svmul_f32_x(svptrue_b32(), _data, rhs._data);
     }
 
     inline void operator/=(sveFloat32 rhs)
     {
-        _data = svdiv_x(svptrue_b32(), _data, rhs._data);
+        _data = svdiv_f32_x(svptrue_b32(), _data, rhs._data);
     }
 };
 
 inline sveFloat32 operator+(sveFloat32 lhs, sveFloat32 rhs)
 {
-    return svadd_x(svptrue_b32(), lhs._data, rhs._data);
+    return svadd_f32_x(svptrue_b32(), lhs._data, rhs._data);
 }
 
 inline sveFloat32 operator-(sveFloat32 lhs, sveFloat32 rhs)
 {
-    return svsub_x(svptrue_b32(), lhs._data, rhs._data);
+    return svsub_f32_x(svptrue_b32(), lhs._data, rhs._data);
+}
+
+inline sveFloat32 operator-(sveFloat32 in)
+{
+    return svsub_f32_x(svptrue_b32(), svdup_f32(-0.0), in._data);
+    // return sveor_f32_x(svptrue_b32(), in._data, svdup_f32(-0.0));
 }
 
 inline sveFloat32 operator*(sveFloat32 lhs, sveFloat32 rhs)
 {
-    return svmul_x(svptrue_b32(), lhs._data, rhs._data);
+    return svmul_f32_x(svptrue_b32(), lhs._data, rhs._data);
 }
 
 inline sveFloat32 operator/(sveFloat32 lhs, sveFloat32 rhs)
 {
-    return svdiv_x(svptrue_b32(), lhs._data, rhs._data);
+    return svdiv_f32_x(svptrue_b32(), lhs._data, rhs._data);
 }
 
 inline sveFloat32 sqrt(sveFloat32 in)
 {
-    return svsqrt_x(svptrue_b32(), in._data);
+    return svsqrt_f32_x(svptrue_b32(), in._data);
 }
 
 inline sveFloat32 abs(sveFloat32 in)
 {
-    return svabs_x(svptrue_b32(), in._data);
+    return svabs_f32_x(svptrue_b32(), in._data);
+}
+
+inline sveFloat32 min(sveFloat32 lhs, sveFloat32 rhs)
+{
+    return svmin_f32_x(svptrue_b32(), lhs._data, rhs._data);
+}
+
+inline sveFloat32 max(sveFloat32 lhs, sveFloat32 rhs)
+{
+    return svmax_f32_x(svptrue_b32(), lhs._data, rhs._data);
 }
 
 inline sveFloat32 log(sveFloat32 in)
@@ -637,6 +760,21 @@ inline sveFloat32 log(sveFloat32 in)
     sveFloat32 ret;
     ret.load(tmp);
     return ret;
+}
+
+inline void load_unalign_interleave(
+    const double *in, const std::uint32_t dataLen,
+    std::vector<sveFloat32, allocator<sveFloat32>> &out)
+{
+    alignas(sveFloat32::alignment) sveFloat32::scalarArray tmp;
+    for (size_t i = 0; i < dataLen; ++i)
+    {
+        for (size_t j = 0; j < sveFloat32::width; ++j)
+        {
+            tmp[j] = in[i + j * dataLen];
+        }
+        out[i].load(tmp);
+    }
 }
 
 inline void load_interleave(const float *in, std::uint32_t dataLen,
@@ -672,6 +810,21 @@ inline void load_interleave(const float *in, std::uint32_t dataLen,
     {
         out[i].gather(in, index0);
         index0 = index0 + 1u;
+    }
+}
+
+inline void deinterleave_unalign_store(
+    const std::vector<sveFloat32, allocator<sveFloat32>> &in,
+    const std::uint32_t dataLen, double *out)
+{
+    alignas(sveFloat32::alignment) sveFloat32::scalarArray tmp;
+    for (size_t i = 0; i < dataLen; ++i)
+    {
+        in[i].store(tmp);
+        for (size_t j = 0; j < sveFloat32::width; ++j)
+        {
+            out[i + j * dataLen] = tmp[j];
+        }
     }
 }
 
@@ -766,20 +919,36 @@ struct sveFloat64
     template <typename T>
     inline void gather(scalarType const *p, const sveInt64<T> &indices)
     {
-        _data = svld1_gather_index(svptrue_b64(), p, indices._data);
+        if constexpr (std::is_signed_v<T>)
+        {
+            _data = svld1_gather_s64index_f64(svptrue_b64(), p, indices._data);
+        }
+        else
+        {
+            _data = svld1_gather_u64index_f64(svptrue_b64(), p, indices._data);
+        }
     }
 
     template <typename T>
     inline void scatter(scalarType *out, const sveInt64<T> &indices) const
     {
-        svst1_scatter_index(svptrue_b64(), out, indices._data, _data);
+        if constexpr (std::is_signed_v<T>)
+        {
+            svst1_scatter_s64index_f64(svptrue_b64(), out, indices._data,
+                                       _data);
+        }
+        else
+        {
+            svst1_scatter_u64index_f64(svptrue_b64(), out, indices._data,
+                                       _data);
+        }
     }
 
     // fma
     // this = this + a * b
     inline void fma(const sveFloat64 &a, const sveFloat64 &b)
     {
-        _data = svmad_x(svptrue_b64(), a._data, b._data, _data);
+        _data = svmad_f64_x(svptrue_b64(), a._data, b._data, _data);
     }
 
     // subscript
@@ -801,53 +970,69 @@ struct sveFloat64
     // unary ops
     inline void operator+=(sveFloat64 rhs)
     {
-        _data = svadd_x(svptrue_b64(), _data, rhs._data);
+        _data = svadd_f64_x(svptrue_b64(), _data, rhs._data);
     }
 
     inline void operator-=(sveFloat64 rhs)
     {
-        _data = svsub_x(svptrue_b64(), _data, rhs._data);
+        _data = svsub_f64_x(svptrue_b64(), _data, rhs._data);
     }
 
     inline void operator*=(sveFloat64 rhs)
     {
-        _data = svmul_x(svptrue_b64(), _data, rhs._data);
+        _data = svmul_f64_x(svptrue_b64(), _data, rhs._data);
     }
 
     inline void operator/=(sveFloat64 rhs)
     {
-        _data = svdiv_x(svptrue_b64(), _data, rhs._data);
+        _data = svdiv_f64_x(svptrue_b64(), _data, rhs._data);
     }
 };
 
 inline sveFloat64 operator+(sveFloat64 lhs, sveFloat64 rhs)
 {
-    return svadd_x(svptrue_b64(), lhs._data, rhs._data);
+    return svadd_f64_x(svptrue_b64(), lhs._data, rhs._data);
 }
 
 inline sveFloat64 operator-(sveFloat64 lhs, sveFloat64 rhs)
 {
-    return svsub_x(svptrue_b64(), lhs._data, rhs._data);
+    return svsub_f64_x(svptrue_b64(), lhs._data, rhs._data);
+}
+
+inline sveFloat64 operator-(sveFloat64 in)
+{
+    return svsub_f64_x(svptrue_b64(), svdup_f64(-0.0), in._data);
+    // return sveor_f64_x(svptrue_b64(), in._data, svdup_f64(-0.0));
 }
 
 inline sveFloat64 operator*(sveFloat64 lhs, sveFloat64 rhs)
 {
-    return svmul_x(svptrue_b64(), lhs._data, rhs._data);
+    return svmul_f64_x(svptrue_b64(), lhs._data, rhs._data);
 }
 
 inline sveFloat64 operator/(sveFloat64 lhs, sveFloat64 rhs)
 {
-    return svdiv_x(svptrue_b64(), lhs._data, rhs._data);
+    return svdiv_f64_x(svptrue_b64(), lhs._data, rhs._data);
 }
 
 inline sveFloat64 sqrt(sveFloat64 in)
 {
-    return svsqrt_x(svptrue_b64(), in._data);
+    return svsqrt_f64_x(svptrue_b64(), in._data);
 }
 
 inline sveFloat64 abs(sveFloat64 in)
 {
-    return svabs_x(svptrue_b64(), in._data);
+    return svabs_f64_x(svptrue_b64(), in._data);
+}
+
+inline sveFloat64 min(sveFloat64 lhs, sveFloat64 rhs)
+{
+    return svmin_f64_x(svptrue_b64(), lhs._data, rhs._data);
+}
+
+inline sveFloat64 max(sveFloat64 lhs, sveFloat64 rhs)
+{
+    return svmax_f64_x(svptrue_b64(), lhs._data, rhs._data);
 }
 
 inline sveFloat64 log(sveFloat64 in)
@@ -863,6 +1048,21 @@ inline sveFloat64 log(sveFloat64 in)
     sveFloat64 ret;
     ret.load(tmp);
     return ret;
+}
+
+inline void load_unalign_interleave(
+    const double *in, const std::uint32_t dataLen,
+    std::vector<sveFloat64, allocator<sveFloat64>> &out)
+{
+    alignas(sveFloat64::alignment) sveFloat64::scalarArray tmp;
+    for (size_t i = 0; i < dataLen; ++i)
+    {
+        for (size_t j = 0; j < sveFloat64::width; ++j)
+        {
+            tmp[j] = in[i + j * dataLen];
+        }
+        out[i].load(tmp);
+    }
 }
 
 inline void load_interleave(const double *in, std::uint32_t dataLen,
@@ -897,6 +1097,21 @@ inline void load_interleave(const double *in, std::uint32_t dataLen,
     {
         out[i].gather(in, index0);
         index0 = index0 + 1ul;
+    }
+}
+
+inline void deinterleave_unalign_store(
+    const std::vector<sveFloat64, allocator<sveFloat64>> &in,
+    const std::uint32_t dataLen, double *out)
+{
+    alignas(sveFloat64::alignment) sveFloat64::scalarArray tmp;
+    for (size_t i = 0; i < dataLen; ++i)
+    {
+        in[i].store(tmp);
+        for (size_t j = 0; j < sveFloat64::width; ++j)
+        {
+            out[i + j * dataLen] = tmp[j];
+        }
     }
 }
 
@@ -947,7 +1162,7 @@ inline sveMask64 operator>(sveFloat64 lhs, sveFloat64 rhs)
     svbool_vlst_t mask = svcmpgt(svptrue_b64(), lhs._data, rhs._data);
     // abuse set inactive to zero to convert
     sveMask64::vectorType sveTrue_v = svdup_u64(sveMask64::true_v);
-    return svand_z(mask, sveTrue_v, sveTrue_v);
+    return svand_u64_z(mask, sveTrue_v, sveTrue_v);
 }
 
 // logical and
@@ -955,7 +1170,7 @@ inline bool operator&&(sveMask64 lhs, bool rhs)
 {
     // set mask
     sveMask64::vectorType sveFalse_v = svdup_u64(sveMask64::false_v);
-    svbool_vlst_t mask = svcmpne(svptrue_b64(), lhs._data, sveFalse_v);
+    svbool_vlst_t mask = svcmpne_u64(svptrue_b64(), lhs._data, sveFalse_v);
     // is any equal to false (zero)?
     bool tmp = svptest_any(svptrue_b64(), mask);
     return tmp && rhs;
@@ -978,7 +1193,7 @@ inline sveMask32 operator>(sveFloat32 lhs, sveFloat32 rhs)
     svbool_vlst_t mask = svcmpgt(svptrue_b32(), lhs._data, rhs._data);
     // abuse set inactive to zero to convert
     sveMask32::vectorType sveTrue_v = svdup_u32(sveMask32::true_v);
-    return svand_z(mask, sveTrue_v, sveTrue_v);
+    return svand_u32_z(mask, sveTrue_v, sveTrue_v);
 }
 
 // logical and
@@ -986,7 +1201,7 @@ inline bool operator&&(sveMask32 lhs, bool rhs)
 {
     // set mask
     sveMask32::vectorType sveFalse_v = svdup_u32(sveMask32::false_v);
-    svbool_vlst_t mask = svcmpne(svptrue_b32(), lhs._data, sveFalse_v);
+    svbool_vlst_t mask = svcmpne_u32(svptrue_b32(), lhs._data, sveFalse_v);
     // is any equal to false (zero)?
     bool tmp = svptest_any(svptrue_b32(), mask);
     return tmp && rhs;

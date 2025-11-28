@@ -38,6 +38,7 @@
 #include "avx2.hpp"
 #include "avx512.hpp"
 #include "scalar.hpp"
+#include "sse2.hpp"
 #include "sve.hpp"
 
 namespace tinysimd
@@ -66,8 +67,8 @@ template <typename T, int width> struct default_abi
 {
     using type = typename first_not_void_of<
         typename sve<T, width>::type, typename avx512<T, width>::type,
-        typename avx2<T, width>::type, typename sse2<T>::type,
-        typename scalar<T>::type>::type;
+        typename avx2<T, width>::type, typename sse2<T, width>::type,
+        typename simd64<T>::type, typename scalar<T>::type>::type;
 
     static_assert(!std::is_void_v<type>, "unsupported SIMD type");
 };
