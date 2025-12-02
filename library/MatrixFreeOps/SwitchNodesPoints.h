@@ -331,6 +331,9 @@
         {
             BOOST_PP_FOR((MIN3D, MIN3D, MAX3D), TEST, UPDATE,
                          OPERATOR3D_M_PYR_PRISM);
+            default:
+                operator3D(input, output);
+                break;
         }
     }
 
