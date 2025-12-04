@@ -27,3 +27,14 @@ __pycache__
 solvers/CardiacEPSolver/CellModels/CellMLTest.*
 # Generated source files
 library/MatrixFreeOps/SwitchLimits.h
+
+# Solver run outputs (keep small, intentional inputs tracked explicitly)
+*.fld
+*.chk
+*.his
+*.rst
+*.vtu
+*.plt
+*.dat
+cases/**/output*/
+solvers/**/Tests/output*/
