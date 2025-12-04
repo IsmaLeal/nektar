@@ -1,0 +1,186 @@
+<NEKTAR xsi:noNamespaceSchemaLocation="http://www.nektar.info/schema/nektar.xsd">
+
+  <!-- =========================================================
+       EXPANSIONS
+     ========================================================= -->
+  <EXPANSIONS>
+    <!-- velocity components -->
+    <E COMPOSITE="C[0]" NUMMODES="12" FIELDS="u,v" TYPE="MODIFIED"/>
+    <!-- pressure -->
+    <E COMPOSITE="C[0]" NUMMODES="11" FIELDS="p" TYPE="MODIFIEDQUADPLUS1"/>
+  </EXPANSIONS>
+
+  <!-- =========================================================
+       CONDITIONS
+     ========================================================= -->
+  <CONDITIONS>
+    <TIMEINTEGRATIONSCHEME>
+      <METHOD> IMEX </METHOD>
+      <ORDER> 1 </ORDER>
+    </TIMEINTEGRATIONSCHEME>
+
+    <SOLVERINFO>
+      <I PROPERTY="SolverType" VALUE="VelocityCorrectionScheme"/>
+      <I PROPERTY="EQTYPE" VALUE="UnsteadyNavierStokes"/>
+      <I PROPERTY="AdvectionForm" VALUE="Convective"/>
+      <I PROPERTY="Projection" VALUE="Galerkin"/>
+      <I PROPERTY="SPECTRALHPDEALIASING" VALUE="True"/>
+    </SOLVERINFO>
+
+    <PARAMETERS>
+      <P> TimeStep = 0.0005 </P>
+      <P> NumSteps = 2400 </P>
+      <P> IO_InfoSteps = 10 </P>
+      <P> Re = 40 </P>
+      <P> Kinvis = 1.0/Re </P>
+    </PARAMETERS>
+
+    <VARIABLES>
+      <V ID="0"> u </V>
+      <V ID="1"> v </V>
+      <V ID="2"> p </V>
+    </VARIABLES>
+
+    <!-- BOUNDARY REGIONS: 4 edges → 4 boundary regions -->
+    <BOUNDARYREGIONS>
+      <B ID="0"> C[1] </B>  <!-- bottom -->
+      <B ID="1"> C[2] </B>  <!-- top    -->
+      <B ID="2"> C[3] </B>  <!-- right  -->
+      <B ID="3"> C[4] </B>  <!-- left   -->
+    </BOUNDARYREGIONS>
+
+    <!-- PERIODIC BOUNDARIES -->
+    <BOUNDARYCONDITIONS>
+      <!-- y-periodic: bottom (0) <-> top (1) -->
+      <REGION REF="0">
+        <P VAR="u" VALUE="[1]"/>
+        <P VAR="v" VALUE="[1]"/>
+        <P VAR="p" VALUE="[1]"/>
+      </REGION>
+      <REGION REF="1">
+        <P VAR="u" VALUE="[0]"/>
+        <P VAR="v" VALUE="[0]"/>
+        <P VAR="p" VALUE="[0]"/>
+      </REGION>
+
+      <!-- x-periodic: right (2) <-> left (3) -->
+      <REGION REF="2">
+        <P VAR="u" VALUE="[3]"/>
+        <P VAR="v" VALUE="[3]"/>
+        <P VAR="p" VALUE="[3]"/>
+      </REGION>
+      <REGION REF="3">
+        <P VAR="u" VALUE="[2]"/>
+        <P VAR="v" VALUE="[2]"/>
+        <P VAR="p" VALUE="[2]"/>
+      </REGION>
+    </BOUNDARYCONDITIONS>
+
+    <!-- LAMB–OSEEN INITIAL CONDITIONS -->
+    <FUNCTION NAME="InitialConditions">
+      <E VAR="u" VALUE=" - (10.0/(2*PI)) * ( (y-PI) / ((x-PI)^2 + (y-PI)^2 + 1.0e-8) ) * (1.0 - exp( - ((x-PI)^2 + (y-PI)^2) / (0.2^2) )) "/>
+      <E VAR="v" VALUE="  (10.0/(2*PI)) * ( (x-PI) / ((x-PI)^2 + (y-PI)^2 + 1.0e-8) ) * (1.0 - exp( - ((x-PI)^2 + (y-PI)^2) / (0.2^2) )) "/>
+      <E VAR="p" VALUE="0"/>
+    </FUNCTION>
+  </CONDITIONS>
+
+  <!-- =========================================================
+       GEOMETRY: [0, 2π] x [0, 2π], 4x2 = 8 QUADS
+     ========================================================= -->
+  <GEOMETRY DIM="2" SPACE="2">
+    <!-- 5 x 3 = 15 vertices -->
+    <VERTEX>
+      <!-- y = 0 -->
+      <V ID="0"> 0.0                 0.0                 0.0 </V>
+      <V ID="1"> 1.5707963268        0.0                 0.0 </V>
+      <V ID="2"> 3.1415926536        0.0                 0.0 </V>
+      <V ID="3"> 4.7123889804        0.0                 0.0 </V>
+      <V ID="4"> 6.2831853072        0.0                 0.0 </V>
+
+      <!-- y = π -->
+      <V ID="5"> 0.0                 3.1415926536        0.0 </V>
+      <V ID="6"> 1.5707963268        3.1415926536        0.0 </V>
+      <V ID="7"> 3.1415926536        3.1415926536        0.0 </V>
+      <V ID="8"> 4.7123889804        3.1415926536        0.0 </V>
+      <V ID="9"> 6.2831853072        3.1415926536        0.0 </V>
+
+      <!-- y = 2π -->
+      <V ID="10"> 0.0                6.2831853072        0.0 </V>
+      <V ID="11"> 1.5707963268       6.2831853072        0.0 </V>
+      <V ID="12"> 3.1415926536       6.2831853072        0.0 </V>
+      <V ID="13"> 4.7123889804       6.2831853072        0.0 </V>
+      <V ID="14"> 6.2831853072       6.2831853072        0.0 </V>
+    </VERTEX>
+
+    <!-- EDGES -->
+    <EDGE>
+      <!-- bottom row -->
+      <E ID="0"> 0 1 </E>
+      <E ID="1"> 1 2 </E>
+      <E ID="2"> 2 3 </E>
+      <E ID="3"> 3 4 </E>
+
+      <!-- middle row -->
+      <E ID="4"> 5 6 </E>
+      <E ID="5"> 6 7 </E>
+      <E ID="6"> 7 8 </E>
+      <E ID="7"> 8 9 </E>
+
+      <!-- top row -->
+      <E ID="8"> 10 11 </E>
+      <E ID="9"> 11 12 </E>
+      <E ID="10"> 12 13 </E>
+      <E ID="11"> 13 14 </E>
+
+      <!-- vertical columns -->
+      <E ID="12"> 0 5 </E>
+      <E ID="13"> 5 10 </E>
+
+      <E ID="14"> 1 6 </E>
+      <E ID="15"> 6 11 </E>
+
+      <E ID="16"> 2 7 </E>
+      <E ID="17"> 7 12 </E>
+
+      <E ID="18"> 3 8 </E>
+      <E ID="19"> 8 13 </E>
+
+      <E ID="20"> 4 9 </E>
+      <E ID="21"> 9 14 </E>
+    </EDGE>
+
+    <!-- QUADRILATERAL ELEMENTS: each Q uses 4 EDGE IDs -->
+    <ELEMENT>
+      <!-- bottom row of quads -->
+      <Q ID="0"> 0 14 4 12 </Q>  <!-- v0-v1-v6-v5 -->
+      <Q ID="1"> 1 16 5 14 </Q>  <!-- v1-v2-v7-v6 -->
+      <Q ID="2"> 2 18 6 16 </Q>  <!-- v2-v3-v8-v7 -->
+      <Q ID="3"> 3 20 7 18 </Q>  <!-- v3-v4-v9-v8 -->
+
+      <!-- top row of quads -->
+      <Q ID="4"> 4 15 8 13 </Q>  <!-- v5-v6-v11-v10 -->
+      <Q ID="5"> 5 17 9 15 </Q>  <!-- v6-v7-v12-v11 -->
+      <Q ID="6"> 6 19 10 17 </Q> <!-- v7-v8-v13-v12 -->
+      <Q ID="7"> 7 21 11 19 </Q> <!-- v8-v9-v14-v13 -->
+    </ELEMENT>
+
+    <COMPOSITE>
+      <C ID="0"> Q[0-7] </C>      <!-- all 8 elements -->
+      <C ID="1"> E[0-3] </C>      <!-- bottom boundary -->
+      <C ID="2"> E[8-11] </C>     <!-- top boundary -->
+      <C ID="3"> E[20-21] </C>    <!-- right boundary -->
+      <C ID="4"> E[12-13] </C>    <!-- left boundary -->
+    </COMPOSITE>
+
+    <DOMAIN> C[0] </DOMAIN>
+  </GEOMETRY>
+
+  <!-- CHECKPOINT FILTER -->
+  <FILTERS>
+    <FILTER TYPE="Checkpoint">
+      <PARAM NAME="OutputFile">domain</PARAM>
+      <PARAM NAME="OutputFrequency">100</PARAM>
+    </FILTER>
+  </FILTERS>
+
+</NEKTAR>
