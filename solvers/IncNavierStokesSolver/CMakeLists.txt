@@ -13,6 +13,9 @@ IF( NEKTAR_SOLVER_INCNAVIERSTOKES )
         ./EquationSystems/CoupledLinearNS.cpp
         ./EquationSystems/CoupledLocalToGlobalC0ContMap.cpp
         ./EquationSystems/IncNavierStokes.cpp
+        ./EquationSystems/DOVelocityCorrectionScheme.cpp
+        ./EquationSystems/DOReducedCGEigenBasis.cpp
+        ./EquationSystems/DOPODInitialiser.cpp
         ./EquationSystems/VelocityCorrectionScheme.cpp
         ./EquationSystems/VelocityCorrectionSchemeImplicit.cpp
         ./EquationSystems/VelocityCorrectionSchemeWeakPressure.cpp
@@ -34,6 +37,7 @@ IF( NEKTAR_SOLVER_INCNAVIERSTOKES )
         ./Filters/FilterReynoldsStresses.cpp
         ./Filters/FilterMovingBody.cpp
         ./Filters/FilterAeroForcesSPM.cpp
+        ./Filters/FilterDOArchive.cpp
         ./Forcing/ForcingIncNSSyntheticEddy.cpp
         ./Forcing/ForcingMovingBody.cpp
         ./Forcing/ForcingStabilityCoupledLNS.cpp
@@ -71,6 +75,7 @@ IF( NEKTAR_SOLVER_INCNAVIERSTOKES )
             Filters/FilterAeroForcesSPM.h
             Filters/FilterMovingBody.h
             Filters/FilterReynoldsStresses.h
+            Filters/FilterDOArchive.h
             Forcing/ForcingIncNSSyntheticEddy.h
             Forcing/ForcingMovingBody.h
             Forcing/ForcingStabilityCoupledLNS.h

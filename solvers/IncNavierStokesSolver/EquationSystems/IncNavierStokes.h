@@ -54,6 +54,7 @@ namespace bnu = boost::numeric::ublas;
 enum SolverType
 {
     eNoSolverType,
+    eDOVelocityCorrectionScheme,
     eCoupledLinearisedNS,
     eSmoothedProfileMethod,
     eVCSMapping,
