@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<NEKTAR>
+    <GEOMETRY DIM="2" SPACE="2">
+        <VERTEX COMPRESSED="B64Z-LittleEndian" BITSIZE="64">eJxjYMAPGFF4P+zR5ZmwyiPUMWM1FSHPAqWNwUDYAV0lK1Z5hH42KC2h6xLyW1ESQz87VnmEfg40d6G7gxPNPHR5LjRxdHluNPvR5XnQ7Ef3By+a/ejyfGj2o8vzo+lDlwcAIIAo6QAA</VERTEX>
+        <EDGE COMPRESSED="B64Z-LittleEndian" BITSIZE="64">eJx1jzcOwDAMxJze4/T8/6eZOISAtAgEdGc6pf8UwS6DXQWbqdUDNwG3Yt7pdM9dL+ZuENM3qpf8JCY/i/nfEvSuYvqyfHhvE5PblcfjEONxivG9Ar9bTN8jH7xfMbkP578CdAAA</EDGE>
+        <ELEMENT>
+            <Q COMPRESSED="B64Z-LittleEndian" BITSIZE="64">eJx1z0kOgCAQRFEU5wnB6f43dfNrYSWyeQmhupoQvqfCGqPdN9hi95PrccDRctHeTzjjYn3qWXGznOaqJ+FuOc1RT8aCh+2vnhMvy+l/6rnxsdwL1KABtQAA</Q>
+        </ELEMENT>
+        <COMPOSITE>
+            <C ID="1"> E[0,4,7] </C>
+            <C ID="2"> E[8,15,22] </C>
+            <C ID="3"> E[18,21,23] </C>
+            <C ID="4"> E[3,12,19] </C>
+            <C ID="10"> Q[0-8] </C>
+        </COMPOSITE>
+        <DOMAIN>
+            <D ID="0"> C[10] </D>
+        </DOMAIN>
+    </GEOMETRY>
+    <Metadata>
+        <Provenance>
+            <GitBranch>refs/heads/master</GitBranch>
+            <GitSHA1>b1774dc058af492a3183698f31ce9b90664267dd</GitSHA1>
+            <Hostname>isma-ThinkPad-P1-Gen-7</Hostname>
+            <NektarVersion>5.9.0</NektarVersion>
+            <Timestamp>09-Feb-2026 15:36:05</Timestamp>
+        </Provenance>
+        <NekMeshCommandLine>mesh/domain.msh mesh/domain_mesh.xml </NekMeshCommandLine>
+    </Metadata>
+    <EXPANSIONS>
+        <E COMPOSITE="C[10]" NUMMODES="4" TYPE="MODIFIED" FIELDS="u" />
+    </EXPANSIONS>
+</NEKTAR>

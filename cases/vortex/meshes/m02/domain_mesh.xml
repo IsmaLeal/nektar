@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<NEKTAR>
+    <GEOMETRY DIM="2" SPACE="2">
+        <VERTEX COMPRESSED="B64Z-LittleEndian" BITSIZE="64">eJx9lLtSU1EUhpMY8IIRFWMSQSXeQDCiBJV7VIJ3BSWieAV8BnsqXsCxoOE5eASLvIBdZmgsU2aGhgmzVpbn2yvs5k/Ol/X9+0zOPrHY4Sse+VYrkSdcbr874lqNJ93r9RbvcOeNd7rzjRY/6s4bP9bGq+u4y23/J1xuni6XW//JNvvSlXK59Z9yufV3u9x6Tkv+qTZX8iH7z7jc+s+63Pp7XG795yR/bzVXKuhPg8fRf96dt/6My60/K1k8WD1Bf87l1n/B5dbf63Lr75Pc2Nz997OQDvovgvP+L7nz1n/Z5dbfL1n9+2t7ZyAT9OfBE+i/4s5b/1WXW/81yWyhXNnL54L+6y63/hsut/4Bl1v/YKStVuI5uIn9kA9J6v/C53gY8+S30M/nsIB58tsRWg/2PwLO/jvg9N+N8EbgHwWnvwhO/5ikeum/B07/fXD6H0jqHP3j4PRPgNM/qfcp1+mfAqd/Gpz+GUk9v/TPgtNfAqdfP+j5pP8ROP2Pwemfk9TzR38ZnP55cPqfxP5ftRLfo09j0UX+TFLPL9+DzzFP/gL9fI+9xDz5qwitB/t/Dc7+N+D0L0R4I/AvgtP/Fpz+d5L6v9K/BE5/BZz+95L6XNC/DE7/B3D6P0rqc0X/Cjj9n8Dp/yypXvq/gNP/FZz+b5I6R/93cPpXwelfk9Tr9K+D0/8DnP59MM71OAAA</VERTEX>
+        <EDGE COMPRESSED="B64Z-LittleEndian" BITSIZE="64">eJx1lVVXVVEURq/dXRgotiJY2HntbgVEVAxUFBNU7A4UFQzsFmwM/qAvaz44xzj3ZY35jX3P+vY5e38rlfr/1yKhtkyorRIqv9ZaD7dJ4LZintdO61nXXsy6DmKe1zEq++L/ncT8v7OYfXSRznO7ivHbTTr9uovZRw/5wUdPMT56JfjqLR1/fRL89pWO735i/GbID/vpL2Y/A8T4GiidfQ4S4ytTOvsfLMbvEPnhvWSJeS9DxfgaJp33NVyMrxHSeY8jxfgdJT+839Fi3u8YMb7GSue9Z4vxNU463yNHjN9c+eE7jRfznSaI8TVROt9vkhhfk6XzXfPE+J0iP1lRp4r53tPE+JounXMwQ4yvmdI5H7PE+J0tP5ybOWLOzVwxvuZJ5zzNF+MrLZ1ztkCM34VRySnO3yIx52+xmDxeovWcy6VizuUyMc9brvWc1xVizutKMc9bFZVc4xyvFuN3jXTO91oxvtZJ59yvF+N3Q1Tyi/uwUUz/TdK5J5vF9N8infuTL8ZXQVRyintVKKb/VunctyIx/bdJ5x4Wi/G1PSp5xP3cIab/Tunc2xIx/XdJ5z7vFuNrT1Ryh3u+V0z/Uunc/31i+u+XTi4cEOOrLCr5Ql4cFNP/kHRypFxM/8PSyZcjYnwdjUqOpKMeE9P/uHTy6ISY/hXSyalKMb5ORiXfyK9TYvqflk6uVYnpf0Y6eXdWjK9zUbn/5OB5MTl4QUyeXdR68vGSmHy8LOZ5V7Se3LwqJjeviXne9ajkCHl6Q4zfm9LJ2VtifN2WTv5Wi/F7Jyo5Qi7fFdO/Rjp5fU9M//vSyfEHYnzVRiVHyPc6Mf0fSif3H4np/1g68+CJGF/1UckR5sRTMf2fSWd+PBfT/4V05spLMb5eRSVHmDevxfR/I5059FZM/3fSmU/vxfj6EJUcYW59FNP/k3TmWYOY/o3SmXOfxfj6EpUcYf59FdP/m3Tm4ncx/X9IL4n6U4yvpqjkG3P0l5j+v6UzX/+I6f9XOnO3WYyvf7r4hEoA</EDGE>
+        <ELEMENT>
+            <Q COMPRESSED="B64Z-LittleEndian" BITSIZE="64">eJx11ec3lwEYh/GGSioRkSIiUkSKSBENokF777333nvvvffe9Q/25rpfdJ2jN59zvs7R9eO5H506/f+vM3bBrh3sCdgNu+vrsffAROyp75uEvbC3/r8E7X0wuYOO2PtiijqiMxX7YZo6emhPx/7qSNSegZnqiM89ALNwoDqStA/CbHX00p6Dg9URP7dczMMh6uijPR8L1JGsfSgWqiM+dxEOw2J1pGgfjiPUkaq9BEvVET/HkViG5epI0z4KK9SRrn00jlFH/P4rsQrHqiNDezXWqCNT+zisVUc8T+NxAtapI0t7PU5Ux0DtDdiojnge4vmfhJNxCmZrn4pN2Iw52qdhC7ZiPN/x3EzHGerI1T4TZ6kjT3sbtqsj7iJ+L7Nxjjrytc/Feeoo0D4fF6gjnuv43AtxkToKtS/GJeoo0r4Ul6kj7iS+73JcoY5i7StxlTqGa1+Na9QR9x13vRbXqaNE+3rcoI5S7RtxkzrifRF3vRm3qKNM+1bcpo5y7dtxhzri3uOud+IudVRo34171DFa+17cp474nHHX+/GAOiq1H8RD6qjSfhiPqCPee3HXR/EYHsdq7SfwJJ7CGu2n8QyexXhvxV2fw/PqqNV+AS+qY7z2S3hZHfE+jru+glfVUaf9Gl5XR732G3hTHfH+jru+hbfV0aD9Dt5VR6P2e3hfHfH+jbt+gA/VMVn7I3ysjinan+BTdcT7PO76GT5XR5P2F/hSHc3aX+FrdcTfh7jrN/hWHS3a3+F7dbRq/4Af1RF/b+KuP+FndczQ/gW/qmOm9m/4XR3xdzLu+gf+VEeb9l/4Wx3t2v/gX3X8A57ufWkA</Q>
+        </ELEMENT>
+        <COMPOSITE>
+            <C ID="1"> E[0,10,17,24,31,38,45,52,59] </C>
+            <C ID="2"> E[60,62,64,117,119,121,174,176,178] </C>
+            <C ID="3"> E[130,137,143,149,155,161,167,173,179] </C>
+            <C ID="4"> E[3,6,9,68,71,74,125,128,131] </C>
+            <C ID="10"> Q[0-80] </C>
+        </COMPOSITE>
+        <DOMAIN>
+            <D ID="0"> C[10] </D>
+        </DOMAIN>
+    </GEOMETRY>
+    <Metadata>
+        <Provenance>
+            <GitBranch>refs/heads/master</GitBranch>
+            <GitSHA1>82d4bc77fec7f0924041d61784fd08207db74f57</GitSHA1>
+            <Hostname>isma-ThinkPad-P1-Gen-7</Hostname>
+            <NektarVersion>5.9.0</NektarVersion>
+            <Timestamp>27-Feb-2026 11:51:33</Timestamp>
+        </Provenance>
+        <NekMeshCommandLine>domain.msh domain_mesh.xml </NekMeshCommandLine>
+    </Metadata>
+    <EXPANSIONS>
+        <E COMPOSITE="C[10]" NUMMODES="4" TYPE="MODIFIED" FIELDS="u" />
+    </EXPANSIONS>
+</NEKTAR>

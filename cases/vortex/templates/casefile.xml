@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?> <!-- Not necessary but nice -->
+<NEKTAR>
+  <GEOMETRY DIM="2" SPACE="2">
+    <VERTEX COMPRESSED="B64Z-LittleEndian" BITSIZE="64">eJxjYMAPGFF4P+zR5ZmwyiPUMWM1FSHPAqWNwUDYAV0lK1Z5hH42KC2h6xLyW1ESQz87VnmEfg40d6G7gxPNPHR5LjRxdHluNPvR5XnQ7Ef3By+a/ejyfGj2o8vzo+lDlwcAIIAo6QAA</VERTEX>
+    <EDGE COMPRESSED="B64Z-LittleEndian" BITSIZE="64">eJx1jzcOwDAMxJze4/T8/6eZOISAtAgEdGc6pf8UwS6DXQWbqdUDNwG3Yt7pdM9dL+ZuENM3qpf8JCY/i/nfEvSuYvqyfHhvE5PblcfjEONxivG9Ar9bTN8jH7xfMbkP578CdAAA</EDGE>
+    <ELEMENT>
+        <Q COMPRESSED="B64Z-LittleEndian" BITSIZE="64">eJx1z0kOgCAQRFEU5wnB6f43dfNrYSWyeQmhupoQvqfCGqPdN9hi95PrccDRctHeTzjjYn3qWXGznOaqJ+FuOc1RT8aCh+2vnhMvy+l/6rnxsdwL1KABtQAA</Q>
+    </ELEMENT>
+    <COMPOSITE>
+        <C ID="1"> E[0,4,7] </C>
+        <C ID="2"> E[8,15,22] </C>
+        <C ID="3"> E[18,21,23] </C>
+        <C ID="4"> E[3,12,19] </C>
+        <C ID="10"> Q[0-8] </C>
+    </COMPOSITE>
+    <DOMAIN>
+        <D ID="0"> C[10] </D>
+    </DOMAIN>
+  </GEOMETRY>
+
+
+  <EXPANSIONS>
+    <E COMPOSITE="C[10]" NUMMODES="5" FIELDS="u,v,p" TYPE="MODIFIED" />
+  </EXPANSIONS>
+
+  <CONDITIONS>
+    <PARAMETERS>
+      <!-- <P> NumSteps = 1000 </P> -->
+      <P> TimeStep = 0.001 </P>
+      <!-- <P> FinTime = NumSteps*TimeStep </P> -->
+      <P> FinTime = 0.5 </P>
+      <P> IO_InfoSteps = 5 </P>
+      <P> IO_CFLSteps = IO_InfoSteps </P>
+      <P> Re = 40 </P>
+      <P> Kinvis = 1.0 / Re </P>
+      <P> DOModes = 10 </P>
+      <P> DOParticles = 200 </P>
+      <P> DOYiSeed = 1 </P>          <!-- mt19937 seed for Y_{p,i} ~ N(0, sigma^2) -->
+      <P> DOYiSigma = 0.05 </P>      <!-- per-mode std-dev; ~1% of peak mean velocity -->
+
+    </PARAMETERS>
+    <SOLVERINFO>
+      <I PROPERTY="SolverType" VALUE="DOVelocityCorrectionScheme"/>
+      <I PROPERTY="EQTYPE" VALUE="UnsteadyNavierStokes"/>
+      <I PROPERTY="Projection" VALUE="Continuous"/>
+      <I PROPERTY="SPECTRALHPDEALIASING" VALUE="True"/>
+      <I PROPERTY="FinalFldOutFile" VALUE="output/casefile.fld"/>
+    </SOLVERINFO>
+    <TIMEINTEGRATIONSCHEME>
+      <METHOD> IMEX </METHOD>
+      <ORDER> 2 </ORDER>
+    </TIMEINTEGRATIONSCHEME>
+    <VARIABLES>
+      <V ID="0"> u </V>
+      <V ID="1"> v </V>
+      <V ID="2"> p </V>
+    </VARIABLES>
+    <BOUNDARYREGIONS>
+      <B ID="0">C[1]</B> <!-- Bottom wall -->
+      <B ID="1">C[2]</B> <!-- Right wall -->
+      <B ID="2">C[3]</B> <!-- Top wall -->
+      <B ID="3">C[4]</B> <!-- Left wall -->
+    </BOUNDARYREGIONS>
+    <BOUNDARYCONDITIONS>
+      <REGION REF="0"> <!-- Bottom wall -->
+        <P VAR="u" VALUE="[2]"/>
+        <P VAR="v" VALUE="[2]"/>
+        <P VAR="p" VALUE="[2]"/>
+      </REGION>
+      <REGION REF="1"> <!-- Right wall -->
+        <P VAR="u" VALUE="[3]"/>
+        <P VAR="v" VALUE="[3]"/>
+        <P VAR="p" VALUE="[3]"/>
+      </REGION>
+      <REGION REF="2"> <!-- Top wall -->
+        <P VAR="u" VALUE="[0]"/>
+        <P VAR="v" VALUE="[0]"/>
+        <P VAR="p" VALUE="[0]"/>
+      </REGION>
+      <REGION REF="3"> <!-- Left wall -->
+        <P VAR="u" VALUE="[1]"/>
+        <P VAR="v" VALUE="[1]"/>
+        <P VAR="p" VALUE="[1]"/>
+      </REGION>
+    </BOUNDARYCONDITIONS>
+    <FUNCTION NAME="InitialConditions">
+      <F VAR="u,v,p" FILE="./ic/out.fld" />
+    </FUNCTION>
+      <!-- <FUNCTION NAME="InitialConditions">
+        <E VAR="u" VALUE="(10.0/(2*PI))*exp(-(2-2*cos(x-PI) + 2-2*cos(y-PI))/(2*0.2^2))*(sin(y-PI)/(0.2^2))"/>
+        <E VAR="v" VALUE="-(10.0/(2*PI))*exp(-(2-2*cos(x-PI) + 2-2*cos(y-PI))/(2*0.2^2))*(sin(x-PI)/(0.2^2))"/>
+        <E VAR="p" VALUE="0"/>
+      </FUNCTION> -->
+
+
+  </CONDITIONS>
+  <FILTERS>
+    <FILTER TYPE="Checkpoint">
+      <PARAM NAME="OutputFile">output/casefile</PARAM>
+      <PARAM NAME="OutputFrequency">500</PARAM>
+    </FILTER>
+    <FILTER TYPE="DOArchive">
+      <PARAM NAME="OutputFile">output/casefile</PARAM>
+      <PARAM NAME="OutputFrequency">500</PARAM>
+    </FILTER>
+  </FILTERS>
+</NEKTAR>
