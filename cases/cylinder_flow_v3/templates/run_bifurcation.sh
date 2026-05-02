@@ -64,7 +64,7 @@ run_sampling() {
     ln -sf "$MESH" "$workdir/geometry.xml"
     echo "[run_bifurcation] sampling Re=$re  (mpirun -np $NRANKS)"
     ( cd "$workdir" && \
-      mpirun -np "$NRANKS" "$SOLVER" casefile.xml geometry.xml \
+      mpirun -np "$NRANKS" "$SOLVER" geometry.xml casefile.xml \
         > sampling.log 2>&1 )
     echo "[run_bifurcation] sampling Re=$re  done"
 }
@@ -88,7 +88,7 @@ run_do() {
     ln -sf "$MESH" "$workdir/geometry.xml"
     echo "[run_bifurcation] DO Re=$re  init=$mode  (mpirun -np $NRANKS)"
     ( cd "$workdir" && \
-      mpirun -np "$NRANKS" "$SOLVER" casefile.xml geometry.xml \
+      mpirun -np "$NRANKS" "$SOLVER" geometry.xml casefile.xml \
         > do.log 2>&1 )
     echo "[run_bifurcation] DO Re=$re  init=$mode  done"
 }
