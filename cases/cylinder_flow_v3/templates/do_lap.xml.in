@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DO with Laplacian (elliptic eigenbasis) initialisation. Placeholders
+     @RE@, @DT@, @T_END@, @CHK_STEPS@, @INFO_STEPS@, @DO_MODES@,
+     @DO_PARTICLES@ are substituted by run_bifurcation.sh. -->
+<NEKTAR>
+  <EXPANSIONS>
+    <E COMPOSITE="C[10]" NUMMODES="12" FIELDS="u,v,p" TYPE="MODIFIED" />
+  </EXPANSIONS>
+
+  <CONDITIONS>
+    <PARAMETERS>
+      <P> TimeStep      = @DT@ </P>
+      <P> FinTime       = @T_END@ </P>
+      <P> NumSteps      = @T_END@ / @DT@ </P>
+      <P> IO_InfoSteps  = @INFO_STEPS@ </P>
+      <P> IO_CFLSteps   = @INFO_STEPS@ </P>
+      <P> Re            = @RE@ </P>
+      <P> Kinvis        = 1.0 / Re </P>
+      <P> DOModes       = @DO_MODES@ </P>
+      <P> DOParticles   = @DO_PARTICLES@ </P>
+      <P> DOYiSeed      = 1234 </P>
+      <P> DOYiSigma     = 1.0 </P>
+    </PARAMETERS>
+    <SOLVERINFO>
+      <I PROPERTY="SolverType" VALUE="DOVelocityCorrectionScheme"/>
+      <I PROPERTY="EQTYPE" VALUE="UnsteadyNavierStokes"/>
+      <I PROPERTY="Projection" VALUE="Continuous"/>
+      <I PROPERTY="SPECTRALHPDEALIASING" VALUE="True"/>
+      <I PROPERTY="DOInitModeBasis" VALUE="Laplacian"/>
+    </SOLVERINFO>
+    <TIMEINTEGRATIONSCHEME>
+      <METHOD> IMEX </METHOD>
+      <ORDER> 2 </ORDER>
+    </TIMEINTEGRATIONSCHEME>
+    <VARIABLES>
+      <V ID="0"> u </V>
+      <V ID="1"> v </V>
+      <V ID="2"> p </V>
+    </VARIABLES>
+    <BOUNDARYREGIONS>
+      <B ID="0">C[7]</B>
+      <B ID="1">C[8]</B>
+      <B ID="2">C[6]</B>
+      <B ID="3">C[9]</B>
+    </BOUNDARYREGIONS>
+    <BOUNDARYCONDITIONS>
+      <REGION REF="0">
+        <D VAR="u" VALUE="1"/>
+        <D VAR="v" VALUE="0"/>
+        <N VAR="p" VALUE="0" USERDEFINEDTYPE="H"/>
+      </REGION>
+      <REGION REF="1">
+        <N VAR="u" VALUE="0.0"/>
+        <N VAR="v" VALUE="0.0"/>
+        <D VAR="p" VALUE="0.0"/>
+      </REGION>
+      <REGION REF="2">
+        <D VAR="u" VALUE="1.0"/>
+        <D VAR="v" VALUE="0.0"/>
+        <N VAR="p" VALUE="0.0" USERDEFINEDTYPE="H"/>
+      </REGION>
+      <REGION REF="3">
+        <D VAR="u" VALUE="0.0"/>
+        <D VAR="v" VALUE="0.0"/>
+        <N VAR="p" VALUE="0.0" USERDEFINEDTYPE="H"/>
+      </REGION>
+    </BOUNDARYCONDITIONS>
+    <FUNCTION NAME="InitialConditions">
+      <E VAR="v,p" VALUE="0.0"/>
+      <E VAR="u" VALUE="1.0"/>
+    </FUNCTION>
+  </CONDITIONS>
+  <FILTERS>
+    <FILTER TYPE="DOArchive">
+      <PARAM NAME="OutputFile">output/casefile</PARAM>
+      <PARAM NAME="OutputFrequency">@CHK_STEPS@</PARAM>
+      <PARAM NAME="Format">Field</PARAM>
+    </FILTER>
+  </FILTERS>
+</NEKTAR>
