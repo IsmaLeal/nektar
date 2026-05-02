@@ -55,6 +55,10 @@ public:
         const size_t npoints);
 
     LUE TimeIntegrationSolutionGLM(
+        const TimeIntegrationAlgorithmGLM *schemeAlgorithm,
+        const Array<OneD, size_t> &varSizes);
+
+    LUE TimeIntegrationSolutionGLM(
         const TimeIntegrationAlgorithmGLM *schemeAlgorithm);
 
     inline const TimeIntegrationAlgorithmGLM *GetIntegrationSchemeData() const
@@ -84,6 +88,11 @@ public:
 
     inline void SetSolutionVector(const size_t Offset, const DoubleArray &y)
     {
+        if (m_varSizes.size() == 0)
+        {
+            SetVarSizes(BuildVarSizes(y));
+        }
+        CheckVarSizes(y);
         m_solVector[Offset] = y;
     }
 
@@ -112,9 +121,14 @@ public:
         return m_solVector[0].size();
     }
 
-    inline size_t GetSecondDim() const
+    inline const Array<OneD, const size_t> &GetVarSizes() const
     {
-        return m_solVector[0][0].size();
+        return m_varSizes;
+    }
+
+    inline size_t GetVarSize(const size_t var) const
+    {
+        return m_uniformVarSizes ? m_npoints : m_varSizes[var];
     }
 
     // Return the number of entries in the solution vector that correspond to
@@ -245,6 +259,11 @@ public:
     inline void SetValue(const size_t timeLevelOffset, const DoubleArray &y,
                          const NekDouble t)
     {
+        if (m_varSizes.size() == 0)
+        {
+            SetVarSizes(BuildVarSizes(y));
+        }
+        CheckVarSizes(y);
         size_t nMultiStepVals = m_schemeAlgorithm->GetNmultiStepValues();
         const Array<OneD, const size_t> &offsetvec =
             m_schemeAlgorithm->GetTimeLevelOffset();
@@ -268,6 +287,11 @@ public:
                                       const DoubleArray &y,
                                       const NekDouble timestep)
     {
+        if (m_varSizes.size() == 0)
+        {
+            SetVarSizes(BuildVarSizes(y));
+        }
+        CheckVarSizes(y);
         size_t nMultiStepVals = m_schemeAlgorithm->GetNmultiStepValues();
         size_t nMultiStepImplicitDerivs =
             m_schemeAlgorithm->GetNmultiStepImplicitDerivs();
@@ -294,6 +318,11 @@ public:
                                       const DoubleArray &y,
                                       const NekDouble timestep)
     {
+        if (m_varSizes.size() == 0)
+        {
+            SetVarSizes(BuildVarSizes(y));
+        }
+        CheckVarSizes(y);
         size_t nMultiStepVals = m_schemeAlgorithm->GetNmultiStepValues();
         size_t nMultiStepImplicitDerivs =
             m_schemeAlgorithm->GetNmultiStepImplicitDerivs();
@@ -344,11 +373,65 @@ public:
     }
 
 private:
+    inline Array<OneD, size_t> BuildVarSizes(const DoubleArray &y) const
+    {
+        Array<OneD, size_t> varSizes(y.size(), size_t(0));
+        for (size_t i = 0; i < y.size(); ++i)
+        {
+            varSizes[i] = y[i].size();
+        }
+
+        return varSizes;
+    }
+
+    inline bool IsUniform(const Array<OneD, size_t> &varSizes) const
+    {
+        if (varSizes.size() == 0)
+        {
+            return true;
+        }
+
+        const size_t npoints = varSizes[0];
+        for (size_t i = 1; i < varSizes.size(); ++i)
+        {
+            if (varSizes[i] != npoints)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    inline void SetVarSizes(const Array<OneD, size_t> &varSizes)
+    {
+        m_varSizes         = varSizes;
+        m_uniformVarSizes  = IsUniform(varSizes);
+        m_npoints          = (m_uniformVarSizes && varSizes.size() > 0)
+                                 ? varSizes[0]
+                                 : 0;
+    }
+
+    inline void CheckVarSizes(const DoubleArray &y) const
+    {
+        ASSERTL1(y.size() == m_varSizes.size(),
+                 "Non-matching number of variables.");
+
+        for (size_t i = 0; i < y.size(); ++i)
+        {
+            ASSERTL1(y[i].size() == m_varSizes[i],
+                     "Non-matching number of coefficients.");
+        }
+    }
+
     const TimeIntegrationAlgorithmGLM *m_schemeAlgorithm;
 
     TripleArray m_solVector;
     Array<OneD, NekDouble> m_t;
     Array<OneD, bool> m_setflag;
+    Array<OneD, size_t> m_varSizes;
+    bool m_uniformVarSizes{false};
+    size_t m_npoints{0};
 
 }; // end class TimeIntegrationSolutionGLM
 

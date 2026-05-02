@@ -103,7 +103,7 @@ void FractionalInTimeIntegrationScheme::v_InitializeScheme(
 {
     m_op      = op;
     m_nvars   = y_0.size();
-    m_npoints = y_0[0].size();
+    SetVarSizes(BuildVarSizes(y_0));
 
     m_deltaT = deltaT;
 
@@ -136,9 +136,9 @@ void FractionalInTimeIntegrationScheme::v_InitializeScheme(
 
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            m_u[m][i] = SingleArray(m_npoints, 0.0);
+            m_u[m][i] = SingleArray(GetVarSize(i), 0.0);
 
-            for (size_t j = 0; j < m_npoints; ++j)
+            for (size_t j = 0; j < GetVarSize(i); ++j)
             {
                 // Store the initial values as the first previous state.
                 if (m == 0)
@@ -163,9 +163,9 @@ void FractionalInTimeIntegrationScheme::v_InitializeScheme(
 
     for (size_t i = 0; i < m_nvars; ++i)
     {
-        m_F[i]     = SingleArray(m_npoints, 0.0);
-        m_uNext[i] = SingleArray(m_npoints, 0.0);
-        m_uInt[i]  = ComplexSingleArray(m_npoints, 0.0);
+        m_F[i]     = SingleArray(GetVarSize(i), 0.0);
+        m_uNext[i] = SingleArray(GetVarSize(i), 0.0);
+        m_uInt[i]  = ComplexSingleArray(GetVarSize(i), 0.0);
     }
 
     // J
@@ -311,7 +311,7 @@ ConstDoubleArray &FractionalInTimeIntegrationScheme::v_TimeIntegrate(
 
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            for (size_t j = 0; j < m_npoints; ++j)
+            for (size_t j = 0; j < GetVarSize(i); ++j)
             {
                 m_uNext[i][j] += m_uInt[i][j].real();
             }
@@ -323,7 +323,7 @@ ConstDoubleArray &FractionalInTimeIntegrationScheme::v_TimeIntegrate(
     {
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            for (size_t j = 0; j < m_npoints; ++j)
+            for (size_t j = 0; j < GetVarSize(i); ++j)
             {
                 m_u[m][i][j] = m_u[m - 1][i][j];
             }
@@ -333,7 +333,7 @@ ConstDoubleArray &FractionalInTimeIntegrationScheme::v_TimeIntegrate(
     // Get the current solution.
     for (size_t i = 0; i < m_nvars; ++i)
     {
-        for (size_t j = 0; j < m_npoints; ++j)
+        for (size_t j = 0; j < GetVarSize(i); ++j)
         {
             m_u[0][i][j] = m_uNext[i][j] + m_u0[i][j];
 
@@ -533,13 +533,14 @@ void FractionalInTimeIntegrationScheme::integralClassInitialize(
 
     for (size_t q = 0; q < m_nvars; ++q)
     {
-        instance.stage_y[q]    = ComplexDoubleArray(m_npoints);
-        instance.cstash_y[q]   = ComplexDoubleArray(m_npoints);
-        instance.csandbox_y[q] = ComplexDoubleArray(m_npoints);
-        instance.fstash_y[q]   = ComplexDoubleArray(m_npoints);
-        instance.fsandbox_y[q] = ComplexDoubleArray(m_npoints);
+        const size_t npoints   = GetVarSize(q);
+        instance.stage_y[q]    = ComplexDoubleArray(npoints);
+        instance.cstash_y[q]   = ComplexDoubleArray(npoints);
+        instance.csandbox_y[q] = ComplexDoubleArray(npoints);
+        instance.fstash_y[q]   = ComplexDoubleArray(npoints);
+        instance.fsandbox_y[q] = ComplexDoubleArray(npoints);
 
-        for (size_t i = 0; i < m_npoints; ++i)
+        for (size_t i = 0; i < npoints; ++i)
         {
             instance.stage_y[q][i]    = ComplexSingleArray(m_nQuadPts, 0.0);
             instance.cstash_y[q][i]   = ComplexSingleArray(m_nQuadPts, 0.0);
@@ -808,7 +809,7 @@ void FractionalInTimeIntegrationScheme::updateStage(const size_t timeStep,
             // Clear the floor sandbox values.
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                for (size_t j = 0; j < m_npoints; ++j)
+                for (size_t j = 0; j < GetVarSize(i); ++j)
                 {
                     for (size_t q = 0; q < m_nQuadPts; ++q)
                     {
@@ -848,7 +849,7 @@ void FractionalInTimeIntegrationScheme::finalIncrement(const size_t timeStep)
 
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            for (size_t j = 0; j < m_npoints; ++j)
+            for (size_t j = 0; j < GetVarSize(i); ++j)
             {
                 m_uNext[i][j] += m_F[i][j] * m_AhattJ[m];
             }
@@ -873,7 +874,7 @@ void FractionalInTimeIntegrationScheme::integralContribution(
 
     for (size_t i = 0; i < m_nvars; ++i)
     {
-        for (size_t j = 0; j < m_npoints; ++j)
+        for (size_t j = 0; j < GetVarSize(i); ++j)
         {
             m_uInt[i][j] = 0;
 
@@ -935,7 +936,7 @@ void FractionalInTimeIntegrationScheme::timeAdvance(const size_t timeStep,
 
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            for (size_t j = 0; j < m_npoints; ++j)
+            for (size_t j = 0; j < GetVarSize(i); ++j)
             {
                 for (size_t q = 0; q < m_nQuadPts; ++q)
                 {
@@ -986,7 +987,7 @@ void FractionalInTimeIntegrationScheme::advanceSandbox(const size_t timeStep,
         // time advance.
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            for (size_t j = 0; j < m_npoints; ++j)
+            for (size_t j = 0; j < GetVarSize(i); ++j)
             {
                 for (size_t q = 0; q < m_nQuadPts; ++q)
                 {
@@ -1016,7 +1017,7 @@ void FractionalInTimeIntegrationScheme::advanceSandbox(const size_t timeStep,
             // for the time advance.
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                for (size_t j = 0; j < m_npoints; ++j)
+                for (size_t j = 0; j < GetVarSize(i); ++j)
                 {
                     for (size_t q = 0; q < m_nQuadPts; ++q)
                     {

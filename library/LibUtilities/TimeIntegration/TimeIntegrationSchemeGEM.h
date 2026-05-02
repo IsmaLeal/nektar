@@ -162,8 +162,78 @@ protected:
     // GEM parameter
     size_t m_order{0};   // Order of the integration scheme
     size_t m_nvars{0};   // Number of variables in the integration scheme.
-    size_t m_npoints{0}; // Number of points in the integration scheme.
+    size_t m_npoints{0}; // Uniform number of points in the fast path.
+    Array<OneD, size_t> m_varSizes; // Per-variable number of points.
+    bool m_uniformVarSizes{false};
     bool m_initialized{false};
+
+    inline Array<OneD, size_t> BuildVarSizes(ConstDoubleArray &y) const
+    {
+        Array<OneD, size_t> varSizes(y.size(), size_t(0));
+        for (size_t i = 0; i < y.size(); ++i)
+        {
+            varSizes[i] = y[i].size();
+        }
+
+        return varSizes;
+    }
+
+    inline bool IsUniform(const Array<OneD, size_t> &varSizes) const
+    {
+        if (varSizes.size() == 0)
+        {
+            return true;
+        }
+
+        const size_t npoints = varSizes[0];
+        for (size_t i = 1; i < varSizes.size(); ++i)
+        {
+            if (varSizes[i] != npoints)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    inline void SetVarSizes(const Array<OneD, size_t> &varSizes)
+    {
+        m_varSizes        = varSizes;
+        m_uniformVarSizes = IsUniform(varSizes);
+        m_npoints         = (m_uniformVarSizes && varSizes.size() > 0)
+                                ? varSizes[0]
+                                : 0;
+    }
+
+    inline size_t GetVarSize(const size_t var) const
+    {
+        return m_uniformVarSizes ? m_npoints : m_varSizes[var];
+    }
+
+    inline bool HasMatchingVarSizes(const Array<OneD, size_t> &varSizes) const
+    {
+        if (m_varSizes.size() != varSizes.size())
+        {
+            return false;
+        }
+
+        for (size_t i = 0; i < varSizes.size(); ++i)
+        {
+            if (m_varSizes[i] != varSizes[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    inline bool CanReuseStorage(ConstDoubleArray &y) const
+    {
+        return m_initialized && m_nvars == y.size() &&
+               HasMatchingVarSizes(BuildVarSizes(y));
+    }
 
 }; // end class TimeIntegrationSchemeGEM
 

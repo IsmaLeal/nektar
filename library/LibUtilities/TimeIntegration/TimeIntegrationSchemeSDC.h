@@ -219,12 +219,24 @@ public:
 
     LUE size_t GetNpoints() const
     {
+        ASSERTL1(m_uniformVarSizes,
+                 "GetNpoints is only valid for uniform-size states.");
         return m_npoints;
     }
 
     LUE size_t GetNvars() const
     {
         return m_nvars;
+    }
+
+    LUE const Array<OneD, const size_t> &GetVarSizes() const
+    {
+        return m_varSizes;
+    }
+
+    LUE size_t GetVarSize(const size_t var) const
+    {
+        return m_uniformVarSizes ? m_npoints : m_varSizes[var];
     }
 
     LUE const PointsKey &GetPointsKey() const
@@ -394,11 +406,88 @@ protected:
     size_t m_order{0};      /// Order of the integration scheme
     size_t m_nQuadPts{0};   /// Number of quadrature points
     size_t m_nvars{0};      /// Number of variables in the integration scheme
-    size_t m_npoints{0};    /// Number of points in the integration scheme
+    size_t m_npoints{0};    /// Uniform number of points in the fast path
+    Array<OneD, size_t> m_varSizes; /// Per-variable numbers of points
+    bool m_uniformVarSizes{false};
     bool m_first_quadrature{true};
     bool m_last_quadrature{true};
     bool m_initialized{false};
     bool m_PFASST{false};
+
+    inline Array<OneD, size_t> BuildVarSizes(ConstDoubleArray &y) const
+    {
+        Array<OneD, size_t> varSizes(y.size(), size_t(0));
+        for (size_t i = 0; i < y.size(); ++i)
+        {
+            varSizes[i] = y[i].size();
+        }
+
+        return varSizes;
+    }
+
+    inline bool IsUniform(const Array<OneD, size_t> &varSizes) const
+    {
+        if (varSizes.size() == 0)
+        {
+            return true;
+        }
+
+        const size_t npoints = varSizes[0];
+        for (size_t i = 1; i < varSizes.size(); ++i)
+        {
+            if (varSizes[i] != npoints)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    inline void SetVarSizes(const Array<OneD, size_t> &varSizes)
+    {
+        m_varSizes        = varSizes;
+        m_uniformVarSizes = IsUniform(varSizes);
+        m_npoints         = (m_uniformVarSizes && varSizes.size() > 0)
+                                ? varSizes[0]
+                                : 0;
+    }
+
+    inline void CheckVarSizes(const DoubleArray &y) const
+    {
+        ASSERTL1(y.size() == m_varSizes.size(),
+                 "Non-matching number of variables.");
+
+        for (size_t i = 0; i < y.size(); ++i)
+        {
+            ASSERTL1(y[i].size() == m_varSizes[i],
+                     "Non-matching number of coefficients.");
+        }
+    }
+
+    inline bool HasMatchingVarSizes(const Array<OneD, size_t> &varSizes) const
+    {
+        if (m_varSizes.size() != varSizes.size())
+        {
+            return false;
+        }
+
+        for (size_t i = 0; i < varSizes.size(); ++i)
+        {
+            if (m_varSizes[i] != varSizes[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    inline bool CanReuseStorage(ConstDoubleArray &y) const
+    {
+        return m_initialized && m_nvars == y.size() &&
+               HasMatchingVarSizes(BuildVarSizes(y));
+    }
 
 }; // end class TimeIntegrationSchemeSDC
 

@@ -122,7 +122,7 @@ void ExplicitTimeIntegrationSchemeSDC::v_ComputeInitialGuess(
             NekDouble dtn = delta_t * (m_tau[n] - m_tau[n - 1]);
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                Vmath::Svtvp(m_npoints, dtn, m_F[n - 1][i], 1, m_Y[n - 1][i], 1,
+                Vmath::Svtvp(GetVarSize(i), dtn, m_F[n - 1][i], 1, m_Y[n - 1][i], 1,
                              m_Y[n][i], 1);
             }
         }
@@ -152,14 +152,14 @@ void ExplicitTimeIntegrationSchemeSDC::v_SDCIterationLoop(
         for (size_t i = 0; i < m_nvars; ++i)
         {
             // Add SFint contribution to solution
-            Vmath::Vadd(m_npoints, m_Y[n - 1][i], 1, m_SFint[n][i], 1,
+            Vmath::Vadd(GetVarSize(i), m_Y[n - 1][i], 1, m_SFint[n][i], 1,
                         m_Y[n][i], 1);
 
             // Add explicit contribution to solution
             if (n > 1)
             {
                 NekDouble dtn = delta_t * (m_tau[n] - m_tau[n - 1]);
-                Vmath::Svtvp(m_npoints, m_theta * dtn, m_F[n - 1][i], 1,
+                Vmath::Svtvp(GetVarSize(i), m_theta * dtn, m_F[n - 1][i], 1,
                              m_Y[n][i], 1, m_Y[n][i], 1);
             }
 
@@ -167,7 +167,7 @@ void ExplicitTimeIntegrationSchemeSDC::v_SDCIterationLoop(
             if (n < m_nQuadPts - 1)
             {
                 NekDouble dtnp = delta_t * (m_tau[n + 1] - m_tau[n]);
-                Vmath::Svtvp(m_npoints, -m_theta * dtnp, m_F[n][i], 1,
+                Vmath::Svtvp(GetVarSize(i), -m_theta * dtnp, m_F[n][i], 1,
                              m_SFint[n + 1][i], 1, m_SFint[n + 1][i], 1);
             }
         }

@@ -82,12 +82,12 @@ TimeIntegrationSolutionGLMSharedPtr TimeIntegrationAlgorithmGLM::InitializeData(
 
         if (offsets[GetNmultiStepValues() + GetNmultiStepImplicitDerivs()] == 0)
         {
-            size_t nvar    = y_0.size();
-            size_t npoints = y_0[0].size();
+            size_t nvar                      = y_0.size();
+            const Array<OneD, size_t> sizes = GetVarSizes(y_0);
             DoubleArray f_y_0(nvar);
             for (size_t i = 0; i < nvar; i++)
             {
-                f_y_0[i] = Array<OneD, NekDouble>(npoints);
+                f_y_0[i] = Array<OneD, NekDouble>(sizes[i]);
             }
 
             // Calculate the derivative of the initial value.
@@ -96,7 +96,7 @@ TimeIntegrationSolutionGLMSharedPtr TimeIntegrationAlgorithmGLM::InitializeData(
             // Multiply by the step size.
             for (size_t i = 0; i < nvar; i++)
             {
-                Vmath::Smul(npoints, deltaT, f_y_0[i], 1, f_y_0[i], 1);
+                Vmath::Smul(sizes[i], deltaT, f_y_0[i], 1, f_y_0[i], 1);
             }
             y_out->SetExplicitDerivative(0, f_y_0, deltaT);
         }
@@ -108,8 +108,8 @@ TimeIntegrationSolutionGLMSharedPtr TimeIntegrationAlgorithmGLM::InitializeData(
 ConstDoubleArray &TimeIntegrationAlgorithmGLM::TimeIntegrate(
     const NekDouble deltaT, TimeIntegrationSolutionGLMSharedPtr &solvector)
 {
-    size_t nvar    = solvector->GetFirstDim();
-    size_t npoints = solvector->GetSecondDim();
+    size_t nvar = solvector->GetFirstDim();
+    const Array<OneD, const size_t> &varSizes = solvector->GetVarSizes();
 
     if (solvector->GetIntegrationSchemeData() != this)
     {
@@ -220,7 +220,7 @@ ConstDoubleArray &TimeIntegrationAlgorithmGLM::TimeIntegrate(
         // Output solution vector of the current scheme.
         TimeIntegrationSolutionGLMSharedPtr solvector_out =
             MemoryManager<TimeIntegrationSolutionGLM>::AllocateSharedPtr(
-                this, nvar, npoints);
+                this, Array<OneD, size_t>(varSizes));
 
         // Integrate one step.
         TimeIntegrate(deltaT, solvector_in->GetSolutionVector(),
@@ -289,14 +289,15 @@ ConstDoubleArray &TimeIntegrationAlgorithmGLM::TimeIntegrate(
 
             for (size_t j = 0; j < nvar; j++)
             {
-                f_impn[j] = Array<OneD, NekDouble>(npoints);
+                f_impn[j] = Array<OneD, NekDouble>(varSizes[j]);
             }
 
             // Calculate the derivative of the initial value.
             m_op.DoImplicitSolve(y_n, f_impn, t_n + deltaT, deltaT);
             for (size_t j = 0; j < nvar; j++)
             {
-                Vmath::Vsub(m_npoints, f_impn[j], 1, y_n[j], 1, f_impn[j], 1);
+                Vmath::Vsub(varSizes[j], f_impn[j], 1, y_n[j], 1, f_impn[j],
+                            1);
             }
         }
 
@@ -333,7 +334,7 @@ ConstDoubleArray &TimeIntegrationAlgorithmGLM::TimeIntegrate(
 
             for (size_t j = 0; j < nvar; j++)
             {
-                f_expn[j] = Array<OneD, NekDouble>(npoints);
+                f_expn[j] = Array<OneD, NekDouble>(varSizes[j]);
             }
 
             // Ensure solution is in correct space.
@@ -349,7 +350,7 @@ ConstDoubleArray &TimeIntegrationAlgorithmGLM::TimeIntegrate(
             // framework).
             for (size_t j = 0; j < nvar; j++)
             {
-                Vmath::Smul(npoints, deltaT, f_expn[j], 1, f_expn[j], 1);
+                Vmath::Smul(varSizes[j], deltaT, f_expn[j], 1, f_expn[j], 1);
             }
         }
 
@@ -412,7 +413,7 @@ ConstDoubleArray &TimeIntegrationAlgorithmGLM::TimeIntegrate(
     {
         TimeIntegrationSolutionGLMSharedPtr solvector_new =
             MemoryManager<TimeIntegrationSolutionGLM>::AllocateSharedPtr(
-                this, nvar, npoints);
+                this, Array<OneD, size_t>(varSizes));
 
         TimeIntegrate(deltaT, solvector->GetSolutionVector(),
                       solvector->GetTimeVector(),
@@ -441,17 +442,17 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
     // Check if storage has already been initialised. If so, we just zero the
     // temporary storage.
     if (m_initialised && m_nvars == GetFirstDim(y_old) &&
-        m_npoints == GetSecondDim(y_old))
+        HasMatchingVarSizes(GetVarSizes(y_old)))
     {
         for (size_t j = 0; j < m_nvars; j++)
         {
-            Vmath::Zero(m_npoints, m_tmp[j], 1);
+            Vmath::Zero(GetVarSize(j), m_tmp[j], 1);
         }
     }
     else
     {
-        m_nvars   = GetFirstDim(y_old);
-        m_npoints = GetSecondDim(y_old);
+        m_nvars = GetFirstDim(y_old);
+        SetVarSizes(GetVarSizes(y_old));
 
         // First, calculate the various stage values and stage derivatives
         // (this is the multi-stage part of the method)
@@ -467,7 +468,7 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
         m_tmp = DoubleArray(m_nvars);
         for (size_t j = 0; j < m_nvars; j++)
         {
-            m_tmp[j] = Array<OneD, NekDouble>(m_npoints, 0.0);
+            m_tmp[j] = Array<OneD, NekDouble>(GetVarSize(j), 0.0);
         }
 
         // The same storage will be used for every stage -> m_tmp is a
@@ -481,7 +482,7 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
             m_Y = DoubleArray(m_nvars);
             for (size_t j = 0; j < m_nvars; j++)
             {
-                m_Y[j] = Array<OneD, NekDouble>(m_npoints, 0.0);
+                m_Y[j] = Array<OneD, NekDouble>(GetVarSize(j), 0.0);
             }
         }
 
@@ -493,7 +494,7 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
             m_F[i] = DoubleArray(m_nvars);
             for (size_t j = 0; j < m_nvars; j++)
             {
-                m_F[i][j] = Array<OneD, NekDouble>(m_npoints, 0.0);
+                m_F[i][j] = Array<OneD, NekDouble>(GetVarSize(j), 0.0);
             }
         }
 
@@ -505,7 +506,8 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
                 m_F_IMEX[i] = DoubleArray(m_nvars);
                 for (size_t j = 0; j < m_nvars; j++)
                 {
-                    m_F_IMEX[i][j] = Array<OneD, NekDouble>(m_npoints, 0.0);
+                    m_F_IMEX[i][j] =
+                        Array<OneD, NekDouble>(GetVarSize(j), 0.0);
                 }
             }
         }
@@ -537,7 +539,7 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
         {
             for (size_t k = 0; k < m_nvars; k++)
             {
-                Vmath::Vcopy(m_npoints, y_old[0][k], 1, m_Y[k], 1);
+                Vmath::Vcopy(GetVarSize(k), y_old[0][k], 1, m_Y[k], 1);
             }
         }
         else
@@ -548,12 +550,13 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
             {
                 for (size_t k = 0; k < m_nvars; k++)
                 {
-                    Vmath::Smul(m_npoints, deltaT * A(k, stage, 0), m_F[0][k],
-                                1, m_tmp[k], 1);
+                    const size_t npoints = GetVarSize(k);
+                    Vmath::Smul(npoints, deltaT * A(k, stage, 0), m_F[0][k], 1,
+                                m_tmp[k], 1);
 
                     if (type == eIMEX)
                     {
-                        Vmath::Svtvp(m_npoints, deltaT * A_IMEX(stage, 0),
+                        Vmath::Svtvp(npoints, deltaT * A_IMEX(stage, 0),
                                      m_F_IMEX[0][k], 1, m_tmp[k], 1, m_tmp[k],
                                      1);
                     }
@@ -564,12 +567,13 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
             {
                 for (size_t k = 0; k < m_nvars; k++)
                 {
-                    Vmath::Svtvp(m_npoints, deltaT * A(k, stage, j), m_F[j][k],
-                                 1, m_tmp[k], 1, m_tmp[k], 1);
+                    const size_t npoints = GetVarSize(k);
+                    Vmath::Svtvp(npoints, deltaT * A(k, stage, j), m_F[j][k], 1,
+                                 m_tmp[k], 1, m_tmp[k], 1);
 
                     if (type == eIMEX)
                     {
-                        Vmath::Svtvp(m_npoints, deltaT * A_IMEX(stage, j),
+                        Vmath::Svtvp(npoints, deltaT * A_IMEX(stage, j),
                                      m_F_IMEX[j][k], 1, m_tmp[k], 1, m_tmp[k],
                                      1);
                     }
@@ -581,7 +585,7 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
             {
                 for (size_t k = 0; k < m_nvars; k++)
                 {
-                    Vmath::Svtvp(m_npoints, U(k, stage, j), y_old[j][k], 1,
+                    Vmath::Svtvp(GetVarSize(k), U(k, stage, j), y_old[j][k], 1,
                                  m_tmp[k], 1, m_tmp[k], 1);
                 }
             }
@@ -616,9 +620,10 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
 
                 for (size_t k = 0; k < m_nvars; ++k)
                 {
-                    Vmath::Vsub(m_npoints, m_Y[k], 1, m_tmp[k], 1,
+                    const size_t npoints = GetVarSize(k);
+                    Vmath::Vsub(npoints, m_Y[k], 1, m_tmp[k], 1,
                                 m_F[stage][k], 1);
-                    Vmath::Smul(m_npoints, 1.0 / (A(stage, stage) * deltaT),
+                    Vmath::Smul(npoints, 1.0 / (A(stage, stage) * deltaT),
                                 m_F[stage][k], 1, m_F[stage][k], 1);
                 }
             }
@@ -644,9 +649,10 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
 
                 for (size_t k = 0; k < m_nvars; k++)
                 {
-                    Vmath::Vsub(m_npoints, m_Y[k], 1, m_tmp[k], 1,
+                    const size_t npoints = GetVarSize(k);
+                    Vmath::Vsub(npoints, m_Y[k], 1, m_tmp[k], 1,
                                 m_F[stage][k], 1);
-                    Vmath::Smul(m_npoints, 1.0 / (A(stage, stage) * deltaT),
+                    Vmath::Smul(npoints, 1.0 / (A(stage, stage) * deltaT),
                                 m_F[stage][k], 1, m_F[stage][k], 1);
                 }
             }
@@ -693,7 +699,7 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
     {
         for (size_t k = 0; k < m_nvars; k++)
         {
-            Vmath::Vcopy(m_npoints, m_Y[k], 1, y_new[0][k], 1);
+            Vmath::Vcopy(GetVarSize(k), m_Y[k], 1, y_new[0][k], 1);
         }
 
         t_new[0] = t_old[0] + deltaT;
@@ -707,13 +713,14 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
         // 1: The stage derivatives:
         for (size_t k = 0; k < m_nvars; k++)
         {
-            Vmath::Smul(m_npoints, deltaT * B(k, i, 0), m_F[0][k], 1,
+            const size_t npoints = GetVarSize(k);
+            Vmath::Smul(npoints, deltaT * B(k, i, 0), m_F[0][k], 1,
                         y_new[i][k], 1);
 
             if (type == eIMEX)
             {
-                Vmath::Svtvp(m_npoints, deltaT * B_IMEX(i, 0), m_F_IMEX[0][k],
-                             1, y_new[i][k], 1, y_new[i][k], 1);
+                Vmath::Svtvp(npoints, deltaT * B_IMEX(i, 0), m_F_IMEX[0][k], 1,
+                             y_new[i][k], 1, y_new[i][k], 1);
             }
         }
 
@@ -726,14 +733,15 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
         {
             for (size_t k = 0; k < m_nvars; k++)
             {
-                Vmath::Svtvp(m_npoints, deltaT * B(k, i, j), m_F[j][k], 1,
+                const size_t npoints = GetVarSize(k);
+                Vmath::Svtvp(npoints, deltaT * B(k, i, j), m_F[j][k], 1,
                              y_new[i][k], 1, y_new[i][k], 1);
 
                 if (type == eIMEX)
                 {
-                    Vmath::Svtvp(m_npoints, deltaT * B_IMEX(i, j),
-                                 m_F_IMEX[j][k], 1, y_new[i][k], 1, y_new[i][k],
-                                 1);
+                    Vmath::Svtvp(npoints, deltaT * B_IMEX(i, j),
+                                 m_F_IMEX[j][k], 1, y_new[i][k], 1,
+                                 y_new[i][k], 1);
                 }
             }
 
@@ -748,8 +756,8 @@ void TimeIntegrationAlgorithmGLM::TimeIntegrate(const NekDouble deltaT,
         {
             for (size_t k = 0; k < m_nvars; k++)
             {
-                Vmath::Svtvp(m_npoints, V(k, i, j), y_old[j][k], 1, y_new[i][k],
-                             1, y_new[i][k], 1);
+                Vmath::Svtvp(GetVarSize(k), V(k, i, j), y_old[j][k], 1,
+                             y_new[i][k], 1, y_new[i][k], 1);
             }
 
             if (m_numstages != 1 || type != eIMEX)
@@ -910,11 +918,27 @@ bool TimeIntegrationAlgorithmGLM::CheckTimeIntegrateArguments(
 
     ASSERTL1(y_old.size() == m_numsteps, "Non-matching number of steps.");
     ASSERTL1(y_new.size() == m_numsteps, "Non-matching number of steps.");
-
     ASSERTL1(y_old[0].size() == y_new[0].size(),
              "Non-matching number of variables.");
-    ASSERTL1(y_old[0][0].size() == y_new[0][0].size(),
-             "Non-matching number of coefficients.");
+
+    const size_t nvars               = y_old[0].size();
+    const Array<OneD, size_t> sizes  = GetVarSizes(y_old);
+
+    for (size_t step = 0; step < m_numsteps; ++step)
+    {
+        ASSERTL1(y_old[step].size() == nvars,
+                 "Non-matching number of variables.");
+        ASSERTL1(y_new[step].size() == nvars,
+                 "Non-matching number of variables.");
+
+        for (size_t var = 0; var < nvars; ++var)
+        {
+            ASSERTL1(y_old[step][var].size() == sizes[var],
+                     "Non-matching number of coefficients.");
+            ASSERTL1(y_new[step][var].size() == sizes[var],
+                     "Non-matching number of coefficients.");
+        }
+    }
 
     ASSERTL1(t_old.size() == m_numsteps, "Non-matching number of steps.");
     ASSERTL1(t_new.size() == m_numsteps, "Non-matching number of steps.");

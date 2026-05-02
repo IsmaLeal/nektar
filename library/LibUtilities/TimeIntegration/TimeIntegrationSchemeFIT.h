@@ -137,6 +137,10 @@ protected:
      */
     void v_SetSolutionVector(const size_t Offset, const DoubleArray &y) override
     {
+        if (m_varSizes.size() == 0)
+        {
+            SetVarSizes(BuildVarSizes(y));
+        }
         m_u[Offset] = y;
     }
 
@@ -260,7 +264,9 @@ protected:
     NekDouble m_nu{0.6};
 
     size_t m_nvars{0};   // Number of variables in the integration scheme.
-    size_t m_npoints{0}; // Number of points    in the integration scheme.
+    size_t m_npoints{0}; // Uniform number of points in the fast path.
+    Array<OneD, size_t> m_varSizes; // Per-variable numbers of points.
+    bool m_uniformVarSizes{false};
 
     size_t m_Lmax{0}; // Maxium number of integral groups.
     Array<OneD, Instance> m_integral_classes;
@@ -294,6 +300,50 @@ protected:
 
     // Multiply the last Ahat array, transposed by J
     SingleArray m_AhattJ;
+
+    inline Array<OneD, size_t> BuildVarSizes(const DoubleArray &y) const
+    {
+        Array<OneD, size_t> varSizes(y.size(), size_t(0));
+        for (size_t i = 0; i < y.size(); ++i)
+        {
+            varSizes[i] = y[i].size();
+        }
+
+        return varSizes;
+    }
+
+    inline bool IsUniform(const Array<OneD, size_t> &varSizes) const
+    {
+        if (varSizes.size() == 0)
+        {
+            return true;
+        }
+
+        const size_t npoints = varSizes[0];
+        for (size_t i = 1; i < varSizes.size(); ++i)
+        {
+            if (varSizes[i] != npoints)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    inline void SetVarSizes(const Array<OneD, size_t> &varSizes)
+    {
+        m_varSizes        = varSizes;
+        m_uniformVarSizes = IsUniform(varSizes);
+        m_npoints         = (m_uniformVarSizes && varSizes.size() > 0)
+                                ? varSizes[0]
+                                : 0;
+    }
+
+    inline size_t GetVarSize(const size_t var) const
+    {
+        return m_uniformVarSizes ? m_npoints : m_varSizes[var];
+    }
 
 }; // end class FractionalInTimeIntegrator
 
