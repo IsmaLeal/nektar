@@ -787,24 +787,24 @@ void DOVelocityCorrectionScheme::AdvanceForcingState()
     const int nVel    = m_velocity.size();
     const int nPhys   = m_fields[0]->GetTotPoints();
     const int nCoeffs = m_fields[0]->GetNcoeffs();
-    const NekDouble σ  = m_forcingSigma;
-    const NekDouble τ  = m_forcingTau;
-    const NekDouble Δt = m_timestep;
+    const NekDouble sigma = m_forcingSigma;
+    const NekDouble tau   = m_forcingTau;
+    const NekDouble dt    = m_timestep;
 
-    // 1) OU exact step (white limit when τ=0)
+    // 1) OU exact step (white limit when tau=0)
     std::normal_distribution<NekDouble> dist(0.0, 1.0);
-    if (τ > 0.0)    // coloured in time
+    if (tau > 0.0)    // coloured in time
     {
-        const NekDouble α = std::exp(-Δt / τ);
-        const NekDouble β = σ * std::sqrt(std::max(0.0, 1.0 - α*α));
+        const NekDouble alpha = std::exp(-dt / tau);
+        const NekDouble beta  = sigma * std::sqrt(std::max(0.0, 1.0 - alpha*alpha));
         for (int q = 0; q < Np*K; ++q)
-            m_forcingEta[q] = α * m_forcingEta[q] + β * dist(m_forcingRng);
+            m_forcingEta[q] = alpha * m_forcingEta[q] + beta * dist(m_forcingRng);
     }
     else            // white-in-time
     {
-        const NekDouble β = σ * std::sqrt(Δt);
+        const NekDouble beta = sigma * std::sqrt(dt);
         for (int q = 0; q < Np*K; ++q)
-            m_forcingEta[q] = β * dist(m_forcingRng);
+            m_forcingEta[q] = beta * dist(m_forcingRng);
     }
 
     // 2) per-channel centering across particles (zero ensemble-mean forcing)
@@ -1634,7 +1634,7 @@ void DOVelocityCorrectionScheme::DOOdeRhs(
     }
     if (m_verbose && m_doStepCounter == 1)
         std::cout << "[DOVelocityCorrectionScheme][diag] Yi RHS:"
-                  << " max|Y·(F-grad p)| = " << maxLin
+                  << " max|Y.(F-grad p)| = " << maxLin
                   << " max|triple|="          << maxTri
                   << " max|forcing|="         << maxFor << "\n";
 
