@@ -1160,13 +1160,20 @@ def main() -> int:
     )
     ap.add_argument(
         "--interp-modes-from-archive",
-        action=argparse.BooleanOptionalAction,
+        dest="interp_modes_from_archive",
+        action="store_true",
         default=True,
         help=(
             "If archive mode coefficients are available (DO_ARCHIVE_V2), "
             "reconstruct and interpolate modes to the same Cartesian grid "
             "(default: enabled; use --no-interp-modes-from-archive to disable)."
         ),
+    )
+    ap.add_argument(
+        "--no-interp-modes-from-archive",
+        dest="interp_modes_from_archive",
+        action="store_false",
+        help="Disable --interp-modes-from-archive.",
     )
     args = ap.parse_args()
 
