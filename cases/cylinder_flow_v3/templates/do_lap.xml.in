@@ -19,7 +19,7 @@
       <P> DOModes       = @DO_MODES@ </P>
       <P> DOParticles   = @DO_PARTICLES@ </P>
       <P> DOYiSeed      = 1234 </P>
-      <P> DOYiSigma     = 1.0 </P>
+      <P> DOYiSigma     = 1e-3 </P>
     </PARAMETERS>
     <SOLVERINFO>
       <I PROPERTY="SolverType" VALUE="DOVelocityCorrectionScheme"/>
