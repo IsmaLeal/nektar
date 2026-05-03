@@ -96,9 +96,12 @@ run_do() {
 # --------------------------------------------------------------- runs ----
 
 # Re = 40 : DO with Laplacian init, no sampling needed.
+# Forced single-rank: DOReducedCGEigenBasis (ARPACK) is not MPI-aware,
+# so the Laplacian init asserts on multi-rank. See
+# DOVelocityCorrectionScheme.cpp:2673.
 RE40="$SWEEP_DIR/Re040_lap"
 mkdir -p "$RE40"
-run_do 40 "$RE40/do" "lap"
+NRANKS=1 run_do 40 "$RE40/do" "lap"
 
 # Re = 50 : sampling -> DO with POD init.
 RE50="$SWEEP_DIR/Re050_pod"
