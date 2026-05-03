@@ -20,6 +20,10 @@
       <P> DOParticles   = @DO_PARTICLES@ </P>
       <P> DOYiSeed      = 1234 </P>
       <P> DOYiSigma     = 1e-3 </P>
+      <P> DOForcingNumChannels = 2 </P>
+      <P> DOForcingSigma       = 1.0 </P>
+      <P> DOForcingTau         = 1.0 </P>
+      <P> DOForcingSeed        = 7 </P>
     </PARAMETERS>
     <SOLVERINFO>
       <I PROPERTY="SolverType" VALUE="DOVelocityCorrectionScheme"/>
@@ -71,12 +75,21 @@
       <E VAR="v,p" VALUE="0.0"/>
       <E VAR="u" VALUE="1.0"/>
     </FUNCTION>
+    <FUNCTION NAME="ForcingChannels">
+      <E VAR="g1_u" VALUE="-(2/0.6^2)*(y - 0.5) * exp(-((x + 3)^2 + (y - 0.5)^2)/(0.6^2))"/>
+      <E VAR="g1_v" VALUE=" (2/0.6^2)*(x + 3) * exp(-((x + 3)^2 + (y - 0.5)^2)/(0.6^2))"/>
+      <E VAR="g2_u" VALUE="-(2/0.6^2)*(y + 0.5) * exp(-((x + 3)^2 + (y + 0.5)^2)/(0.6^2))"/>
+      <E VAR="g2_v" VALUE=" (2/0.6^2)*(x + 3) * exp(-((x + 3)^2 + (y + 0.5)^2)/(0.6^2))"/>
+    </FUNCTION>
   </CONDITIONS>
   <FILTERS>
+    <FILTER TYPE="Checkpoint">
+      <PARAM NAME="OutputFile">output/casefile</PARAM>
+      <PARAM NAME="OutputFrequency">@CHK_STEPS@</PARAM>
+    </FILTER>
     <FILTER TYPE="DOArchive">
       <PARAM NAME="OutputFile">output/casefile</PARAM>
       <PARAM NAME="OutputFrequency">@CHK_STEPS@</PARAM>
-      <PARAM NAME="Format">Field</PARAM>
     </FILTER>
   </FILTERS>
 </NEKTAR>
