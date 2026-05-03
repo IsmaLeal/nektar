@@ -30,9 +30,9 @@ if [[ ! -f "$MESH" ]]; then
 fi
 
 # ------------------------------------------------------------ parameters --
-DT="${DT:-0.01}"
+DT="${DT:-0.005}"
 T_END="${T_END:-50.0}"
-CHK_STEPS="${CHK_STEPS:-50}"      # 50 * 0.01 = 0.5 s between snapshots
+CHK_STEPS="${CHK_STEPS:-100}"     # 100 * 0.005 = 0.5 s between snapshots
 INFO_STEPS="${INFO_STEPS:-250}"    # 2.5 s between info dumps
 DO_MODES="${DO_MODES:-4}"
 DO_PARTICLES="${DO_PARTICLES:-20}"
