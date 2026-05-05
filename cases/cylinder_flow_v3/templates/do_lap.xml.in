@@ -88,6 +88,7 @@
     <FILTER TYPE="DOArchive">
       <PARAM NAME="OutputFile">output/casefile</PARAM>
       <PARAM NAME="OutputFrequency">@CHK_STEPS@</PARAM>
+      <PARAM NAME="Format">Field</PARAM>
     </FILTER>
   </FILTERS>
 </NEKTAR>
