@@ -2728,6 +2728,8 @@ void DOVelocityCorrectionScheme::InitialiseModesFromEllipticEigenbasis()
  *   <I PROPERTY="PODSnapshotPattern" VALUE="snap_*.chk"/>      (required)
  *   <I PROPERTY="PODMeanType"        VALUE="TimeMean|FirstSnapshot|ProvidedMeanField"/>
  *   <I PROPERTY="PODMeanFile"        VALUE="..."/>             (only if ProvidedMeanField)
+ *   <P> PODtmin = 40.0 </P>      (optional; warm-up cutoff, requires PODdt)
+ *   <P> PODdt   = 0.5  </P>      (sampling output interval = ChkSteps*DT)
  * Snapshot list is the glob expansion of PODSnapshotPattern (sorted by trailing
  * _<index>.<ext> if present, else lexicographically). Method-of-snapshots POD
  * is computed in the velocity mass inner product. The leading m_nDOModes modes
@@ -2748,6 +2750,20 @@ void DOVelocityCorrectionScheme::InitialiseModesFromPOD()
              "<I PROPERTY=\"PODSnapshotPattern\" VALUE=\"...\"/>.");
     const std::string pattern = m_session->GetSolverInfo("PODSnapshotPattern");
     cfg.snapshotFiles = DOPODInitialiser::ExpandGlob(pattern);
+
+    NekDouble podTmin = 0.0, podDt = 0.0;
+    m_session->LoadParameter("PODtmin", podTmin, podTmin);
+    m_session->LoadParameter("PODdt",   podDt,   podDt);
+    ASSERTL0(!(podTmin > 0.0 && podDt <= 0.0),
+             "PODtmin requires PODdt (sampling interval) to be > 0.");
+    if (podTmin > 0.0)
+    {
+        size_t k0 = std::min(cfg.snapshotFiles.size(),
+                             (size_t)std::ceil(podTmin / podDt));
+        cfg.snapshotFiles.erase(cfg.snapshotFiles.begin(),
+                                cfg.snapshotFiles.begin() + k0);
+    }
+
     ASSERTL0(!cfg.snapshotFiles.empty(),
              "DOInitModeBasis=POD: PODSnapshotPattern matched zero files: "
              + pattern);
