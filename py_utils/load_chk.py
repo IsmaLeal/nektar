@@ -899,22 +899,33 @@ def _resolve_chk_dir(chk_dir_arg: Path | None, xml_path: Path) -> Path:
 
 
 def _read_field_format_metadata(fld_path: Path) -> dict:
-    """Read DOVelocityCorrectionScheme_* metadata + Yi from a Field-format .fld snapshot."""
-    import h5py
-    with h5py.File(fld_path, "r") as f:
-        md = dict(f["NEKTAR/Metadata"].attrs)
-        step  = int(md["DOVelocityCorrectionScheme_step"])
-        time  = float(md["DOVelocityCorrectionScheme_time"])
-        nM    = int(md["DOVelocityCorrectionScheme_n_modes"])
-        nP    = int(md["DOVelocityCorrectionScheme_n_particles"])
-        nV    = int(md["DOVelocityCorrectionScheme_n_vel"])
-        dt    = float(md["DOVelocityCorrectionScheme_dt"])
-        yi_hex = md["DOVelocityCorrectionScheme_Yi_hex"]
-        if isinstance(yi_hex, bytes):
-            yi_hex = yi_hex.decode()
-        yi = np.frombuffer(bytes.fromhex(yi_hex), dtype=np.float64).reshape(nP, nM)
-    return {"step": step, "time": time, "n_modes": nM, "n_particles": nP,
-            "n_vel": nV, "dt": dt, "yi": yi}
+    """Read DOVelocityCorrectionScheme_* metadata + Yi from a Field-format .fld
+    snapshot. Handles both HDF5 .fld (parallel writes) and XML .fld (serial)."""
+    with open(fld_path, "rb") as fb:
+        is_h5 = fb.read(8) == b"\x89HDF\r\n\x1a\n"
+    if is_h5:
+        import h5py
+        with h5py.File(fld_path, "r") as f:
+            attrs = dict(f["NEKTAR/Metadata"].attrs)
+        md = {k: (v.decode() if isinstance(v, bytes) else str(v))
+              for k, v in attrs.items()}
+    else:
+        from xml.etree import ElementTree as ET
+        meta_node = ET.parse(fld_path).getroot().find("Metadata")
+        if meta_node is None:
+            raise ValueError(f"{fld_path}: no <Metadata> element")
+        md = {child.tag: (child.text or "").strip() for child in meta_node}
+    nM = int(md["DOVelocityCorrectionScheme_n_modes"])
+    nP = int(md["DOVelocityCorrectionScheme_n_particles"])
+    yi = np.frombuffer(bytes.fromhex(md["DOVelocityCorrectionScheme_Yi_hex"]),
+                       dtype=np.float64).reshape(nP, nM)
+    return {"step":        int(md["DOVelocityCorrectionScheme_step"]),
+            "time":        float(md["DOVelocityCorrectionScheme_time"]),
+            "n_modes":     nM,
+            "n_particles": nP,
+            "n_vel":       int(md["DOVelocityCorrectionScheme_n_vel"]),
+            "dt":          float(md["DOVelocityCorrectionScheme_dt"]),
+            "yi":          yi}
 
 
 def _field_format_files(case_dir: Path) -> list[Path]:
