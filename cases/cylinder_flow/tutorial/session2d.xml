@@ -28,7 +28,6 @@
              <!--  Final time -->
             <P> FinTime        =                      </P>
             <P> NumSteps       = FinTime/TimeStep     </P>
-            <P> IO_CheckSteps  =                      </P>
             <P> IO_InfoSteps   = 5                    </P>
             <P> IO_FiltersInfoSteps   = 100           </P>
             <P> IO_CFLSteps    = 10	                  </P>

@@ -13,7 +13,6 @@
       <P> NumSteps      = @T_END@ / @DT@ </P>
       <P> IO_InfoSteps  = @INFO_STEPS@ </P>
       <P> IO_CFLSteps   = @INFO_STEPS@ </P>
-      <P> IO_CheckSteps = @CHK_STEPS@ </P>
       <P> Re            = @RE@ </P>
       <P> Kinvis        = 1.0 / Re </P>
     </PARAMETERS>
