@@ -212,6 +212,7 @@ public:
             for (int c = 0; c < m_nVel; ++c)
                 for (int j = 0; j < m_nCoeffs; ++j)
                     m_snapCoeffs[k][c][j] -= mean[c][j];
+        m_mean = mean;  // stash for ExportMean()
 
         // 3) Build the K x K correlation matrix C[i,j] = <snap_i, snap_j>_M
         //    using the velocity mass inner product summed over components.
@@ -392,6 +393,17 @@ public:
         // Free per-snapshot storage to keep memory peak bounded after compute.
         m_snapCoeffs.clear();
         m_snapCoeffs.shrink_to_fit();
+    }
+
+    void ExportMean(Array<OneD, NekDouble> &meanCoeffs) const
+    {
+        ASSERTL0(!m_mean.empty(),
+                 "DOPODInitialiser: Compute() must run before ExportMean.");
+        for (int c = 0; c < m_nVel; ++c)
+        {
+            Vmath::Vcopy(m_nCoeffs, m_mean[c].data(), 1,
+                         meanCoeffs.data() + c * m_nCoeffs, 1);
+        }
     }
 
     void ExportToDOMode(Array<OneD, NekDouble> &modePhys,
@@ -601,6 +613,9 @@ private:
     std::vector<std::vector<std::vector<NekDouble>>> m_modeCoeffs;
     std::vector<std::vector<std::vector<NekDouble>>> m_modePhys;
 
+    /// Mean field used by Compute() (per cfg.meanType): [component][coeff].
+    std::vector<std::vector<NekDouble>> m_mean;
+
     std::vector<NekDouble>              m_sigmas;
     /// m_eigVecs[k][p] = v_{p,k}, the K-vector eigenvector for mode k.
     std::vector<std::vector<NekDouble>> m_eigVecs;
@@ -632,6 +647,11 @@ void DOPODInitialiser::ExportToDOMode(Array<OneD, NekDouble> &modePhys,
                                        Array<OneD, NekDouble> &modeCoeffs) const
 {
     m_impl->ExportToDOMode(modePhys, modeCoeffs);
+}
+
+void DOPODInitialiser::ExportMean(Array<OneD, NekDouble> &meanCoeffs) const
+{
+    m_impl->ExportMean(meanCoeffs);
 }
 
 const std::vector<NekDouble> &DOPODInitialiser::SingularValues() const

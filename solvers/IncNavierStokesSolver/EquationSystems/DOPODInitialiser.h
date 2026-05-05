@@ -87,6 +87,10 @@ public:
     void ExportToDOMode(Array<OneD, NekDouble> &modePhys,
                         Array<OneD, NekDouble> &modeCoeffs) const;
 
+    /// Pack the mean field computed during Compute() (per cfg.meanType) into
+    /// a per-component coeff layout: meanCoeffs[c*nCoeffs + j] for c in [0,nVel).
+    void ExportMean(Array<OneD, NekDouble> &meanCoeffs) const;
+
     /// Singular values sigma_k = sqrt(lambda_k), descending.
     const std::vector<NekDouble> &SingularValues() const;
 

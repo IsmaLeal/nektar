@@ -2807,6 +2807,24 @@ void DOVelocityCorrectionScheme::InitialiseModesFromPOD()
     pod.Compute();
     pod.ExportToDOMode(m_DOModePhys, m_DOModeCoeffs);
 
+    // Install POD mean as the simulation mean field, overriding whatever
+    // VelocityCorrectionScheme::v_DoInitialise set from <InitialConditions>.
+    // Without this, the mean (= <InitialConditions>) and modes (= POD modes
+    // around the POD time mean) are inconsistent at t=0.
+    {
+        const int nVel    = (int)m_velocity.size();
+        const int nCoeffs = m_fields[m_velocity[0]]->GetNcoeffs();
+        Array<OneD, NekDouble> meanCoeffs(nVel * nCoeffs);
+        pod.ExportMean(meanCoeffs);
+        for (int c = 0; c < nVel; ++c)
+        {
+            auto &f = m_fields[m_velocity[c]];
+            Vmath::Vcopy(nCoeffs, meanCoeffs.data() + c * nCoeffs, 1,
+                         f->UpdateCoeffs().data(), 1);
+            f->BwdTrans(f->GetCoeffs(), f->UpdatePhys());
+        }
+    }
+
     // Stash POD spectrum + eigenvectors for InitialiseYi (Y from projection).
     m_podSigmas       = pod.SingularValues();
     m_podEigVecs      = pod.EigenVectors();
