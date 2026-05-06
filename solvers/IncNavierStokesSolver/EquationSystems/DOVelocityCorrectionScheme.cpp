@@ -424,6 +424,9 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
         m_forcingTau = m_session->GetParameter("DOForcingTau");
     if (m_session->DefinesParameter("DOForcingSeed"))
         m_forcingSeed = (int)m_session->GetParameter("DOForcingSeed");
+    // Tikhonov regularisation strength for the inverse-covariance operator
+    // applied to the mode RHS in eigenbasis (see ComputeNMode). Default 1e-2.
+    m_session->LoadParameter("DOForcingRegEps", m_forcingRegEps, m_forcingRegEps);
     if (m_nForcingChannels > 0)
     {
         const int K = m_nForcingChannels;
@@ -489,12 +492,14 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
         //   u_p = ubar + Σ_k Yi[p,k] * mode_k_new ≈ snap_p.
         if (m_doInitBasis == "POD" && m_podInitialiser)
         {
-            // The owned-scratch refactor in RecomputeYiByProjection (Tier B1)
-            // reduces but does not eliminate the post-projection NaN flake
-            // (measured: n=2 failure 10/10 → 8/10). The remaining trigger
-            // appears to be inside IProductWRTBase or a related Nektar
-            // codepath. Keep the storage guard as belt-and-suspenders.
-            CallRecomputeYiWithStorageGuard();
+            // Re-project snapshots onto the post-reorth modes. Value-pure
+            // (no side effects on m_fields). The previous workaround wrapper
+            // CallRecomputeYiWithStorageGuard was a misdiagnosis: the
+            // first-step instability it appeared to mitigate was actually the
+            // unbounded 1/μ_i amplification in ComputeNMode (now Tikhonov-
+            // regularised). See the addStoch+triple operator block.
+            m_podInitialiser->RecomputeYiByProjection(
+                m_DOModePhys, m_DOModeCoeffs, m_Yi, m_nDOParticles);
             m_podInitialiser.reset();   // snapshots/POD state no longer needed
 
             // Re-zero-mean Yi across particles per mode (DO requires the
@@ -643,62 +648,6 @@ void DOVelocityCorrectionScheme::InitialiseYi()
     }
 }
 
-/**
- * Wrapper around DOPODInitialiser::RecomputeYiByProjection() that captures
- * each velocity ExpList's m_coeffs/m_phys BEFORE the call, runs the call,
- * then writes the captured values back through UpdateCoeffs()/UpdatePhys()
- * AFTER the call.
- *
- * Symptom prevented:
- *   On n=2/4 MPI ranks (cylinder POD-init case), without this guard the
- *   first time step's pressure or viscous CG diverged to NaN immediately
- *   after init:
- *     "CG iterations made = 5001 ... error = nan" repeated, then
- *     "DOVelocityCorrectionScheme: orthonormalisation collapsed" or
- *     "DOVelocityCorrectionScheme: forcing channel ... has zero mass-norm".
- *
- * Why this guard works (and why it has to look like this):
- *   RecomputeYiByProjection constructs non-owning eArrayWrapper views into
- *   m_DOModePhys and passes them through Nektar's IProductWRTBase /
- *   ExtractDataToCoeffs codepaths. Those calls leave the velocity ExpLists'
- *   Array<OneD,T> shared-storage / refcount state in a configuration that
- *   confuses the next iterative solve. A bisect showed:
- *     - rewriting m_coeffs/m_phys (with any data) AT THE CALL SITE after
- *       the function returns and its local Array views destruct fixes
- *       n=2 and n=3; merely writing through UpdateCoeffs()/UpdatePhys()
- *       once is enough on n=3 but n=2 needs the full rewrite;
- *     - identical rewrite inside the projection function (before return)
- *       does not fix n=4;
- *     - the saved values must come from BEFORE the call (saving the
- *       post-call values and writing them back fails on n=2);
- *     - byte-by-byte the buffer VALUES are identical before vs after the
- *       projection, so this is numerically a no-op — the side effect is
- *       purely Array internal book-keeping (refcount / detach-on-write).
- *
- * Idempotent. Safe on n=1. See Tier B refactor: the cleaner long-term fix
- * is to remove the eArrayWrapper views inside RecomputeYiByProjection.
- */
-void DOVelocityCorrectionScheme::CallRecomputeYiWithStorageGuard()
-{
-    const int nVel = m_velocity.size();
-    std::vector<Array<OneD, NekDouble>> sC(nVel), sP(nVel);
-    for (int c = 0; c < nVel; ++c)
-    {
-        auto &f = m_fields[m_velocity[c]];
-        sC[c] = Array<OneD, NekDouble>(f->GetNcoeffs());
-        sP[c] = Array<OneD, NekDouble>(f->GetTotPoints());
-        Vmath::Vcopy(f->GetNcoeffs(),   f->GetCoeffs().data(), 1, sC[c].data(), 1);
-        Vmath::Vcopy(f->GetTotPoints(), f->GetPhys().data(),   1, sP[c].data(), 1);
-    }
-    m_podInitialiser->RecomputeYiByProjection(
-        m_DOModePhys, m_DOModeCoeffs, m_Yi, m_nDOParticles);
-    for (int c = 0; c < nVel; ++c)
-    {
-        auto &f = m_fields[m_velocity[c]];
-        Vmath::Vcopy(f->GetNcoeffs(),   sC[c].data(), 1, f->UpdateCoeffs().data(), 1);
-        Vmath::Vcopy(f->GetTotPoints(), sP[c].data(), 1, f->UpdatePhys().data(),   1);
-    }
-}
 
 /**
  * Reads the XML "ForcingChannels" function block, evaluates each channel's
@@ -1080,6 +1029,22 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
     const NekDouble mui = (i < m_nDOModes) ? m_Cij[i*m_nDOModes + i] : 0.0;
     const NekDouble eps = 1e-12;
 
+    // Tikhonov-regularised inverse covariance for mode i.
+    //   invMuReg_i = mu_i / (mu_i^2 + lambda^2),   lambda = m_forcingRegEps * mu_max
+    // Reduces to 1/mu_i for mu_i >> lambda; bounded for mu_i -> 0. Acts as
+    // the Σ^{-1} operator on the C^{-1}-coupled contributions to the mode
+    // RHS (triple-moment + additive stochastic). Cross-coupling and the
+    // viscous laplacian have no Σ^{-1} factor in the canonical DO mode
+    // equation and are added outside this scaling.
+    NekDouble muMax = 0.0;
+    for (int q = 0; q < m_nDOModes; ++q)
+    {
+        muMax = std::max(muMax, std::abs(m_Cij[q*m_nDOModes + q]));
+    }
+    const NekDouble lambdaReg = m_forcingRegEps * muMax;
+    const NekDouble denomReg  = mui*mui + lambdaReg*lambdaReg;
+    const NekDouble invMuReg  = (denomReg > 0.0) ? mui / denomReg : 0.0;
+
     Array<OneD, Array<OneD, NekDouble>> cross(nVel), triple(nVel), lap(nVel), innerArg(nVel);
 
     for (int c = 0; c < nVel; ++c)  // for each component: array of 0s for each quadrature point
@@ -1091,12 +1056,12 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         Vmath::Zero(nPhys, N[c].data(), 1); // zero output
     }
 
-    // 1) cross = -[(ū . grad) u_i + (u_i . grad) ū]
+    // 1) cross = -[(ū . grad) u_i + (u_i . grad) ū]   (no Σ^{-1} action)
     ComputeModeCross(i, cross);
 
-    // 2) triple-moment F_{ml}M_{mli}/mu_i (pseudoinverse: zero when mu_i below eps)
-    //     triple[c](x) = \sum_{m,l} (M_{mli}/mu_i) F_{ml,c}(x)
-    if (mui > eps)
+    // 2) triple-moment in UNSCALED form (Σ^{-1} applied at assembly via invMuReg)
+    //      triple_unscaled[c](x) = -Σ_{m,l} M_{mli} (u_m . ∇) u_{l,c}
+    if (invMuReg > eps)
     {
         // precompute duLcd = ∂_d u_{l,c}
         Array<OneD, NekDouble> duLcd(m_nDOModes * nVel * nVel * nPhys);
@@ -1123,8 +1088,8 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         {
             for (int l = 0; l < m_nDOModes; ++l)                    // second triple-moment index
             {
-                const NekDouble Mml = m_Mkli[(m*m_nDOModes          // Mml = M_mli / mui
-                                              + l)*m_nDOModes + i] / mui;
+                const NekDouble Mml = m_Mkli[(m*m_nDOModes          // Mml = M_mli (unscaled; Σ^{-1} applied below)
+                                              + l)*m_nDOModes + i];
                 if (std::abs(Mml) < eps) continue;
 
                 for (int c = 0; c < nVel; ++c)                      // output spatial component
@@ -1145,20 +1110,21 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         }
     }
 
-    // 3) additive stochastic forcing contribution to mode i:
-    //      addStochN_{i,c}(x) = (1/μ_i) Σ_k A_{i,k} g_{k,c}(x)
-    //      Included in `rough` below so it flows into both N and innerArg, and
-    //      so the existing DO projection (step 5) automatically applies the
+    // 3) additive stochastic forcing contribution to mode i (UNSCALED):
+    //      addStochN_unscaled_{i,c}(x) = Σ_k A_{i,k} g_{k,c}(x)
+    //      The Σ^{-1} factor is applied at assembly via invMuReg below.
+    //      Included in `rough` so it flows into both N and innerArg, and
+    //      so the DO projection (step 6) automatically applies the
     //      ⊥-to-modes orthogonalisation that the canonical DO mode equation
     //      requires for the forcing term.
     Array<OneD, Array<OneD, NekDouble>> addStochN(nVel);
     for (int c = 0; c < nVel; ++c) addStochN[c] = Array<OneD, NekDouble>(nPhys, 0.0);
-    if (m_nForcingChannels > 0 && mui > eps)
+    if (m_nForcingChannels > 0 && invMuReg > eps)
     {
         const int K = m_nForcingChannels;
         for (int k = 0; k < K; ++k)                         // loop over channels
         {
-            const NekDouble Aik = m_forcingA[i*K + k] / mui;
+            const NekDouble Aik = m_forcingA[i*K + k];
             if (std::abs(Aik) < eps) continue;
             for (int c = 0; c < nVel; ++c)                  // loop over components
             {
@@ -1168,28 +1134,32 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         }
     }
 
-    // 4) lap(u_i)
+    // 4) lap(u_i)   (no Σ^{-1} action)
     ComputeModeLaplacian(i, lap);
 
-    // 5) "rough" = cross + triple + addStochN ; innerArg = rough + nu * Lap u_i
+    // 5) Assemble (single Σ^{-1} action on triple+addStoch via invMuReg):
+    //      N         = cross + invMuReg * (triple_unscaled + addStoch_unscaled)
+    //      innerArg  = N + nu * Lap u_i        (consumed by step 6 DO projection)
     NekDouble maxTriple = 0.0, maxCross = 0.0, maxStoch = 0.0;
     for (int c = 0; c < nVel; ++c)      // loop over components
         for (int k = 0; k < nPhys; ++k) // loop over points
         {
-            const NekDouble rough = cross[c][k] + triple[c][k]    // mean-mode + triple-moment
-                                  + addStochN[c][k];               // + stochastic forcing
+            const NekDouble triple_scaled = invMuReg * triple[c][k];
+            const NekDouble stoch_scaled  = invMuReg * addStochN[c][k];
+            const NekDouble rough = cross[c][k] + triple_scaled + stoch_scaled;
             N[c][k]         = rough;
             innerArg[c][k]  = rough + nu * lap[c][k];
-            maxTriple = std::max(maxTriple, std::abs(triple[c][k]));
+            maxTriple = std::max(maxTriple, std::abs(triple_scaled));
             maxCross  = std::max(maxCross , std::abs(cross [c][k]));
-            maxStoch  = std::max(maxStoch , std::abs(addStochN[c][k]));
+            maxStoch  = std::max(maxStoch , std::abs(stoch_scaled));
         }
     if (m_verbose && m_doStepCounter == 1)
         std::cout << "[DOVelocityCorrectionScheme][diag] mode i=" << i
                   << " max|cross|="    << maxCross
                   << " max|triple|="   << maxTriple
                   << " max|addStoch|=" << maxStoch
-                  << " mu_i="          << mui << "\n";
+                  << " mu_i="          << mui
+                  << " invMuReg="      << invMuReg << "\n";
 
     // 5.5) project N orthogonal to the constant subspace (uses innerArg as the
     //      projection argument so the coefficient matches the downstream DO
