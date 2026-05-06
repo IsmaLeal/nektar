@@ -338,12 +338,21 @@ def _run_fieldconvert(
     pts_path: Path,
     out_path: Path,
 ) -> None:
+    # FieldConvert needs both geometry and conditions XMLs. Conventional
+    # case-dir layout has geometry.xml alongside casefile.xml; if present,
+    # comma-prepend it so SessionReader / MeshGraphIO finds the geometry.
+    geom = xml_path.parent / "geometry.xml"
+    fromxml = (
+        f"{geom},{xml_path}"
+        if geom.exists() and geom.resolve() != xml_path.resolve()
+        else str(xml_path)
+    )
     cmd = [
         str(fieldconvert),
         "-f",
         "-e",
         "-m",
-        f"interppoints:fromxml={xml_path}:fromfld={chk_path}:topts={pts_path}",
+        f"interppoints:fromxml={fromxml}:fromfld={chk_path}:topts={pts_path}",
         str(out_path),
     ]
     proc = subprocess.run(
