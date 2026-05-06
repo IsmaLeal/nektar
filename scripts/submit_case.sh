@@ -171,7 +171,10 @@ python3 '$LOAD_CHK' \
 EOF
 )
 else
-    POSTPROC_CMD="python3 '$WORKFLOW' run-case --case-dir '$CASE_DIR' --stages '$STAGES'"
+    # --keep-going: validation-only stages (suite/check) must not block
+    # downstream artefact stages (panels/video). Failed validations remain
+    # visible in the postproc log and in suite_summary.json.
+    POSTPROC_CMD="python3 '$WORKFLOW' run-case --case-dir '$CASE_DIR' --stages '$STAGES' --keep-going"
 fi
 
 # --- submit detached ---
