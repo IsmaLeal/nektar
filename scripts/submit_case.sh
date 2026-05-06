@@ -2,7 +2,14 @@
 # scripts/submit_case.sh — run a Nektar++ case + auto-postprocess, detached.
 #
 # Usage:
-#   scripts/submit_case.sh <case-dir> [--ranks N] [--stages S]
+#   scripts/submit_case.sh <case-dir> [--ranks N] [--stages S] [--chain "ARGS"]
+#
+# --chain "ARGS": after the solver+postproc of <case-dir> finish (and only if
+#   the solver succeeded), invoke this same script again with ARGS (typically
+#   another case dir, optionally with its own flags). Useful for chaining
+#   sampling -> DO automatically:
+#       submit_case.sh runs/Re60_pod_30s/sampling \
+#                      --chain "runs/Re60_pod_30s/do --ranks 6"
 #
 # <case-dir> must contain:
 #   casefile.xml   the run XML (you write/edit it directly)
@@ -63,10 +70,12 @@ usage() {
 CASE_DIR="$1"; shift
 RANKS=""
 STAGES="$DEFAULT_STAGES"
+CHAIN_ARGS=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --ranks)  RANKS="$2";  shift 2 ;;
         --stages) STAGES="$2"; shift 2 ;;
+        --chain)  CHAIN_ARGS="$2"; shift 2 ;;
         -h|--help) usage 0 ;;
         *) echo "unknown flag: $1" >&2; usage 1 ;;
     esac
@@ -178,6 +187,7 @@ else
 fi
 
 # --- submit detached ---
+SELF="$(realpath "$0")"
 nohup bash -c "
     cd '$CASE_DIR'
     mpirun -np $RANKS '$SOLVER' geometry.xml casefile.xml > solver.log 2>&1
@@ -185,9 +195,20 @@ nohup bash -c "
     echo \"solver_exit=\$ec finished_at=\$(date -Iseconds)\" >> '$CASE_DIR/RUN_SPEC.txt'
     if [ \$ec -eq 0 ]; then
         $POSTPROC_CMD > '$CASE_DIR/postproc.log' 2>&1
-        echo \"postproc_exit=\$? postproc_at=\$(date -Iseconds)\" >> '$CASE_DIR/RUN_SPEC.txt'
+        pp_ec=\$?
+        echo \"postproc_exit=\$pp_ec postproc_at=\$(date -Iseconds)\" >> '$CASE_DIR/RUN_SPEC.txt'
     else
         echo 'postproc_skipped (solver failed)' >> '$CASE_DIR/RUN_SPEC.txt'
+        pp_ec=skipped
+    fi
+    # --chain: kick off the next submission after this one finishes, regardless
+    # of postproc outcome (chain runs as long as the SOLVER succeeded). The
+    # chained submit_case.sh internally re-nohups, so this call returns fast.
+    if [ -n '$CHAIN_ARGS' ] && [ \$ec -eq 0 ]; then
+        echo \"chain_dispatched_at=\$(date -Iseconds) chain_args=$CHAIN_ARGS\" >> '$CASE_DIR/RUN_SPEC.txt'
+        bash '$SELF' $CHAIN_ARGS >> '$CASE_DIR/chain.log' 2>&1
+    elif [ -n '$CHAIN_ARGS' ]; then
+        echo 'chain_skipped (solver failed)' >> '$CASE_DIR/RUN_SPEC.txt'
     fi
 " > "$CASE_DIR/driver.log" 2>&1 &
 
