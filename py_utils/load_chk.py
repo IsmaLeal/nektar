@@ -909,21 +909,38 @@ def _resolve_chk_dir(chk_dir_arg: Path | None, xml_path: Path) -> Path:
 
 def _read_field_format_metadata(fld_path: Path) -> dict:
     """Read DOVelocityCorrectionScheme_* metadata + Yi from a Field-format .fld
-    snapshot. Handles both HDF5 .fld (parallel writes) and XML .fld (serial)."""
-    with open(fld_path, "rb") as fb:
-        is_h5 = fb.read(8) == b"\x89HDF\r\n\x1a\n"
-    if is_h5:
-        import h5py
-        with h5py.File(fld_path, "r") as f:
-            attrs = dict(f["NEKTAR/Metadata"].attrs)
-        md = {k: (v.decode() if isinstance(v, bytes) else str(v))
-              for k, v in attrs.items()}
-    else:
+    snapshot. Handles HDF5 .fld (single file, parallel writes), XML .fld
+    (single file, serial), and the parallel-XML directory layout where the
+    snapshot is a directory containing Info.xml + P*.fld per-rank files
+    (the Nektar default IOFormat=Xml output for parallel runs)."""
+    if fld_path.is_dir():
+        # Parallel-XML layout: metadata lives in Info.xml inside the snapshot
+        # directory.
+        info_path = fld_path / "Info.xml"
+        if not info_path.is_file():
+            raise ValueError(
+                f"{fld_path}: snapshot directory missing Info.xml"
+            )
         from xml.etree import ElementTree as ET
-        meta_node = ET.parse(fld_path).getroot().find("Metadata")
+        meta_node = ET.parse(info_path).getroot().find("Metadata")
         if meta_node is None:
-            raise ValueError(f"{fld_path}: no <Metadata> element")
+            raise ValueError(f"{info_path}: no <Metadata> element")
         md = {child.tag: (child.text or "").strip() for child in meta_node}
+    else:
+        with open(fld_path, "rb") as fb:
+            is_h5 = fb.read(8) == b"\x89HDF\r\n\x1a\n"
+        if is_h5:
+            import h5py
+            with h5py.File(fld_path, "r") as f:
+                attrs = dict(f["NEKTAR/Metadata"].attrs)
+            md = {k: (v.decode() if isinstance(v, bytes) else str(v))
+                  for k, v in attrs.items()}
+        else:
+            from xml.etree import ElementTree as ET
+            meta_node = ET.parse(fld_path).getroot().find("Metadata")
+            if meta_node is None:
+                raise ValueError(f"{fld_path}: no <Metadata> element")
+            md = {child.tag: (child.text or "").strip() for child in meta_node}
     nM = int(md["DOVelocityCorrectionScheme_n_modes"])
     nP = int(md["DOVelocityCorrectionScheme_n_particles"])
     yi = np.frombuffer(bytes.fromhex(md["DOVelocityCorrectionScheme_Yi_hex"]),
@@ -938,11 +955,18 @@ def _read_field_format_metadata(fld_path: Path) -> dict:
 
 
 def _field_format_files(case_dir: Path) -> list[Path]:
-    """Discover Field-format DO archive snapshot files."""
+    """Discover Field-format DO archive snapshots.
+
+    A snapshot can be either a single .fld file (HDF5 or serial XML) or a
+    directory `*.do_<step>.fld/` containing `Info.xml` + per-rank `P*.fld`
+    (Nektar's default IOFormat=Xml output for parallel writes). Both layouts
+    are valid inputs to FieldConvert and to _read_field_format_metadata."""
     out_dir = (case_dir / "output").resolve()
     if not out_dir.is_dir():
         return []
-    files = sorted([p for p in out_dir.glob("*.do_*.fld") if p.is_file()],
+    candidates = [p for p in out_dir.glob("*.do_*.fld")
+                  if (p.is_file() or p.is_dir())]
+    files = sorted(candidates,
                    key=lambda p: int(re.search(r"\.do_(\d+)\.fld$", p.name).group(1)))
     return files
 
@@ -1117,10 +1141,17 @@ def main() -> int:
     )
     ap.add_argument("--nx", type=int, default=100, help="Cartesian grid points in x")
     ap.add_argument("--ny", type=int, default=100, help="Cartesian grid points in y")
-    ap.add_argument("--xmin", type=float, default=0.0)
-    ap.add_argument("--xmax", type=float, default=6.283185307179586)
-    ap.add_argument("--ymin", type=float, default=0.0)
-    ap.add_argument("--ymax", type=float, default=6.283185307179586)
+    # Bounds default to None: auto-detected from geometry.xml vertex extents
+    # after argument parsing. The legacy fallback for cases without a
+    # geometry.xml alongside the casefile is the periodic [0, 2π]² square.
+    ap.add_argument("--xmin", type=float, default=None,
+                    help="Cartesian x lower bound (default: geometry.xml extent)")
+    ap.add_argument("--xmax", type=float, default=None,
+                    help="Cartesian x upper bound (default: geometry.xml extent)")
+    ap.add_argument("--ymin", type=float, default=None,
+                    help="Cartesian y lower bound (default: geometry.xml extent)")
+    ap.add_argument("--ymax", type=float, default=None,
+                    help="Cartesian y upper bound (default: geometry.xml extent)")
     ap.add_argument(
         "--u-col",
         type=int,
@@ -1196,6 +1227,78 @@ def main() -> int:
         help="Disable --interp-modes-from-archive.",
     )
     args = ap.parse_args()
+
+    # Auto-detect Cartesian extraction bounds from geometry.xml vertex
+    # extents when the user didn't pass explicit --xmin/--xmax/--ymin/--ymax.
+    # Supports both uncompressed <V> elements and Nektar's compressed
+    # <VERTEX COMPRESSED="B64Z-LittleEndian" BITSIZE="64"> blob (base64 +
+    # zlib + little-endian doubles, 3 per vertex even for 2D meshes).
+    # Falls back to the periodic [0, 2π]² square only if no geometry.xml is
+    # found alongside the casefile (legacy default).
+    if (args.xmin is None or args.xmax is None
+            or args.ymin is None or args.ymax is None):
+        geom_path = None
+        if args.xml is not None:
+            geom_candidate = args.xml.parent / "geometry.xml"
+            if geom_candidate.is_file():
+                geom_path = geom_candidate
+        xs: list[float] = []
+        ys: list[float] = []
+        if geom_path is not None:
+            try:
+                geom_root = ET.parse(geom_path).getroot()
+                # 1) Uncompressed: individual <V>x y z</V> elements.
+                for v in geom_root.iter("V"):
+                    if v.text is None:
+                        continue
+                    parts = v.text.split()
+                    if len(parts) >= 2:
+                        try:
+                            xs.append(float(parts[0]))
+                            ys.append(float(parts[1]))
+                        except ValueError:
+                            pass
+                # 2) Compressed: <VERTEX COMPRESSED="B64Z-LittleEndian"
+                #    BITSIZE="64">...base64...</VERTEX>
+                # Layout per vertex (Nektar mesh XML): packed struct
+                #   (int64 id, double x, double y, double z)  = 32 bytes
+                # interpreted as 4 doubles per vertex (id reinterpreted as
+                # double — usually appears as 0.0 for small ids), with z = 0
+                # for SPACE=2 meshes. Stride is always 4 doubles regardless
+                # of SPACE.
+                if not xs or not ys:
+                    import struct
+                    for vx in geom_root.iter("VERTEX"):
+                        comp = (vx.get("COMPRESSED") or "").lower()
+                        if "b64z" not in comp or vx.text is None:
+                            continue
+                        try:
+                            raw = zlib.decompress(base64.b64decode(vx.text.strip()))
+                            ndoubles = len(raw) // 8
+                            doubles = struct.unpack(f"<{ndoubles}d", raw[:ndoubles * 8])
+                            # vertex i: doubles[4*i + 0]=id (as double),
+                            #           doubles[4*i + 1]=x, [+2]=y, [+3]=z
+                            for i in range(0, ndoubles, 4):
+                                if i + 2 < ndoubles:
+                                    xs.append(doubles[i + 1])
+                                    ys.append(doubles[i + 2])
+                        except Exception:
+                            pass
+                if xs and ys:
+                    if args.xmin is None: args.xmin = min(xs)
+                    if args.xmax is None: args.xmax = max(xs)
+                    if args.ymin is None: args.ymin = min(ys)
+                    if args.ymax is None: args.ymax = max(ys)
+            except Exception:
+                pass
+        # Final fallback: legacy [0, 2π]² for any bound still unset.
+        _2pi = 6.283185307179586
+        if args.xmin is None: args.xmin = 0.0
+        if args.xmax is None: args.xmax = _2pi
+        if args.ymin is None: args.ymin = 0.0
+        if args.ymax is None: args.ymax = _2pi
+        print(f"[load_chk] auto-detected bounds: "
+              f"x=[{args.xmin}, {args.xmax}]  y=[{args.ymin}, {args.ymax}]")
 
     xml_path = args.xml.resolve() if args.xml else _default_xml()
     if xml_path is None or not xml_path.is_file():
