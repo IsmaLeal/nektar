@@ -108,8 +108,12 @@ def main() -> int:
     ap.add_argument(
         "--robust-pct",
         type=float,
-        default=99.5,
-        help="Percentile used to compute robust fixed/chunked limits.",
+        default=95.0,
+        help=("Percentile used to compute robust fixed/chunked limits. "
+              "Default 95 saturates ~5% of the most extreme points (boundary "
+              "ringing, isolated element-edge spikes) so the colormap "
+              "concentrates on the bulk of the mode amplitude. Bump to 99+ "
+              "if you want extreme outliers to define the limit instead."),
     )
     ap.add_argument(
         "--norm",
