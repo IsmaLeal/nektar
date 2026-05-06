@@ -531,7 +531,19 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
         // to a Cartesian grid for post-processing. Doing the round-trip
         // here makes the t=0 mode snapshot identical in basis to all
         // subsequent snapshots, killing the artefact.
+        //
+        // BC bracket: m_fields[velocity] carries the BASE flow's Dirichlet
+        // values (u=1 at inlet/walls). Modes have HOMOGENEOUS Dirichlet BCs
+        // by construction (zero at walls/inlet). Without homogenizing the
+        // velocity BCs around the round-trip, FwdTrans/BwdTrans on the
+        // ContField would inject the base-flow Dirichlet values into the
+        // mode boundaries, corrupting the modes catastrophically (orth
+        // collapses on the next step). Same homogenize/restore bracket
+        // pattern as ReOrthonormalise().
         {
+            auto bcState = CaptureVelocityBCState(m_fields, m_velocity);
+            HomogenizeVelocityBCsForModes(m_fields, m_velocity);
+
             const int nVelLocal    = (int)m_velocity.size();
             const int nPhysLocal   = m_fields[0]->GetTotPoints();
             const int nCoeffsLocal = m_fields[0]->GetNcoeffs();
@@ -554,6 +566,8 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
                                  m_DOModeCoeffs.data() + cOff, 1);
                 }
             }
+
+            RestoreVelocityBCState(m_fields, bcState);
         }
 
         // Pack the (modes, Y) initial state into m_doState and initialise the
