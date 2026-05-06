@@ -485,6 +485,60 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
         RotateToEigenbasisOfC();                    // diagonalise C(0); rotates modes and Y consistently (no-op if R<=1)
         ReOrthonormalise();                         // Stokes-project each mode to discrete div-free space
 
+        // FE-project each mode field onto the discrete polynomial space:
+        //     phys -> coeffs (FwdTrans) -> phys (BwdTrans)
+        // The mode coeffs assembled by POD compute / ReOrthonormalise can
+        // carry high-order components inconsistent with the FE basis (the
+        // POD synthesis is a linear combination of snapshot coeffs, not a
+        // discrete projection per se). The first viscous solve performs
+        // this round-trip implicitly, so the inconsistency only affects
+        // the t=0 archive snapshot — visual ringing in do_panels at t=0
+        // when FieldConvert later interpolates the modes onto a Cartesian
+        // grid for post-processing. Doing the round-trip here makes the
+        // t=0 mode snapshot identical in basis to all subsequent ones.
+        //
+        // Order matters: this MUST happen BEFORE RecomputeYiByProjection
+        // below, otherwise Y is computed against the un-projected modes
+        // and the (mode, Y) correspondence is broken — the t=0 realization
+        // u_p = ubar + Σ_k Y_p,k φ_k no longer reconstructs snap_p.
+        //
+        // BC bracket: m_fields[velocity] carries the BASE flow's Dirichlet
+        // values (u=1 at inlet/walls). Modes have HOMOGENEOUS Dirichlet BCs
+        // by construction. Without homogenizing the velocity BCs around the
+        // round-trip, ContField::FwdTrans would inject base-flow boundary
+        // values into the modes, corrupting them catastrophically (orth
+        // collapses on step 1). Same homogenize/restore bracket as
+        // ReOrthonormalise().
+        {
+            auto bcState = CaptureVelocityBCState(m_fields, m_velocity);
+            HomogenizeVelocityBCsForModes(m_fields, m_velocity);
+
+            const int nVelLocal    = (int)m_velocity.size();
+            const int nPhysLocal   = m_fields[0]->GetTotPoints();
+            const int nCoeffsLocal = m_fields[0]->GetNcoeffs();
+            Array<OneD, NekDouble> physTmp(nPhysLocal);
+            Array<OneD, NekDouble> coefTmp(nCoeffsLocal);
+            for (int i = 0; i < m_nDOModes; ++i)
+            {
+                for (int c = 0; c < nVelLocal; ++c)
+                {
+                    const int pOff = (i*nVelLocal + c)*nPhysLocal;
+                    const int cOff = (i*nVelLocal + c)*nCoeffsLocal;
+                    Vmath::Vcopy(nPhysLocal,
+                                 m_DOModePhys.data() + pOff, 1,
+                                 physTmp.data(), 1);
+                    m_fields[m_velocity[c]]->FwdTrans(physTmp, coefTmp);
+                    m_fields[m_velocity[c]]->BwdTrans(coefTmp, physTmp);
+                    Vmath::Vcopy(nPhysLocal, physTmp.data(), 1,
+                                 m_DOModePhys.data() + pOff, 1);
+                    Vmath::Vcopy(nCoeffsLocal, coefTmp.data(), 1,
+                                 m_DOModeCoeffs.data() + cOff, 1);
+                }
+            }
+
+            RestoreVelocityBCState(m_fields, bcState);
+        }
+
         // POD path: ReOrthonormalise's Stokes projection is non-unitary
         // (changes the subspace, not just rotates within it) and is
         // non-deterministic under MPI. Re-project the snapshots onto the
@@ -518,57 +572,6 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
             }
         }
         InitialiseForcingBasis();                   // forcing channels (XML-driven; no-op if K==0)
-
-        // FE-project each mode field onto the discrete polynomial space:
-        //     phys -> coeffs (FwdTrans) -> phys (BwdTrans)
-        // The mode coeffs assembled by POD compute / ReOrthonormalise can
-        // carry high-order components inconsistent with the FE basis (the
-        // POD synthesis is a linear combination of snapshot coeffs, not a
-        // discrete projection per se). The first viscous solve performs
-        // this round-trip implicitly, so the inconsistency only affects
-        // the t=0 archive snapshot — it shows up as visual ringing in
-        // do_panels at t=0 when FieldConvert later interpolates the modes
-        // to a Cartesian grid for post-processing. Doing the round-trip
-        // here makes the t=0 mode snapshot identical in basis to all
-        // subsequent snapshots, killing the artefact.
-        //
-        // BC bracket: m_fields[velocity] carries the BASE flow's Dirichlet
-        // values (u=1 at inlet/walls). Modes have HOMOGENEOUS Dirichlet BCs
-        // by construction (zero at walls/inlet). Without homogenizing the
-        // velocity BCs around the round-trip, FwdTrans/BwdTrans on the
-        // ContField would inject the base-flow Dirichlet values into the
-        // mode boundaries, corrupting the modes catastrophically (orth
-        // collapses on the next step). Same homogenize/restore bracket
-        // pattern as ReOrthonormalise().
-        {
-            auto bcState = CaptureVelocityBCState(m_fields, m_velocity);
-            HomogenizeVelocityBCsForModes(m_fields, m_velocity);
-
-            const int nVelLocal    = (int)m_velocity.size();
-            const int nPhysLocal   = m_fields[0]->GetTotPoints();
-            const int nCoeffsLocal = m_fields[0]->GetNcoeffs();
-            Array<OneD, NekDouble> physTmp(nPhysLocal);
-            Array<OneD, NekDouble> coefTmp(nCoeffsLocal);
-            for (int i = 0; i < m_nDOModes; ++i)
-            {
-                for (int c = 0; c < nVelLocal; ++c)
-                {
-                    const int pOff = (i*nVelLocal + c)*nPhysLocal;
-                    const int cOff = (i*nVelLocal + c)*nCoeffsLocal;
-                    Vmath::Vcopy(nPhysLocal,
-                                 m_DOModePhys.data() + pOff, 1,
-                                 physTmp.data(), 1);
-                    m_fields[m_velocity[c]]->FwdTrans(physTmp, coefTmp);
-                    m_fields[m_velocity[c]]->BwdTrans(coefTmp, physTmp);
-                    Vmath::Vcopy(nPhysLocal, physTmp.data(), 1,
-                                 m_DOModePhys.data() + pOff, 1);
-                    Vmath::Vcopy(nCoeffsLocal, coefTmp.data(), 1,
-                                 m_DOModeCoeffs.data() + cOff, 1);
-                }
-            }
-
-            RestoreVelocityBCState(m_fields, bcState);
-        }
 
         // Pack the (modes, Y) initial state into m_doState and initialise the
         // DO subsystem integrator. From here on the scheme owns the multi-step
