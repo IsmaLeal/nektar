@@ -113,15 +113,34 @@ fi
 # --- sampling: resolve domain bounds (auto from geometry.xml unless overridden) ---
 if [[ "$IS_SAMPLING" -eq 1 && -z "$SAMP_BOUNDS" ]]; then
     SAMP_BOUNDS="$(python3 - "$CASE_DIR/geometry.xml" <<'PY'
-import sys, xml.etree.ElementTree as ET
+import sys, base64, zlib, struct
+import xml.etree.ElementTree as ET
 root = ET.parse(sys.argv[1]).getroot()
 xs, ys = [], []
+# 1) Uncompressed: <V ID="i">x y z</V>
 for v in root.iter('V'):
     if v.text is None: continue
     parts = v.text.split()
     if len(parts) >= 2:
         try: xs.append(float(parts[0])); ys.append(float(parts[1]))
         except ValueError: pass
+# 2) Compressed: <VERTEX COMPRESSED="B64Z-LittleEndian" ...>
+#    Layout per vertex: (int64 id, double x, double y, double z) packed = 32
+#    bytes interpreted as 4 doubles. x at offset 1, y at offset 2.
+if not xs or not ys:
+    for vx in root.iter('VERTEX'):
+        comp = (vx.get('COMPRESSED') or '').lower()
+        if 'b64z' not in comp or vx.text is None:
+            continue
+        try:
+            raw = zlib.decompress(base64.b64decode(vx.text.strip()))
+            n = len(raw) // 8
+            d = struct.unpack(f'<{n}d', raw[:n*8])
+            for i in range(0, n, 4):
+                if i + 2 < n:
+                    xs.append(d[i+1]); ys.append(d[i+2])
+        except Exception:
+            pass
 if not xs or not ys:
     print(""); sys.exit(0)
 print(f"{min(xs)},{max(xs)},{min(ys)},{max(ys)}")
