@@ -7,7 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>       // snprintf for hex hash strings (verbose-only diagnostics)
+#include <cstdio>       // (verbose-only diagnostics)
 #include <cstring>      // memcpy for type-punning doubles in non-contamination hash
 #include <iostream>
 #include <limits>
@@ -21,12 +21,16 @@ namespace
 {
 
 // ============================================================================
-// BC capture / homogenize / restore helpers
+// BC capture / homogenise / restore helpers
 // ============================================================================
+// These helpers are used to enforce the homogeneous BCs for the modes.
+// This is because some Nektar's built-in methods (FwdTrans, HelmSolve, etc) enforce
+// the BCs on the fields stored in `m_fields` (the mean fields, with the inhomogeneous
+// BCs). These helpers allow us to apply those methods to the modes, enforcing their
+// homogeneous BCs, without permanently altering the BCs of the mean fields.
 
 /**
  * Stores one BC state for one velocity component and one boundary region.
- * Used to capture and restore BCs around mode projection.
  * - `fieldId`: which component;
  * - `region`: which boundary region;
  * - `phys` and `coeffs`: the BC arrays for that region, which get overwritten during
@@ -41,7 +45,7 @@ struct BcArrayState
 };
 
 /**
- * A collection of BcArrayState s, representing the full BC state for
+ * Collection of BcArrayState, representing the full BC state for
  * all velocity components in all regions
  */
 struct VelocityBCState
@@ -51,18 +55,20 @@ struct VelocityBCState
 
 /**
  * Saves the current boundary data for all velocity components for all boundary regions.
+ * - `fields`: all fields (velocity + pressure);
+ * - `velocity`: indices picking velocity components in `fields`.
  */
 VelocityBCState CaptureVelocityBCState(
     const Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
     const Array<OneD, int> &velocity)
 {
-    VelocityBCState state;
+    VelocityBCState state;                                  // full BC state to return
     for (int c = 0; c < velocity.size(); ++c)               // loop over components
     {
-        const int fieldId = velocity[c];
-        auto bcs = fields[fieldId]->GetBndConditions();
-        auto bnd = fields[fieldId]->GetBndCondExpansions();
-        for (int region = 0; region < bcs.size(); ++region) // loop over regions
+        const int fieldId = velocity[c];                    // this component's index in `fields`
+        auto bcs = fields[fieldId]->GetBndConditions();     // BC type per region
+        auto bnd = fields[fieldId]->GetBndCondExpansions(); // actual BC data per-region (phys + coeffs)
+        for (int region = 0; region < bcs.size(); ++region)     // loop over regions
         {
             // keep only Dirichlet & Neumann
             const auto type = bcs[region]->GetBoundaryConditionType();
@@ -72,7 +78,7 @@ VelocityBCState CaptureVelocityBCState(
                 continue;
             }
 
-            // copy phys and coeff values
+            // copy phys and coeff values component-region's BCArrayState into the full VelocityBCState
             BcArrayState entry;
             entry.fieldId = fieldId;
             entry.region  = region;
@@ -85,7 +91,7 @@ VelocityBCState CaptureVelocityBCState(
             state.entries.push_back(std::move(entry));
         }
     }
-    return state;   // vector of BcArrayState entries for all velocity components and all regions
+    return state;
 }
 
 /**
@@ -110,7 +116,7 @@ void HomogenizeVelocityBCsForModes(
                 continue;
             }
 
-            // zero out BC values
+            // zero out BC values (UpdatePhys/Coeffs returns a writable reference to the actual BC arrays)
             auto phys   = bnd[region]->UpdatePhys();
             auto coeffs = bnd[region]->UpdateCoeffs();
             Vmath::Zero(phys.size(),   phys.data(),   1);
@@ -176,38 +182,23 @@ NekDouble VectorMassInner(
 }
 
 // ============================================================================
-// Constant subspace cache + projection helpers
+// Constant subspace storage + projection helpers
 // ============================================================================
-//
-// The discrete FEM Stokes projector preserves spatially-constant velocity
-// fields (a constant is divergence-free), so without explicit treatment a
-// non-zero constant component leaks into the modes during time stepping and
-// the modes drift to uniform velocity vectors. To prevent this, we treat
-// the constant velocity subspace
-//      c_α(x) = (1/√|Ω|) e_α       (α = 0,...,nVel-1)
+// Without explicit treatment, a constant velocity component (incompressible)
+// leaks into some modes and they drift to uniform vector fields. Only a problem
+// with fully periodic / Neumann BCs. To prevent this, we treat the constant-velocity subspace
+//      v_c(x) = (1/√|Ω|) e_c   (c = 0,...,nVel-1)
 // as a fixed, non-evolving sub-basis and continuously project the DO modes
 // (and the rate N) orthogonal to it under the velocity mass inner product.
-// In purely-Dirichlet problems this subspace is empty (constants violate the
-// BCs), so the projection becomes a no-op there.
-//
-// Mathematical reduction. With c_α normalised by √|Ω|, the inner product
-//      <v, c_α>_M = (1/√|Ω|) ∫_Ω v_α dΩ
-// so the per-component update v_α ← v_α - <v,c_α>_M c_α reduces to
-//      v_α(x) ← v_α(x) - (1/|Ω|) ∫_Ω v_α dΩ              (phys representation)
-// i.e. subtract the spatial mean of component α from itself. The coefficient
-// counterpart is `coeffs[α] -= mean * onesCoeffs`, with `onesCoeffs` the
-// (cached) coefficient representation of the constant 1.
 
 /**
- * Cached state for the constant-subspace projection.
- * - `domainArea`: |Ω| = ∫_Ω 1 dΩ.
- * - `onesCoeffs`: coefficient vector of the constant function 1 (per component;
- *      identical across components since all velocity fields share the same
- *      expansion, but cached as an array for symmetry with the per-component API).
+ * Stored state for the constant-subspace projection.
+ * - `domainArea`: |Ω| = ∫_Ω 1 dΩ;
+ * - `onesCoeffs`: coefficient vector of the constant function 1;
  * - `admissible[c]`: whether constants are admissible for component c (true iff
  *      that component has no Dirichlet BC; false for hard-walled components).
- *      When admissible[c] is false the projection is a no-op for that component.
- * - `inited`: lazy-init flag.
+ *      When admissible[c] is false: nothing happens;
+ * - `inited`: boolean flag (false on first call, true after).
  */
 struct ConstantSubspaceCache
 {
@@ -218,39 +209,39 @@ struct ConstantSubspaceCache
 };
 
 /**
- * Lazily computes (on first call) and returns the constant-subspace cache.
- * `domainArea` is computed via `field0->Integral(ones)`; `onesCoeffs[c]` via
- * `field[c]->FwdTrans(ones, ...)`; `admissible[c]` is true iff the
- * AssemblyMapCG of component `c` has no Dirichlet bnd-coeffs.
+ * Computes on first call and returns the constant-subspace cache.
+ * - `domainArea`: `field0->Integral(ones)`;
+ * - `onesCoeffs[c]`: `field[c]->FwdTrans(ones, ...)`;
+ * - `admissible[c]`: true iff component `c` has no Dirichlet bnd-coeffs.
  */
 ConstantSubspaceCache &GetConstantSubspaceCache(
     const Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
     const Array<OneD, int> &velocity)
 {
     static ConstantSubspaceCache s_cache;
-    if (s_cache.inited) return s_cache;
+    if (s_cache.inited) return s_cache;         // only in first call
 
     const int nVel = velocity.size();
     s_cache.onesCoeffs.resize(nVel);
     s_cache.admissible.assign(nVel, false);
 
-    // domain area: |Ω| = \int_\Omega 1 dΩ via Integral on a constant-1 phys array
+    // domain area: |Ω| = \int_\Omega d\Omega
     auto field0     = fields[velocity[0]];
     const int nPhys = field0->GetTotPoints();
-    Array<OneD, NekDouble> ones(nPhys, 1.0);
+    Array<OneD, NekDouble> ones(nPhys, 1.0);    // array of ones
     s_cache.domainArea = field0->Integral(ones);
 
-    // per-component: admissibility flag + onesCoeffs (FwdTrans of constant 1)
-    for (int c = 0; c < nVel; ++c)
+    // admissibility flag + onesCoeffs (FwdTrans of constant 1)
+    for (int c = 0; c < nVel; ++c)              // loop over components
     {
-        auto cf = std::dynamic_pointer_cast<MultiRegions::ContField>(
-            fields[velocity[c]]);
-        ASSERTL0(cf, "DOVelocityCorrectionScheme: CG only.");
-        // constants admissible iff this component has no Dirichlet bnd-coeffs
+        // `cf`: ContField for this component
+        auto cf = std::dynamic_pointer_cast<MultiRegions::ContField>(fields[velocity[c]]);
+        // constants admissible iff this component has no Dirichlet; otherwise skip
         s_cache.admissible[c] =
             (cf->GetLocalToGlobalMap()->GetNumGlobalDirBndCoeffs() == 0);
-        if (!s_cache.admissible[c]) continue;       // skip FwdTrans when subspace is empty
+        if (!s_cache.admissible[c]) continue;
 
+        // phys and coeff arrays of ones (used in ProjectOutConstantsFromMode)
         const int nc = cf->GetNcoeffs();
         s_cache.onesCoeffs[c] = Array<OneD, NekDouble>(nc, 0.0);
         Array<OneD, NekDouble> physOnes(cf->GetTotPoints(), 1.0);
@@ -262,16 +253,11 @@ ConstantSubspaceCache &GetConstantSubspaceCache(
 }
 
 /**
- * Projects `N` orthogonal to the constant subspace under the velocity mass
- * inner product (component-wise), using `innerArg` as the projection argument
- * (so that the projection coefficient matches the one used downstream in the
- * DO projection of N onto the existing modes).
- *
- * For each spatial component c with admissible constants:
- *     β_c = <innerArg[c], c_c>_M = (1/√|Ω|) ∫_Ω innerArg[c] dΩ
- *     N[c](x) ← N[c](x) - β_c · (1/√|Ω|)
- *             = N[c](x) - (1/|Ω|) ∫_Ω innerArg[c] dΩ
- * i.e. subtract the spatial mean of innerArg[c] from N[c].
+ * Projects the mode RHS `N` orthogonal to the constant subspace component-wise,
+ * using `innerArg` as the projection argument:
+ * `innerArg` is N + \nu * Lap(u_i). If we modify N (and hence innerArg) by a scalar
+ * (N -> N - mu; innerArg -> innerArg - mu), the DO constraint is enforced iff
+ * mu = spatial mean of innerArg.
  */
 void ProjectOutConstantsFromN(
     const Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
@@ -280,7 +266,7 @@ void ProjectOutConstantsFromN(
     Array<OneD, Array<OneD, NekDouble>>               &N)
 {
     const auto &cache = GetConstantSubspaceCache(fields, velocity);
-    if (cache.domainArea <= 0.0) return;        // degenerate; nothing safe to do
+    if (cache.domainArea <= 0.0) return;
 
     const int nVel  = velocity.size();
     const int nPhys = fields[0]->GetTotPoints();
@@ -295,22 +281,20 @@ void ProjectOutConstantsFromN(
 }
 
 /**
- * Projects a candidate mode `cand` orthogonal to the constant subspace under
- * the velocity mass inner product, in BOTH phys and coeff representations.
+ * Projects a mode orthogonal to the constant subspace component-wise, in both
+ * phys and coeff representations. Unlike in ProjectOutConstantsFromN, we own the
+ * mode itself:
+ * - mode.phys[c] -> mode.phys[c] - mean;
+ * - mode.coeffs[c] -> mode.coeffs[c] - mean * onesCoeffs[c];
+ * with mean = spatial mean of the mode
  *
- * For each spatial component c with admissible constants:
- *     β_c = <cand, c_c>_M = (1/√|Ω|) ∫_Ω cand.phys[c] dΩ
- *     cand.phys[c]   ← cand.phys[c]   - mean
- *     cand.coeffs[c] ← cand.coeffs[c] - mean · onesCoeffs[c]
- * with mean = (1/|Ω|) ∫_Ω cand.phys[c] dΩ.
- *
- * Used after each Stokes projection inside ReOrthonormalise to remove the
- * constant component the projector preserves (constants are divergence-free).
+ * Used in ReOrthonormalise after each Stokes projection to remove the
+ * constant component the projector preserves.
  */
-void ProjectOutConstantsFromCand(
+void ProjectOutConstantsFromMode(
     const Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
     const Array<OneD, int>                            &velocity,
-    ModeData                                          &cand)
+    ModeData                                          &mode)
 {
     const auto &cache = GetConstantSubspaceCache(fields, velocity);
     if (cache.domainArea <= 0.0) return;
@@ -318,23 +302,23 @@ void ProjectOutConstantsFromCand(
     const int nVel = velocity.size();
     for (int c = 0; c < nVel; ++c)              // loop over components
     {
-        if (!cache.admissible[c]) continue;     // Dirichlet component: constants not admissible
+        if (!cache.admissible[c]) continue;     // Dirichlet component: skip
 
         auto      f     = fields[velocity[c]];
         const int nPhys = f->GetTotPoints();
         const int nCo   = f->GetNcoeffs();
 
-        // ∫ cand.phys[c] dΩ via a borrowed (non-owning) view over the std::vector storage
-        Array<OneD, NekDouble> physView(nPhys, cand.phys[c].data());
+        // \int mode.phys[c] d\Omega via a borrowed (non-owning) view
+        Array<OneD, NekDouble> physView(nPhys, mode.phys[c].data());
         const NekDouble integ = f->Integral(physView);
         const NekDouble mean  = integ / cache.domainArea;
 
         // phys: subtract the spatial mean
-        for (auto &v : cand.phys[c]) v -= mean;
+        for (auto &v : mode.phys[c]) v -= mean;
 
         // coeffs: subtract mean · onesCoeffs[c] (coefficient image of constant 1)
         const NekDouble *oc = cache.onesCoeffs[c].data();
-        NekDouble       *cc = cand.coeffs[c].data();
+        NekDouble       *cc = mode.coeffs[c].data();
         Vmath::Svtvp(nCo, -mean, oc, 1, cc, 1, cc, 1);                          // cc -= mean · oc
     }
 }
@@ -367,15 +351,23 @@ DOVelocityCorrectionScheme::DOVelocityCorrectionScheme(const LibUtilities::Sessi
  * - runs base VCS initialisation;
  * - reads DO parameters;
  * - allocates memory for modes and Yi;
- *      - modes + mode history,
- *      - mode pressures,
- *      - Yi + Yi history,
+ *      - modes;
+ *      - mode pressures;
+ *      - Yi.
+ * - reads other parameters (forcing, Tikhonov reg.);
+ * - initialises the time integrator `m_doScheme`.
  */
 void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
 {
     VelocityCorrectionScheme::v_InitObject(DeclareField);   // VCS init
     ASSERTL0(!m_ALESolver, "ALE not supported with DOVelocityCorrectionScheme.");
     ASSERTL0(!m_meshDistorted, "Distorted mesh not supported with DOVelocityCorrectionScheme.");
+    for (int c = 0; c < (int)m_velocity.size(); ++c)
+    {
+        ASSERTL0(std::dynamic_pointer_cast<MultiRegions::ContField>(
+            m_fields[m_velocity[c]]),
+            "DOVelocityCorrectionScheme: CG only.");
+    }
 
     // sizes
     const int nPhys   = m_fields[0]->GetTotPoints();
@@ -386,9 +378,7 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     m_nDOModes     = m_session->GetParameter("DOModes");
     m_nDOParticles = m_session->GetParameter("DOParticles");
 
-    // allocate arrays. NB the m_doScheme owns the multi-step history for both
-    // the modes and Y (m_F[1]/m_F[0]/u^{n-1}/etc); DOVelocityCorrectionScheme no longer carries
-    // m_DOModePhysPrev/m_DOModeNExpl/m_DOModeNExplPrev/m_YiPrev/m_YiRhsPrev.
+    // allocate arrays (multi-step history owned my `m_doScheme` (the time integrator))
     m_DOModePhys      = Array<OneD, NekDouble>(nDim*nPhys*m_nDOModes, 0.0);     // modes' physical values
     m_DOModeCoeffs    = Array<OneD, NekDouble>(nDim*nCoeffs*m_nDOModes, 0.0);   // modes' coeffs
     m_DOModePCoeffs   = Array<OneD, NekDouble>(nPC * m_nDOModes, 0.0);          // mode pressure coeffs (read by Y RHS)
@@ -396,26 +386,24 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     m_Cij.assign(m_nDOModes*m_nDOModes, 0.0);                                   // second moment
     m_Mkli.assign(m_nDOModes*m_nDOModes*m_nDOModes, 0.0);                       // third moment
 
-
-    // Initial mode basis: "Laplacian" (default) or "POD". When POD is
-    // selected, additional keys consulted in InitialiseModesFromPOD():
-    //     <S> PODSnapshotPattern </S>     (glob with one '*', e.g. "snap_*.chk")
-    //     <I PROPERTY="PODMeanType" VALUE="TimeMean|FirstSnapshot|ProvidedMeanField"/>
-    //     <S> PODMeanFile </S>            (only if PODMeanType=ProvidedMeanField)
-    //     <P> PODNumModes = DOModes </P>  (defaults to DOModes)
+    // Initial mode basis: "Laplacian" (eigenmodes) or "POD". If POD is
+    // selected, additional keys consulted in InitialiseModesFromPOD()
     m_session->LoadSolverInfo("DOInitModeBasis", m_doInitBasis, "Laplacian");
     ASSERTL0(m_doInitBasis == "Laplacian" || m_doInitBasis == "POD",
              "DOInitModeBasis must be 'Laplacian' or 'POD'.");
-
-    // Gaussian parameters for Yi init
+    // Gaussian parameters for Yi (seed and initial variance). Only used for Laplacian init.
     if (m_session->DefinesParameter("DOYiSeed"))
         m_doYiSeed = (int)m_session->GetParameter("DOYiSeed");
     if (m_session->DefinesParameter("DOYiSigma"))
         m_doYiSigma = m_session->GetParameter("DOYiSigma");
 
-    // additive stochastic forcing (channels): K templates from "ForcingChannels"
-    // XML block, σ = OU equilibrium std (per-channel), τ = OU correlation time
-    // (0 ⇒ white in time), seed = mt19937 seed
+    // Tikhonov regularisation strength for the inverse-covariance operator
+    // applied to the mode RHS in eigenbasis (see ComputeNMode). Default 1e-2.
+    m_session->LoadParameter("DOInvCovRegEps", m_invCovRegEps, m_invCovRegEps);
+
+    // additive stochastic forcing (channels): K spatial shapes from "ForcingChannels"
+    // XML block, σ = OU equilibrium std (per-channel), τ = OU correlation time,
+    // seed = mt19937 seed
     if (m_session->DefinesParameter("DOForcingNumChannels"))
         m_nForcingChannels = (int)m_session->GetParameter("DOForcingNumChannels");
     if (m_session->DefinesParameter("DOForcingSigma"))
@@ -424,14 +412,11 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
         m_forcingTau = m_session->GetParameter("DOForcingTau");
     if (m_session->DefinesParameter("DOForcingSeed"))
         m_forcingSeed = (int)m_session->GetParameter("DOForcingSeed");
-    // Tikhonov regularisation strength for the inverse-covariance operator
-    // applied to the mode RHS in eigenbasis (see ComputeNMode). Default 1e-2.
-    m_session->LoadParameter("DOForcingRegEps", m_forcingRegEps, m_forcingRegEps);
     if (m_nForcingChannels > 0)
     {
         const int K = m_nForcingChannels;
         m_forcingBasisPhys   = Array<OneD, NekDouble>(K*nDim*nPhys,   0.0);     // K channels, each a vector field on phys grid
-        m_forcingBasisCoeffs = Array<OneD, NekDouble>(K*nDim*nCoeffs, 0.0);     // FE coefficients of each channel
+        m_forcingBasisCoeffs = Array<OneD, NekDouble>(K*nDim*nCoeffs, 0.0);     // forcing coeffs
         m_forcingEta         = Array<OneD, NekDouble>(m_nDOParticles*K, 0.0);   // per-particle OU amplitudes (start quiescent)
         m_forcingG.assign(m_nDOModes*K, 0.0);                                   // <g_k, u_i>_M (recomputed each step)
         m_forcingA.assign(m_nDOModes*K, 0.0);                                   // (1/Np) Σ_p Y_{p,i} η_{p,k}
@@ -439,16 +424,17 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     }
 
     // === DO subsystem time integrator ===========================================
-    // State-vector layout: variables 0..S*nVel-1 are the mode phys components
-    // (one variable per (mode i, comp c), each of size nPhys); variable S*nVel is
-    // Y_flat (size Np*S). Heterogeneous-size GLM API supplies the rest.
+    // State-vector layout:
+    // - variables 0..S*nVel-1 : mode phys components
+    //   (one variable per (mode i, comp c), each of size nPhys);
+    // - variable S*nVel       : Y_flat (size Np*S).
+    // Heterogeneous-size GLM API supplies the rest.
     m_doNumModeVars = m_nDOModes * nDim;
     m_doYIdx        = m_doNumModeVars;
 
-    // Use the SAME TIMEINTEGRATIONSCHEME as VCS reads from session (typically
-    // IMEX/2 → BDF2/EXT2). DOImplicitSolve relies on the scheme passing
-    // lambda = (2/3)·dt to the implicit callback (BDF2 weight); other schemes
-    // would need a generalised Dt = lambda·(scheme-specific factor) inside
+    // Use same TIMEINTEGRATIONSCHEME as VCS (IMEX/2 → BDF2/EXT2). DOImplicitSolve
+    // relies on the scheme passing lambda = (2/3)·dt to the implicit callback  (BDF2)
+    // Other schemes would need a generalised Dt = lambda·(scheme-specific factor) inside
     // ModePressureSolve/ModeViscousSolve.
     auto timeInt = m_session->GetTimeIntScheme();
     m_doScheme   = LibUtilities::GetTimeIntegrationSchemeFactory().CreateInstance(
@@ -459,9 +445,11 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
 
 /**
  * Runs the VCS IC setup (mean velocity + pressure), and on the first call:
- * - initialises modes from elliptic eigenbasis;
+ * - initialises modes from POD/eigenbasis;
  * - initialises Yi as i.i.d. Gaussian samples;
  * - rotates the joint (modes, Yi) state so C(0) is diagonal;
+ * - orthonormalises modes, projects them to finite-element basis;
+ * - recomputes Yi by projection (if POD-initialised), to make (modes, Yi) self-consistent;
  * - initialises forcing channels;
  * - packs the (modes, Y) state into m_doState and calls
  *   m_doScheme->InitializeScheme so the integrator knows the t=0 state and
@@ -485,30 +473,23 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
         RotateToEigenbasisOfC();                    // diagonalise C(0); rotates modes and Y consistently (no-op if R<=1)
         ReOrthonormalise();                         // Stokes-project each mode to discrete div-free space
 
-        // FE-project each mode field onto the discrete polynomial space:
+        // Project each mode field onto the discrete polynomial space:
         //     phys -> coeffs (FwdTrans) -> phys (BwdTrans)
-        // The mode coeffs assembled by POD compute / ReOrthonormalise can
-        // carry high-order components inconsistent with the FE basis (the
-        // POD synthesis is a linear combination of snapshot coeffs, not a
-        // discrete projection per se). The first viscous solve performs
-        // this round-trip implicitly, so the inconsistency only affects
-        // the t=0 archive snapshot — visual ringing in do_panels at t=0
-        // when FieldConvert later interpolates the modes onto a Cartesian
-        // grid for post-processing. Doing the round-trip here makes the
-        // t=0 mode snapshot identical in basis to all subsequent ones.
+        // The modes assembled by POD compute / ReOrthonormalise can
+        // carry high-order components inconsistent with the FE basis.
+        // Doing this projection makes the initial modes self-consistent with the
+        // FE basis and the BCs.
         //
-        // Order matters: this MUST happen BEFORE RecomputeYiByProjection
-        // below, otherwise Y is computed against the un-projected modes
-        // and the (mode, Y) correspondence is broken — the t=0 realization
-        // u_p = ubar + Σ_k Y_p,k φ_k no longer reconstructs snap_p.
+        // Do this BEFORE RecomputeYiByProjection, otherwise Ys are
+        // computed from the un-projected modes.
         //
-        // BC bracket: m_fields[velocity] carries the BASE flow's Dirichlet
-        // values (u=1 at inlet/walls). Modes have HOMOGENEOUS Dirichlet BCs
-        // by construction. Without homogenizing the velocity BCs around the
-        // round-trip, ContField::FwdTrans would inject base-flow boundary
-        // values into the modes, corrupting them catastrophically (orth
-        // collapses on step 1). Same homogenize/restore bracket as
-        // ReOrthonormalise().
+        // NOTE: coefTmp MUST be zero-initialised. Nektar's
+        // Array<OneD,NekDouble>(size) constructor leaves fundamental types
+        // UNINITIALISED (heap garbage). The iterative LinSys uses outarray as
+        // an initial guess for the iteration, and a garbage initial guess
+        // gives garbage output (the iteration finishes in finite steps with
+        // the initial garbage barely perturbed). With (size, 0.0) the initial
+        // is zero and FwdTrans converges to the correct L2 projection.
         {
             auto bcState = CaptureVelocityBCState(m_fields, m_velocity);
             HomogenizeVelocityBCsForModes(m_fields, m_velocity);
@@ -516,17 +497,18 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
             const int nVelLocal    = (int)m_velocity.size();
             const int nPhysLocal   = m_fields[0]->GetTotPoints();
             const int nCoeffsLocal = m_fields[0]->GetNcoeffs();
-            Array<OneD, NekDouble> physTmp(nPhysLocal);
-            Array<OneD, NekDouble> coefTmp(nCoeffsLocal);
-            for (int i = 0; i < m_nDOModes; ++i)
+            Array<OneD, NekDouble> physTmp(nPhysLocal, 0.0);
+            Array<OneD, NekDouble> coefTmp(nCoeffsLocal, 0.0);
+            for (int i = 0; i < m_nDOModes; ++i)        // loop over modes
             {
-                for (int c = 0; c < nVelLocal; ++c)
+                for (int c = 0; c < nVelLocal; ++c)     // loop over components
                 {
                     const int pOff = (i*nVelLocal + c)*nPhysLocal;
                     const int cOff = (i*nVelLocal + c)*nCoeffsLocal;
                     Vmath::Vcopy(nPhysLocal,
                                  m_DOModePhys.data() + pOff, 1,
                                  physTmp.data(), 1);
+                    Vmath::Zero(nCoeffsLocal, coefTmp.data(), 1); // reset initial guess each iter
                     m_fields[m_velocity[c]]->FwdTrans(physTmp, coefTmp);
                     m_fields[m_velocity[c]]->BwdTrans(coefTmp, physTmp);
                     Vmath::Vcopy(nPhysLocal, physTmp.data(), 1,
@@ -546,19 +528,12 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
         //   u_p = ubar + Σ_k Yi[p,k] * mode_k_new ≈ snap_p.
         if (m_doInitBasis == "POD" && m_podInitialiser)
         {
-            // Re-project snapshots onto the post-reorth modes. Value-pure
-            // (no side effects on m_fields). The previous workaround wrapper
-            // CallRecomputeYiWithStorageGuard was a misdiagnosis: the
-            // first-step instability it appeared to mitigate was actually the
-            // unbounded 1/μ_i amplification in ComputeNMode (now Tikhonov-
-            // regularised). See the addStoch+triple operator block.
+            // Re-project snapshots onto the post-reorth modes
             m_podInitialiser->RecomputeYiByProjection(
                 m_DOModePhys, m_DOModeCoeffs, m_Yi, m_nDOParticles);
             m_podInitialiser.reset();   // snapshots/POD state no longer needed
 
-            // Re-zero-mean Yi across particles per mode (DO requires the
-            // sample mean of Y to be zero; the projection block is mean 0
-            // for TimeMean but not for FirstSnapshot/ProvidedMeanField).
+            // De-mean Yi across particles per mode
             const NekDouble invNp =
                 1.0 / static_cast<NekDouble>(m_nDOParticles);
             for (int i = 0; i < m_nDOModes; ++i)
@@ -571,7 +546,7 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
                     m_Yi[p * m_nDOModes + i] -= mu;
             }
         }
-        InitialiseForcingBasis();                   // forcing channels (XML-driven; no-op if K==0)
+        InitialiseForcingBasis();   // forcing channels
 
         // Pack the (modes, Y) initial state into m_doState and initialise the
         // DO subsystem integrator. From here on the scheme owns the multi-step
@@ -580,8 +555,8 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
         const int nPhys = m_fields[0]->GetTotPoints();
         const int nVar  = m_doNumModeVars + 1;
         m_doState = Array<OneD, Array<OneD, NekDouble>>(nVar);
-        for (int i = 0; i < m_nDOModes; ++i)                                    // mode phys per (i, c)
-            for (int c = 0; c < nVel; ++c)
+        for (int i = 0; i < m_nDOModes; ++i)    // loop over modes
+            for (int c = 0; c < nVel; ++c)      // loop over components
             {
                 const int v = i*nVel + c;
                 m_doState[v] = Array<OneD, NekDouble>(nPhys);
@@ -609,9 +584,8 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
  *
  * Decorrelation: the resulting sample covariance C_{ij} = (1/Np)Σ_p Y_{i,p}Y_{j,p}
  * has off-diagonals of order σ²/√Np. Since `ComputeNMode` uses the simplification
- * μ_i = C_{ii} (valid only when C is diagonal, which `RotateToEigenbasisOfC`
- * normally enforces at the end of every step), the caller (`v_DoInitialise`)
- * must invoke `RotateToEigenbasisOfC` once after this routine to diagonalise
+ * μ_i = C_{ii}, the caller (`v_DoInitialise`) must invoke `RotateToEigenbasisOfC`
+ * once after this routine to diagonalise
  * the initial C and rotate the modes/Y consistently before the first integration
  * step.
  */
@@ -1083,19 +1057,12 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
     const NekDouble mui = (i < m_nDOModes) ? m_Cij[i*m_nDOModes + i] : 0.0;
     const NekDouble eps = 1e-12;
 
-    // Tikhonov-regularised inverse covariance for mode i.
-    //   invMuReg_i = mu_i / (mu_i^2 + lambda^2),   lambda = m_forcingRegEps * mu_max
-    // Reduces to 1/mu_i for mu_i >> lambda; bounded for mu_i -> 0. Acts as
-    // the Σ^{-1} operator on the C^{-1}-coupled contributions to the mode
-    // RHS (triple-moment + additive stochastic). Cross-coupling and the
-    // viscous laplacian have no Σ^{-1} factor in the canonical DO mode
-    // equation and are added outside this scaling.
     NekDouble muMax = 0.0;
     for (int q = 0; q < m_nDOModes; ++q)
     {
         muMax = std::max(muMax, std::abs(m_Cij[q*m_nDOModes + q]));
     }
-    const NekDouble lambdaReg = m_forcingRegEps * muMax;
+    const NekDouble lambdaReg = m_invCovRegEps * muMax;
     const NekDouble denomReg  = mui*mui + lambdaReg*lambdaReg;
     const NekDouble invMuReg  = (denomReg > 0.0) ? mui / denomReg : 0.0;
 
@@ -1484,7 +1451,28 @@ void DOVelocityCorrectionScheme::DOOdeRhs(
     const int nPP     = m_pressure->GetTotPoints();
 
     // 1) sync m_DOModePhys / m_DOModeCoeffs / m_Yi from `in`
-    Array<OneD, NekDouble> tmpPhys(nPhys), tmpCoef(nCoeffs);
+    //
+    // BC bracket: m_fields[velocity] carries the BASE flow's Dirichlet values
+    // (u=1 at inlet/walls). Modes have HOMOGENEOUS Dirichlet BCs. Without
+    // homogenizing the velocity BCs around FwdTrans, ContField::v_FwdTrans ->
+    // GlobalSolve -> v_ImposeDirichletConditions writes the base-flow BC values
+    // (e.g. u=1) into the boundary local DOFs of `tmpCoef`, which then
+    // contaminate m_DOModeCoeffs. This contamination is what was producing
+    // the noisy t=0 do_panels frame: TimeIntegrationAlgorithmGLM::InitializeData
+    // calls DoOdeRhs once at t=0 (for the multistep history's f_y_0); that
+    // single un-bracketed call wrote BC values into m_DOModeCoeffs *after*
+    // v_DoInitialise's own FE-projection bracket had cleaned them, and the
+    // FilterDOArchive::v_Initialise dump that follows immediately captured the
+    // contaminated state. Same pattern that ReOrthonormalise / v_DoInitialise
+    // already use around their per-mode FwdTrans.
+    auto bcState = CaptureVelocityBCState(m_fields, m_velocity);
+    HomogenizeVelocityBCsForModes(m_fields, m_velocity);
+
+    // tmpCoef MUST be zero-initialised — Nektar's Array<OneD,NekDouble>(size)
+    // constructor leaves fundamental types uninitialised (heap garbage), and
+    // FwdTrans uses outarray as the iterative solver's initial guess. Garbage
+    // initial guess => garbage output. Reset to 0 each iteration.
+    Array<OneD, NekDouble> tmpPhys(nPhys, 0.0), tmpCoef(nCoeffs, 0.0);
     for (int i = 0; i < S; ++i)                                                 // loop over modes
         for (int c = 0; c < nVel; ++c)                                          // loop over components
         {
@@ -1494,10 +1482,14 @@ void DOVelocityCorrectionScheme::DOOdeRhs(
             Vmath::Vcopy(nPhys, in[v].data(), 1,
                          m_DOModePhys.data() + pOff, 1);
             Vmath::Vcopy(nPhys, in[v].data(), 1, tmpPhys.data(), 1);            // FwdTrans wants its own buffer
-            m_fields[m_velocity[c]]->FwdTrans(tmpPhys, tmpCoef);                // refresh coeffs
+            Vmath::Zero(nCoeffs, tmpCoef.data(), 1);                            // reset initial guess
+            m_fields[m_velocity[c]]->FwdTrans(tmpPhys, tmpCoef);                // refresh coeffs (homogeneous Dir DOFs)
             Vmath::Vcopy(nCoeffs, tmpCoef.data(), 1,
                          m_DOModeCoeffs.data() + cOff, 1);
         }
+
+    RestoreVelocityBCState(m_fields, bcState);
+
     Vmath::Vcopy(m_nDOParticles*S, in[m_doYIdx].data(), 1, m_Yi.data(), 1);
 
     // 2) swap m_fields phys to mean^n (so ComputeModeCross/DOMeanCoupling read
@@ -2269,10 +2261,21 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
         const auto &advanced = m_doScheme->TimeIntegrate(step, m_timestep);
 
         // Unpack `advanced` back into m_DOModePhys / m_DOModeCoeffs / m_Yi.
+        // BC bracket: same reason as DOOdeRhs's sync block — homogenize the
+        // velocity-field Dirichlet BCs around FwdTrans so the mode coeffs'
+        // boundary DOFs end up zeroed (mode space is homogeneous-BC by
+        // construction). Without this bracket, ImposeDirichletConditions
+        // inside FwdTrans imposes the base-flow u=1 BC value at boundary
+        // local DOFs of m_DOModeCoeffs.
         const int nVel    = m_velocity.size();
         const int nPhys   = m_fields[0]->GetTotPoints();
         const int nCoeffs = m_fields[0]->GetNcoeffs();
-        Array<OneD, NekDouble> tmpPhys(nPhys), tmpCoef(nCoeffs);
+        auto piBcState = CaptureVelocityBCState(m_fields, m_velocity);
+        HomogenizeVelocityBCsForModes(m_fields, m_velocity);
+        // tmpCoef MUST be zero-initialised (uninitialised heap garbage would
+        // corrupt FwdTrans's iterative-solver initial guess). Reset to 0 each
+        // iteration.
+        Array<OneD, NekDouble> tmpPhys(nPhys, 0.0), tmpCoef(nCoeffs, 0.0);
         for (int i = 0; i < m_nDOModes; ++i)
             for (int c = 0; c < nVel; ++c)
             {
@@ -2280,10 +2283,12 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
                 Vmath::Vcopy(nPhys, advanced[v].data(), 1,
                              m_DOModePhys.data() + v*nPhys, 1);
                 Vmath::Vcopy(nPhys, advanced[v].data(), 1, tmpPhys.data(), 1);
-                m_fields[m_velocity[c]]->FwdTrans(tmpPhys, tmpCoef);            // refresh coeffs
+                Vmath::Zero(nCoeffs, tmpCoef.data(), 1);
+                m_fields[m_velocity[c]]->FwdTrans(tmpPhys, tmpCoef);            // refresh coeffs (homogeneous Dir DOFs)
                 Vmath::Vcopy(nCoeffs, tmpCoef.data(), 1,
                              m_DOModeCoeffs.data() + v*nCoeffs, 1);
             }
+        RestoreVelocityBCState(m_fields, piBcState);
         Vmath::Vcopy(m_nDOParticles*m_nDOModes, advanced[m_doYIdx].data(), 1,
                      m_Yi.data(), 1);
 
@@ -2347,9 +2352,6 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
 void DOVelocityCorrectionScheme::ReOrthonormalise()
 {
     if (m_nDOModes == 0) return;
-    auto field0 = std::dynamic_pointer_cast<MultiRegions::ContField>(
-        m_fields[m_velocity[0]]);
-    ASSERTL0(field0, "DOVelocityCorrectionScheme: CG only."); // CG only
 
     // homogeneous-BC bracket: zero velocity Dirichlet+Neumann coeffs for the
     // duration of the per-mode Stokes projections; restore at the end
@@ -2377,6 +2379,9 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
         Vmath::Zero(nc, pBnd[n]->UpdateCoeffs().data(), 1);
         Vmath::Zero(np, pBnd[n]->UpdatePhys().data(),   1);
     }
+
+    auto field0 = std::dynamic_pointer_cast<MultiRegions::ContField>(
+        m_fields[m_velocity[0]]);
 
     const int nVel    = m_velocity.size();
     const int nCoeffs = field0->GetNcoeffs();
@@ -2491,7 +2496,7 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
 
         // 1) Stokes projection -> 2) modified GS
         projectMode(cand);
-        ProjectOutConstantsFromCand(m_fields, m_velocity, cand);    // strip the constant component the Stokes projector preserves
+        ProjectOutConstantsFromMode(m_fields, m_velocity, cand);    // strip the constant component the Stokes projector preserves
         runMgs(cand);
 
         // 3) ‖∇·u_cand‖_L2 — trigger a second projection if not clean
@@ -2507,7 +2512,7 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
         if (m_pressure->L2(divCand) > 1e-3)     // if dirty -> second pass
         {
             projectMode(cand);
-            ProjectOutConstantsFromCand(m_fields, m_velocity, cand);    // strip constants from second-pass output too
+            ProjectOutConstantsFromMode(m_fields, m_velocity, cand);    // strip constants from second-pass output too
             runMgs(cand);
         }
 
@@ -2685,9 +2690,6 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
 void DOVelocityCorrectionScheme::InitialiseModesFromEllipticEigenbasis()
 {
     if (m_nDOModes == 0) return;
-    auto field0 = std::dynamic_pointer_cast<MultiRegions::ContField>(
-        m_fields[m_velocity[0]]);
-    ASSERTL0(field0, "DOVelocityCorrectionScheme: CG only.");       // CG only
 
     // DOReducedCGEigenBasis runs ARPACK on the per-rank local CG-reduced space;
     // its iteration arithmetic is not MPI-aware, so under multi-rank runs
@@ -2700,7 +2702,9 @@ void DOVelocityCorrectionScheme::InitialiseModesFromEllipticEigenbasis()
              "DOInitModeBasis=POD (set <I PROPERTY=\"DOInitModeBasis\" "
              "VALUE=\"POD\"/> in your casefile and provide a snapshot pattern).");
 
-    DOReducedCGEigenBasis eigenBasis(field0);   // reduced homogeneous Laplacian eigenbasis            
+    auto field0 = std::dynamic_pointer_cast<MultiRegions::ContField>(
+        m_fields[m_velocity[0]]);
+    DOReducedCGEigenBasis eigenBasis(field0);   // reduced homogeneous Laplacian eigenbasis
     ASSERTL0(eigenBasis.GetNumHomCoeffs() > m_nDOModes,
              "Number of DO modes must be smaller than the reduced homogeneous CG size.");
 

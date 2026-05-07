@@ -91,13 +91,8 @@ protected:
     NekDouble m_forcingSigma     = 0.0;     ///< OU equilibrium std-dev (per channel)
     NekDouble m_forcingTau       = 0.0;     ///< OU correlation time (0 => white in time)
     int       m_forcingSeed      = 0;       ///< mt19937 seed
-    /// Relative Tikhonov regularisation strength for the inverse-covariance
-    /// operator Σ^{-1} acting on the mode RHS in eigenbasis. Defines
-    ///   invMuReg_i = μ_i / (μ_i² + λ²),  λ = m_forcingRegEps · μ_max,
-    /// where μ_max is the largest current diagonal of C. Bounded for μ_i → 0;
-    /// reduces to 1/μ_i when μ_i ≫ λ. Loaded from session parameter
-    /// "DOForcingRegEps" (default 1e-2).
-    NekDouble m_forcingRegEps    = 1e-2;
+
+    NekDouble m_invCovRegEps    = 1e-2;         /// Relative Tikhonov regularisation strength for the inverse-covariance operator
     Array<OneD, NekDouble> m_forcingBasisPhys;   ///< K * nVel * nPhys, fixed channel templates
     Array<OneD, NekDouble> m_forcingBasisCoeffs; ///< K * nVel * nCoeffs, FE coefficients of channels
     Array<OneD, NekDouble> m_forcingEta;         ///< Np * K, current per-particle OU amplitudes
