@@ -950,21 +950,24 @@ void DOVelocityCorrectionScheme::ComputeModeLaplacian(int i,
 
     for (int c = 0; c < nVel; ++c)                  // output spatial component
     {
-        Vmath::Zero(nPhys, lap[c].data(), 1);       // zero it out
-        const NekDouble *u_ic = m_DOModePhys.data() // pointer to mode i, component c
+        Vmath::Zero(nPhys, lap[c].data(), 1);       // zero it
+        const NekDouble *u_ic = m_DOModePhys.data() // pointer to u_i[c]
                               + (i*nVel + c)*nPhys;
-        Vmath::Vcopy(nPhys, u_ic, 1,                // phys = u_{i,c}
+        Vmath::Vcopy(nPhys, u_ic, 1,                // phys = u_i[c]
                      phys.data(), 1);
         for (int d = 0; d < nVel; ++d)              // sum over derivative directions
         {
-            m_fields[m_velocity[c]]->PhysDeriv(d, phys, du);    // du = ∂_d u_{i,c}
-            m_fields[m_velocity[c]]->PhysDeriv(d, du, d2u);     // d2u = ∂²_d u_{i,c}
+            m_fields[m_velocity[c]]->PhysDeriv(d, phys, du);    // du = ∂_d u_i[c]
+            m_fields[m_velocity[c]]->PhysDeriv(d, du, d2u);     // d2u = ∂²_d u_i[c]
             Vmath::Vadd(nPhys, d2u.data(), 1, lap[c].data(),    // lap[c] += d2u
                         1, lap[c].data(), 1);
         }
     }
 }
 
+/**
+ * 
+ */
 void DOVelocityCorrectionScheme::ComputeNMode(int i,
                           Array<OneD, Array<OneD, NekDouble>> &N)
 {
@@ -972,21 +975,20 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
     const int nPhys = m_fields[0]->GetTotPoints();
     const int nCoeffs   = m_fields[0]->GetNcoeffs();
     const NekDouble nu  = m_kinvis;
-    const NekDouble mui = (i < m_nDOModes) ? m_Cij[i*m_nDOModes + i] : 0.0;
+    const NekDouble mui = m_Cij[i*m_nDOModes + i];
     const NekDouble eps = 1e-12;
 
     NekDouble muMax = 0.0;
-    for (int q = 0; q < m_nDOModes; ++q)
+    for (int q = 0; q < m_nDOModes; ++q)                    // find largest eigenvalue
     {
         muMax = std::max(muMax, std::abs(m_Cij[q*m_nDOModes + q]));
     }
-    const NekDouble lambdaReg = m_invCovRegEps * muMax;
-    const NekDouble denomReg  = mui*mui + lambdaReg*lambdaReg;
-    const NekDouble invMuReg  = (denomReg > 0.0) ? mui / denomReg : 0.0;
+    const NekDouble lambdaReg = m_invCovRegEps * muMax;     // regularisation parameter for the inverse of C
+    const NekDouble invMuReg  = mui / (mui*mui + lambdaReg*lambdaReg);
 
     Array<OneD, Array<OneD, NekDouble>> cross(nVel), triple(nVel), lap(nVel), innerArg(nVel);
 
-    for (int c = 0; c < nVel; ++c)  // for each component: array of 0s for each quadrature point
+    for (int c = 0; c < nVel; ++c)  // for each component c, allocate arrays and zero output N[c]
     {
         cross[c]    = Array<OneD, NekDouble>(nPhys, 0.0);
         triple[c]   = Array<OneD, NekDouble>(nPhys, 0.0);
@@ -995,29 +997,26 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         Vmath::Zero(nPhys, N[c].data(), 1); // zero output
     }
 
-    // 1) cross = -[(ū . grad) u_i + (u_i . grad) ū]   (no Σ^{-1} action)
     ComputeModeCross(i, cross);
 
-    // 2) triple-moment in UNSCALED form (Σ^{-1} applied at assembly via invMuReg)
-    //      triple_unscaled[c](x) = -Σ_{m,l} M_{mli} (u_m . ∇) u_{l,c}
+    // triple_unscaled[c](x) = -Σ_{m,l} M_{mli} (u_m . ∇) u_{l,c} (inverse eigval applied at assembly)
     if (invMuReg > eps)
     {
-        // precompute duLcd = ∂_d u_{l,c}
+        // duLcd = ∂_d u_l[c] for all (l (modes), c (components), d (directions to differentiate))
         Array<OneD, NekDouble> duLcd(m_nDOModes * nVel * nVel * nPhys);
         Array<OneD, NekDouble> tmp(nPhys);
-        for (int l = 0; l < m_nDOModes; ++l)
+        for (int l = 0; l < m_nDOModes; ++l)                            // loop over modes l
         {
-            for (int c = 0; c < nVel; ++c)                      // component to differentiate
+            for (int c = 0; c < nVel; ++c)                              // loop over components c
             {
-                const NekDouble *u_lc = m_DOModePhys.data()     // pointer to mode l, component c
+                const NekDouble *u_lc = m_DOModePhys.data()             // pointer to u_l[c]
                                        + (l*nVel + c)*nPhys;
-                Vmath::Vcopy(nPhys, u_lc, 1, tmp.data(), 1);    // tmp = u_{l,c}
-                for (int d = 0; d < nVel; ++d)                  // derivative direction
+                Vmath::Vcopy(nPhys, u_lc, 1, tmp.data(), 1);            // tmp = u_l[c]
+                for (int d = 0; d < nVel; ++d)                          // loop over directions to differentiate
                 {
-                    Array<OneD, NekDouble> duOut = duLcd        // pointer to duLcd
+                    Array<OneD, NekDouble> duOut = duLcd                // pointer to duLcd
                                                   + ((l*nVel + c)*nVel + d)*nPhys;
-                    m_fields[m_velocity[c]]->PhysDeriv(d, tmp,  // duOut = ∂_d u_{l,c}
-                                                       duOut);
+                    m_fields[m_velocity[c]]->PhysDeriv(d, tmp, duOut);  // duOut = ∂_d u_l[c]
                 }
             }
         }
@@ -1026,21 +1025,20 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         for (int m = 0; m < m_nDOModes; ++m)                        // first triple-moment index
         {
             for (int l = 0; l < m_nDOModes; ++l)                    // second triple-moment index
-            {
-                const NekDouble Mml = m_Mkli[(m*m_nDOModes          // Mml = M_mli (unscaled; Σ^{-1} applied below)
-                                              + l)*m_nDOModes + i];
+            {                                                       // Mml = M_mli (i is a function arg)
+                const NekDouble Mml = m_Mkli[(m*m_nDOModes + l)*m_nDOModes + i];
                 if (std::abs(Mml) < eps) continue;
                 for (int c = 0; c < nVel; ++c)                      // output spatial component
                 {
                     for (int d = 0; d < nVel; ++d)                  // contraction inside (u_m . grad) u_l
                     {
-                        const NekDouble *u_md = m_DOModePhys.data() // pointer to mode m, component d
+                        const NekDouble *u_md = m_DOModePhys.data() // pointer to u_m[d]
                                                + (m*nVel + d)*nPhys;
                         const NekDouble *du   = duLcd.data()        // pointer to precomputed duLcd
                                                + ((l*nVel + c)*nVel + d)*nPhys;
                         Vmath::Vmul(nPhys, u_md, 1, du, 1,          // prod = u_md * du
                                     prod.data(), 1);
-                        Vmath::Svtvp(nPhys, -Mml, prod.data(), 1,   // triple[c][k] -= Mml * prod[k] for all ks
+                        Vmath::Svtvp(nPhys, -Mml, prod.data(), 1,   // triple[c][k] -= Mml * prod[k]
                                     triple[c].data(), 1, triple[c].data(), 1);
                     }
                 }
@@ -1072,7 +1070,6 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         }
     }
 
-    // 4) lap(u_i)   (no Σ^{-1} action)
     ComputeModeLaplacian(i, lap);
 
     // 5) Assemble (single Σ^{-1} action on triple+addStoch via invMuReg):
