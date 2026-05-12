@@ -1055,7 +1055,7 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         }
     }
 
-    // for this mode i: addStochN[c](x) = \sum_k m_forcingA[i*K + k] g_k[c](x)
+    // stochastic contribution: addStochN[c](x) = \sum_k m_forcingA[i*K + k] g_k[c](x)
     Array<OneD, Array<OneD, NekDouble>> addStochN(nVel);
     for (int c = 0; c < nVel; ++c) addStochN[c] = Array<OneD, NekDouble>(nPhys, 0.0);
     if (m_nForcingChannels > 0 && invMuReg > eps)
