@@ -974,8 +974,6 @@ void DOVelocityCorrectionScheme::ComputeModeLaplacian(int i,
  *      - computes the laplacian `lap` for the viscous term;
  *      
  *      - assembles: N = cross + invMuReg * (triple + addStochN) + nu*lap
- * E[f_{stoch}Y_i] = \sum_k g_k E[eta_k Y_i]
- *                 = \sum_k GSOMETHINGAAAAAAAAAA * m_forcingA[i*K + k].
  */
 void DOVelocityCorrectionScheme::ComputeNMode(int i,
                           Array<OneD, Array<OneD, NekDouble>> &N)
@@ -1060,24 +1058,23 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
     for (int c = 0; c < nVel; ++c) addStochN[c] = Array<OneD, NekDouble>(nPhys, 0.0);
     if (m_nForcingChannels > 0 && invMuReg > eps)
     {
-        const int K = m_nForcingChannels;
-        for (int k = 0; k < K; ++k)                         // loop over channels
+        for (int k = 0; k < m_nForcingChannels; ++k)    // loop over channels
         {
-            const NekDouble Aik = m_forcingA[i*K + k];
+            const NekDouble Aik = m_forcingA[i*m_nForcingChannels + k];
             if (std::abs(Aik) < eps) continue;
-            for (int c = 0; c < nVel; ++c)                  // loop over components
+            for (int c = 0; c < nVel; ++c)              // loop over components
             {
                 const NekDouble *gk = m_forcingBasisPhys.data() + (k*nVel + c)*nPhys;
-                Vmath::Svtvp(nPhys, Aik, gk, 1, addStochN[c].data(), 1, addStochN[c].data(), 1);
+                Vmath::Svtvp(nPhys, Aik, gk, 1, addStochN[c].data(), 1, addStochN[c].data(), 1); // addStochN[c] += Aik * gk
             }
         }
     }
 
     ComputeModeLaplacian(i, lap);
 
-    // 5) Assemble (single Σ^{-1} action on triple+addStoch via invMuReg):
-    //      N         = cross + invMuReg * (triple_unscaled + addStoch_unscaled)
-    //      innerArg  = N + nu * Lap u_i        (consumed by step 6 DO projection)
+    // assemble
+    //  - N         = cross + invMuReg * (triple + addStoch)
+    //  - innerArg  = N + nu * Lap u_i        (consumed by step 6 DO projection)
     NekDouble maxTriple = 0.0, maxCross = 0.0, maxStoch = 0.0;
     for (int c = 0; c < nVel; ++c)      // loop over components
         for (int k = 0; k < nPhys; ++k) // loop over points
