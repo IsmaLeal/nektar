@@ -896,8 +896,8 @@ void DOVelocityCorrectionScheme::ComputeDOMeanCoupling(
 
 /**
  * Cross terms for one mode:
- *      cross[c] = -[(ū . grad) u_i + (u_i . grad) ū][c]
- *               = -[\sum_d (ū[d] ∂_d u_i[c]) + (u_i[d] ∂_d ū[c])].
+ *      cross[c] = -[(u_mean . grad) u_i + (u_i . grad) u_mean][c]
+ *               = -[\sum_d (u_mean[d] ∂_d u_i[c]) + (u_i[d] ∂_d u_mean[c])].
  * Output overwritten in `cross`.
  */
 void DOVelocityCorrectionScheme::ComputeModeCross(int i,
@@ -913,25 +913,25 @@ void DOVelocityCorrectionScheme::ComputeModeCross(int i,
     {
         Vmath::Zero(nPhys, cross[c].data(), 1);                                 // zero output `cross[c]`
 
-        const NekDouble *u_ic = m_DOModePhys.data() + (i*nVel + c)*nPhys;       // pointer to mode i, component c
+        const NekDouble *u_ic = m_DOModePhys.data() + (i*nVel + c)*nPhys;       // pointer to u_i[c]
         Vmath::Vcopy(nPhys, u_ic, 1, tmp_uic.data(), 1);                        // tmp_uic = u_i[c]
         Vmath::Vcopy(nPhys, m_fields[m_velocity[c]]->GetPhys().data(), 1,       // tmp_uBarc = u_mean[c]
                      tmp_uBarc.data(), 1);
 
-        for (int d = 0; d < nVel; ++d)                                          // contraction 
+        for (int d = 0; d < nVel; ++d)                                          // contraction for the gradient
         {
-            // term 1: cross[c] -= ū_d * ∂_d u_{i,c}
+            // term 1: cross[c] -= u_mean[d] * ∂_d u_i[c]
             m_fields[m_velocity[c]]->PhysDeriv(d, tmp_uic, du);                 // du = ∂_d u_i[c]
-            const auto &uBar_d = m_fields[m_velocity[d]]->GetPhys();            // mean's d-component
+            const auto &uBar_d = m_fields[m_velocity[d]]->GetPhys();            // uBar_d = u_mean[d]
             Vmath::Vmul(nPhys, uBar_d.data(), 1, du.data(), 1, prod.data(), 1); // prod = uBar_d * du
-            Vmath::Svtvp(nPhys, -1.0, prod.data(), 1,                           // cross[c][k] -= prod[k] for all ks
+            Vmath::Svtvp(nPhys, -1.0, prod.data(), 1,                           // cross[c](x_k) -= prod(x_k)
                          cross[c].data(), 1, cross[c].data(), 1);
 
-            // term 2: cross[c] -= u_{i,d} * ∂_d ū_c
+            // term 2: cross[c] -= u_i[d] * ∂_d u_mean[c]
             m_fields[m_velocity[c]]->PhysDeriv(d, tmp_uBarc, du);               // du = ∂_d u_mean[c]
-            const NekDouble *u_id = m_DOModePhys.data() + (i*nVel + d)*nPhys;   // pointer to mode i, component d
+            const NekDouble *u_id = m_DOModePhys.data() + (i*nVel + d)*nPhys;   // pointer to u_i[d]
             Vmath::Vmul(nPhys, u_id, 1, du.data(), 1, prod.data(), 1);          // prod = u_id * du
-            Vmath::Svtvp(nPhys, -1.0, prod.data(), 1,                           // cross[c][k] -= prod[k] for all ks
+            Vmath::Svtvp(nPhys, -1.0, prod.data(), 1,                           // cross[c](x_k) -= prod(x_k)
                          cross[c].data(), 1, cross[c].data(), 1);
         }
     }
