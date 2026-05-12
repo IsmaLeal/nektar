@@ -1055,13 +1055,7 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         }
     }
 
-    // 3) additive stochastic forcing contribution to mode i:
-    //      addStochN_i[c](x) = Σ_k A_{i,k} g_{k,c}(x)
-    //      The Σ^{-1} factor is applied at assembly via invMuReg below.
-    //      Included in `rough` so it flows into both N and innerArg, and
-    //      so the DO projection (step 6) automatically applies the
-    //      ⊥-to-modes orthogonalisation that the canonical DO mode equation
-    //      requires for the forcing term.
+    // for this mode i: addStochN[c](x) = \sum_k m_forcingA[i*K + k] g_k[c](x)
     Array<OneD, Array<OneD, NekDouble>> addStochN(nVel);
     for (int c = 0; c < nVel; ++c) addStochN[c] = Array<OneD, NekDouble>(nPhys, 0.0);
     if (m_nForcingChannels > 0 && invMuReg > eps)
