@@ -525,9 +525,9 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
  * Initialises `m_Yi[p*S + i]` = Y_{i,p} (mode i for particle p) by drawing
  * i.i.d. Gaussian samples Y_{i,p} ~ N(0, m_doYiSigma^2)
  *
- * Decorrelation: the resulting sample covariance C_{ij} = (1/Np)Σ_p Y_{i,p}Y_{j,p}
- * has off-diagonals of order σ²/√Np. Since `ComputeNMode` uses the simplification
- * μ_i = C_{ii}, the caller (`v_DoInitialise`) must invoke `RotateToEigenbasisOfC`
+ * Decorrelation: the resulting sample covariance C[i,j] = (1/Np)Σ_p Y_{i,p}Y_{j,p}
+ * has off-diagonals of order m_doYiSigma^2/sqrt(Np). Since `ComputeNMode` uses the simplification
+ * μ_i = C[i,i], the caller (`v_DoInitialise`) must invoke `RotateToEigenbasisOfC`
  * once after this routine to diagonalise
  * the initial C and rotate the modes/Y consistently before the first integration
  * step.
@@ -909,26 +909,26 @@ void DOVelocityCorrectionScheme::ComputeModeCross(int i,
     Array<OneD, NekDouble> tmp_uic(nPhys), tmp_uBarc(nPhys);                    // PhysDeriv inputs
     Array<OneD, NekDouble> du(nPhys), prod(nPhys);
 
-    for (int c = 0; c < nVel; ++c)                                              // output spatial component
+    for (int c = 0; c < nVel; ++c)                                              // output spatial component c
     {
-        Vmath::Zero(nPhys, cross[c].data(), 1);                                 // zero output
+        Vmath::Zero(nPhys, cross[c].data(), 1);                                 // zero output `cross[c]`
 
         const NekDouble *u_ic = m_DOModePhys.data() + (i*nVel + c)*nPhys;       // pointer to mode i, component c
-        Vmath::Vcopy(nPhys, u_ic, 1, tmp_uic.data(), 1);                        // tmp_uic = u_{i,c}
-        Vmath::Vcopy(nPhys, m_fields[m_velocity[c]]->GetPhys().data(), 1,       // tmp_uBarc = ū_c 
+        Vmath::Vcopy(nPhys, u_ic, 1, tmp_uic.data(), 1);                        // tmp_uic = u_i[c]
+        Vmath::Vcopy(nPhys, m_fields[m_velocity[c]]->GetPhys().data(), 1,       // tmp_uBarc = u_mean[c]
                      tmp_uBarc.data(), 1);
 
         for (int d = 0; d < nVel; ++d)                                          // contraction 
         {
             // term 1: cross[c] -= ū_d * ∂_d u_{i,c}
-            m_fields[m_velocity[c]]->PhysDeriv(d, tmp_uic, du);                 // du = ∂_d u_{i,c}
+            m_fields[m_velocity[c]]->PhysDeriv(d, tmp_uic, du);                 // du = ∂_d u_i[c]
             const auto &uBar_d = m_fields[m_velocity[d]]->GetPhys();            // mean's d-component
             Vmath::Vmul(nPhys, uBar_d.data(), 1, du.data(), 1, prod.data(), 1); // prod = uBar_d * du
             Vmath::Svtvp(nPhys, -1.0, prod.data(), 1,                           // cross[c][k] -= prod[k] for all ks
                          cross[c].data(), 1, cross[c].data(), 1);
 
             // term 2: cross[c] -= u_{i,d} * ∂_d ū_c
-            m_fields[m_velocity[c]]->PhysDeriv(d, tmp_uBarc, du);               // du = ∂_d ū_c
+            m_fields[m_velocity[c]]->PhysDeriv(d, tmp_uBarc, du);               // du = ∂_d u_mean[c]
             const NekDouble *u_id = m_DOModePhys.data() + (i*nVel + d)*nPhys;   // pointer to mode i, component d
             Vmath::Vmul(nPhys, u_id, 1, du.data(), 1, prod.data(), 1);          // prod = u_id * du
             Vmath::Svtvp(nPhys, -1.0, prod.data(), 1,                           // cross[c][k] -= prod[k] for all ks
