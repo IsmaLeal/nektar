@@ -637,8 +637,8 @@ void DOVelocityCorrectionScheme::InitialiseForcingBasis()
             eq->Evaluate(xq, yq, zq, phys);                                     // analytical -> phys
             m_fields[m_velocity[c]]->FwdTrans(phys, coeffs);                    // -> FE coefficients
             m_fields[m_velocity[c]]->BwdTrans(coeffs, phys);                    // FE-projected phys (consistent with coeffs)
-            const int pOff = (k*nVel + c)*nPhys;
-            const int cOff = (k*nVel + c)*nCoeffs;
+            const int pOff = (k*nVel + c)*nPhys;    // physical offset
+            const int cOff = (k*nVel + c)*nCoeffs;  // coeff offset
             Vmath::Vcopy(nPhys,   phys.data(),   1, m_forcingBasisPhys.data()   + pOff, 1); // store the physical values
             Vmath::Vcopy(nCoeffs, coeffs.data(), 1, m_forcingBasisCoeffs.data() + cOff, 1); // store the coeffs
         }
@@ -966,7 +966,16 @@ void DOVelocityCorrectionScheme::ComputeModeLaplacian(int i,
 }
 
 /**
- * 
+ * Computes the nonlinear term of mode i's PDE:
+ *      - computes the regularisation parameter `invMuReg` for the inverse of C;
+ *      - calls ComputeModeCross for the `cross` contribution;
+ *      - computes the triple moment contribution `triple`;
+ *      - computes the stochastic forcing contribution `addStochN`;
+ *      - computes the laplacian `lap` for the viscous term;
+ *      
+ *      - assembles: N = cross + invMuReg * (triple + addStochN) + nu*lap
+ * E[f_{stoch}Y_i] = \sum_k g_k E[eta_k Y_i]
+ *                 = \sum_k GSOMETHINGAAAAAAAAAA * m_forcingA[i*K + k].
  */
 void DOVelocityCorrectionScheme::ComputeNMode(int i,
                           Array<OneD, Array<OneD, NekDouble>> &N)
@@ -999,7 +1008,7 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
 
     ComputeModeCross(i, cross);
 
-    // triple_unscaled[c](x) = -Σ_{m,l} M_{mli} (u_m . ∇) u_{l,c} (inverse eigval applied at assembly)
+    // triple[c](x) = -Σ_{m,l} M_{mli} (u_m . ∇) u_{l,c} (inverse eigval applied at assembly)
     if (invMuReg > eps)
     {
         // duLcd = ∂_d u_l[c] for all (l (modes), c (components), d (directions to differentiate))
@@ -1046,8 +1055,8 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         }
     }
 
-    // 3) additive stochastic forcing contribution to mode i (UNSCALED):
-    //      addStochN_unscaled_{i,c}(x) = Σ_k A_{i,k} g_{k,c}(x)
+    // 3) additive stochastic forcing contribution to mode i:
+    //      addStochN_i[c](x) = Σ_k A_{i,k} g_{k,c}(x)
     //      The Σ^{-1} factor is applied at assembly via invMuReg below.
     //      Included in `rough` so it flows into both N and innerArg, and
     //      so the DO projection (step 6) automatically applies the
