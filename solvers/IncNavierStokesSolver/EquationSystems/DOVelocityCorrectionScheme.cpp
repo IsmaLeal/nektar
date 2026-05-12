@@ -1088,7 +1088,7 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
             maxCross  = std::max(maxCross , std::abs(cross [c][k]));
             maxStoch  = std::max(maxStoch , std::abs(stoch_scaled));
         }
-    if (m_verbose && m_doStepCounter == 1)
+    if (m_verbose && m_doStepCounter == 1)  // diagnostics
         std::cout << "[DOVelocityCorrectionScheme][diag] mode i=" << i
                   << " max|cross|="    << maxCross
                   << " max|triple|="   << maxTriple
@@ -1096,15 +1096,10 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
                   << " mu_i="          << mui
                   << " invMuReg="      << invMuReg << "\n";
 
-    // 5.5) project N orthogonal to the constant subspace (uses innerArg as the
-    //      projection argument so the coefficient matches the downstream DO
-    //      projection; no-op for components with Dirichlet BCs)
-    if (!m_doAllowConstantModes)
-    {
-        ProjectOutConstantsFromN(m_fields, m_velocity, innerArg, N);
-    }
+    if (!m_doAllowConstantModes) // project orthogonal to the constant subspace
+    {ProjectOutConstantsFromN(m_fields, m_velocity, innerArg, N);}
 
-    // 6) DO projection: N -= Σ_p β_p u_p   with β_p = <innerArg, u_p>_M
+    // DO mode projection: N -= \sum_p <innerArg, u_p> u_p
     NekDouble maxBeta = 0.0;
     Array<OneD, NekDouble> ip(nCoeffs);
     // Pre-AllReduce: assemble all S β_p into one buffer, single global reduce.
@@ -1127,7 +1122,7 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         maxBeta = std::max(maxBeta, std::abs(beta_p));
         for (int c = 0; c < nVel; ++c)                                   // subtract β_p * u_p from N
         {
-            const NekDouble *u_pc = m_DOModePhys.data()                  // pointer to mode p, component c (phys)
+            const NekDouble *u_pc = m_DOModePhys.data()                  // pointer to u_p[c]
                                    + (p*nVel + c)*nPhys;
             Vmath::Svtvp(nPhys, -beta_p, u_pc, 1, N[c].data(), 1,        // N[c][k] -= β_p * u_pc[k] for all ks
                          N[c].data(), 1);
