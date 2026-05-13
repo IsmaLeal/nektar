@@ -45,7 +45,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SOLVER="${SOLVER:-$REPO_ROOT/build/solvers/IncNavierStokesSolver/IncNavierStokesSolver}"
+SOLVER="${SOLVER:-/home/isma/nektar_repro/build/solvers/IncNavierStokesSolver/IncNavierStokesSolver}"
 WORKFLOW="${WORKFLOW:-$REPO_ROOT/py_utils/workflow.py}"
 LOAD_CHK="${LOAD_CHK:-$REPO_ROOT/py_utils/load_chk.py}"
 ANIMATE_SINGLE="${ANIMATE_SINGLE:-$REPO_ROOT/py_utils/reconstruction/animation/animate_single.py}"

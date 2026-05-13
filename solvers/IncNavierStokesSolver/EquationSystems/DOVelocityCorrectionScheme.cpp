@@ -1200,16 +1200,16 @@ void DOVelocityCorrectionScheme::ModePressureSolve(
         Vmath::Zero(nc, pbnd[n]->UpdateCoeffs().data(), 1); // zero pbnd[n]
     }
 
-    // Poisson RHS: divUhat = (\nabla . uhat) / dt
-    Array<OneD, NekDouble> divUhat(nPhys, 0.0), tmp(nPhys, 0.0);
-    for (int c = 0; c < nVel; ++c)                                      // accumulate  ∂_c uhat[c]
+    // Poisson RHS = (\nabla . uhat) / dt
+    Array<OneD, NekDouble> poisson_RHS(nPhys, 0.0), tmp(nPhys, 0.0);
+    for (int c = 0; c < nVel; ++c)                                              // accumulate  ∂_c uhat[c]
     {
         m_fields[m_velocity[c]]->PhysDeriv(c, uhatPhys[c], tmp);
-        Vmath::Vadd(nPhys, tmp.data(), 1, divUhat.data(), 1, divUhat.data(), 1);
+        Vmath::Vadd(nPhys, tmp.data(), 1, poisson_RHS.data(), 1, poisson_RHS.data(), 1);
     }
-    Vmath::Smul(nPhys, 1.0/Dt, divUhat.data(), 1, divUhat.data(), 1);   // divUhat /= dt
+    Vmath::Smul(nPhys, 1.0/Dt, poisson_RHS.data(), 1, poisson_RHS.data(), 1);   // poisson_RHS /= dt
 
-    // solve lap(p) = divUhat with homogeneous Neumann
+    // solve lap(p) = poisson_RHS with homogeneous Neumann
     StdRegions::ConstFactorMap factors;
     factors[StdRegions::eFactorLambda] = 0.0;
     // Zero mean pressure coeffs before iterative solve. With λ=0 (pure Poisson)
@@ -1217,7 +1217,7 @@ void DOVelocityCorrectionScheme::ModePressureSolve(
     // the mean pressure is used as initial guess, shifting the solution by an
     // arbitrary constant (gradient blows up downstream).
     Vmath::Zero(npC, m_pressure->UpdateCoeffs().data(), 1);
-    m_pressure->HelmSolve(divUhat, m_pressure->UpdateCoeffs(), factors);
+    m_pressure->HelmSolve(poisson_RHS, m_pressure->UpdateCoeffs(), factors);
 
     Vmath::Vcopy(npC, m_pressure->GetCoeffs().data(), 1,    // pCoeffsOut = mode pressure coeffs solution
                  pCoeffsOut.data(), 1);
@@ -1231,18 +1231,14 @@ void DOVelocityCorrectionScheme::ModePressureSolve(
 }
 
 /**
- * Solves the viscous Helmholtz step for one DO mode, component-wise
- * (spec eq. 97-99):
- *
- *     (lap - 3/(2\nu dt)) u_k^{n+1} = -uhat_k/(\nu dt) + ∂_k p^{n+1} / \nu
- *
- * The implicit weight aii_Dt = (2/3)·Dt is hard-coded for BDF2; on the
- * BDF1 startup step (DOImplicitSolve passes the same `Dt = m_timestep`)
- * this introduces a small order-1 startup error on the implicit term —
- * the standard VCS BDF1→BDF2 transition behaviour.
- *
- * Both m_pressure and m_fields coefficient arrays are saved on entry
- * and restored on exit. Results written to `uNewPhys` and `uNewCoeffs`.
+ * Solves the viscous Helmholtz step for one DO mode, component-wise:
+ *      - saves mean pressure and velocity states and BCs;
+ *      - builds Helmholtz RHS = (- uhat / Dt + grad p) / \nu;
+ *      - calls HelmSolve, zeroing the `m_fields` coefficients to improve initial guesses;
+ *      - restores means.
+ * 
+ * The equation solved is hard-coded for BDF2 (default for VCS and IMEX2 time-stepping):
+ *     (lap - 3/(2\nu dt)) u_k^{n+1} = -uhat_k/(\nu dt) + ∂_k p^{n+1} / \nu.
  */
 void DOVelocityCorrectionScheme::ModeViscousSolve(
     const Array<OneD, Array<OneD, NekDouble>> &uhatPhys,
@@ -1255,15 +1251,13 @@ void DOVelocityCorrectionScheme::ModeViscousSolve(
     const int nPhys  = m_fields[0]->GetTotPoints();
     const int npC    = m_pressure->GetNcoeffs();
     const int npP    = m_pressure->GetTotPoints();
-    const NekDouble aii_Dt = (2.0/3.0)*Dt;
+    const NekDouble aii_Dt = (2.0/3.0)*Dt;  // BDF2 implicit weight for the viscous term
 
-    // save `m_pressure` state
+    // save `m_pressure` and `m_fields` states
     Array<OneD, NekDouble> savedPC(npC), savedPP(npP);
+    std::vector<Array<OneD, NekDouble>> savedVC(nVel);
     Vmath::Vcopy(npC, m_pressure->GetCoeffs().data(), 1, savedPC.data(), 1);
     Vmath::Vcopy(npP, m_pressure->GetPhys().data(),   1, savedPP.data(), 1);
-
-    // save `m_fields` velocity coeffs (otherwise HelmSolve overwrites them)
-    std::vector<Array<OneD, NekDouble>> savedVC(nVel);
     for (int c = 0; c < nVel; ++c)
     {
         const int nc = m_fields[m_velocity[c]]->GetNcoeffs();
@@ -1272,53 +1266,45 @@ void DOVelocityCorrectionScheme::ModeViscousSolve(
                      savedVC[c].data(), 1);
     }
 
-    // load `pCoeffsIn` into `m_pressure` to use PhysDeriv on it
+    // Helmholtz RHS [k] = (- uhat_k / Dt + ∂_k p) / ν
+    Array<OneD, Array<OneD, NekDouble>> helmholtz_RHS(m_nConvectiveFields);
+    // copy `pCoeffsIn` into `m_pressure`, compute gradient
     Vmath::Vcopy(npC, pCoeffsIn.data(), 1,
                  m_pressure->UpdateCoeffs().data(), 1);
     m_pressure->BwdTrans(m_pressure->GetCoeffs(), m_pressure->UpdatePhys());
-
-    // Forcing[k] := ∂_k p  for k < nVel ; zero for any extra convective fields
-    Array<OneD, Array<OneD, NekDouble>> Forcing(m_nConvectiveFields);
     for (int k = 0; k < m_nConvectiveFields; ++k)       // allocate space
-        Forcing[k] = Array<OneD, NekDouble>(nPhys, 0.0);
-
-    if (nVel == 2)  // 2d fill derivatives
-        m_pressure->PhysDeriv(m_pressure->GetPhys(), Forcing[0], Forcing[1]);
-    else            // 3d fill derivatives
-        m_pressure->PhysDeriv(m_pressure->GetPhys(),
-                              Forcing[0], Forcing[1], Forcing[2]);
-
-    // Forcing[k] = (∂_k p - uhat_k / Dt) / ν                          
+        helmholtz_RHS[k] = Array<OneD, NekDouble>(nPhys, 0.0);
+    if (nVel == 2)  // differentiates p wrt all convective directions
+        m_pressure->PhysDeriv(m_pressure->GetPhys(), helmholtz_RHS[0], helmholtz_RHS[1]);
+    else
+        m_pressure->PhysDeriv(m_pressure->GetPhys(), helmholtz_RHS[0], helmholtz_RHS[1], helmholtz_RHS[2]);
+    // helmholtz_RHS[k] -=u hatPhys[k]/(\nu Dt)
     for (int k = 0; k < m_nConvectiveFields; ++k)
     {
         if (k < nVel)
-            Vmath::Svtvp(nPhys, -1.0/Dt, uhatPhys[k].data(), 1,         // Forcing[k] -=u hatPhys[k]/Dt for all ks
-                         Forcing[k].data(), 1, Forcing[k].data(), 1);
-        Vmath::Smul(nPhys, 1.0/m_diffCoeff[k],                          // Forcing[k] /= ν
-                    Forcing[k].data(), 1, Forcing[k].data(), 1);
+            Vmath::Svtvp(nPhys, -1.0/Dt, uhatPhys[k].data(), 1,
+                         helmholtz_RHS[k].data(), 1, helmholtz_RHS[k].data(), 1);
+        Vmath::Smul(nPhys, 1.0/m_diffCoeff[k],
+                    helmholtz_RHS[k].data(), 1, helmholtz_RHS[k].data(), 1);
     }
 
-    // solve (Δ - λ) u_k = Forcing[k]  with λ = 1/(aii_Dt · ν) = 3/(2νΔt)
+    // solve (lap - lambda) u_k = helmholtz_RHS[k]
     StdRegions::ConstFactorMap factors;
     for (int k = 0; k < m_nConvectiveFields; ++k)
     {
-        factors[StdRegions::eFactorLambda] = 1.0/aii_Dt/m_diffCoeff[k];
-        // Zero the field coeffs to give HelmSolve a clean initial guess.
-        // Without this, the saved mean-velocity coeffs (peak ~5) are used
-        // as initial guess and the iterative solver may not fully converge,
-        // leaving a residual that propagates into uNew.
-        Vmath::Zero(m_fields[m_velocity[k]]->GetNcoeffs(),
-                    m_fields[m_velocity[k]]->UpdateCoeffs().data(), 1);
-        m_fields[m_velocity[k]]->HelmSolve(Forcing[k],              // coeffs stored in m_fields[k]
+        factors[StdRegions::eFactorLambda] = 1.0/aii_Dt/m_diffCoeff[k]; // lambda = 1/(aii_Dt \nu) = 3/(2 \nu Δt)
+        // zero the mean field coeffs to give HelmSolve's initial guess
+        Vmath::Zero(m_fields[m_velocity[k]]->GetNcoeffs(), m_fields[m_velocity[k]]->UpdateCoeffs().data(), 1);
+        m_fields[m_velocity[k]]->HelmSolve(helmholtz_RHS[k],            // coeffs stored in m_fields[k]
             m_fields[m_velocity[k]]->UpdateCoeffs(), factors);
-        m_fields[m_velocity[k]]->BwdTrans(                          // uNewPhys
+        m_fields[m_velocity[k]]->BwdTrans(                              // uNewPhys
             m_fields[m_velocity[k]]->GetCoeffs(), uNewPhys[k]);
         Vmath::Vcopy(m_fields[m_velocity[k]]->GetNcoeffs(),
                      m_fields[m_velocity[k]]->GetCoeffs().data(), 1,
                      uNewCoeffs[k].data(), 1);
     }
 
-    // restore `m_fields` velocity coeffs & `m_pressure` state
+    // restore m_fields velocity coeffs & m_pressure state
     for (int c = 0; c < nVel; ++c)
         Vmath::Vcopy(m_fields[m_velocity[c]]->GetNcoeffs(),
                      savedVC[c].data(), 1,
@@ -1328,113 +1314,85 @@ void DOVelocityCorrectionScheme::ModeViscousSolve(
 }
 
 /**
- * Explicit-RHS callback registered with m_doScheme. Replaces the explicit
- * portions of the deleted AdvanceModes() and AdvanceYi(). The integrator
- * passes:
- *      `in[0..S*nVel-1]` = mode phys at time t (one variable per (i,c));
- *      `in[m_doYIdx]`    = Y_flat at time t (size Np*S).
- * It expects in `out` the *un-multiplied* explicit RHS (the BDF2/EXT2 weight
- * Δt is applied internally by the integrator).
+ * RHS for explicit (Poisson) step, called by the time integrator `m_doScheme`.
+ *      - `in[0,...,m_nDOModes*nVel-1]` : mode phys at time t (one variable per (i,c));
+ *      - `in[m_doYIdx]`                : Y_flat at time t (size m_nDOParticles*m_nDOModes).
+ *      - `out`: unscaled explicit RHS (BDF2/EXT2 weight dt applied by the integrator).
  *
- * For consistency with mean^t, we swap m_fields phys to m_meanAtTn (captured
- * by the EXT operator at the same time level the integrator is asking for)
- * for the duration of the callback. m_DOModePhys/m_DOModeCoeffs/m_Yi are
- * synced from `in` so the existing helpers (ComputeYMoments, ComputeNMode,
- * ComputeModeCross/Laplacian) operate on the correct state.
+ * m_fields phys swapped to m_meanAtTn for the duration of the callback. m_DOModePhys/m_DOModeCoeffs/m_Yi are
+ * synced from `in` so ComputeYMoments, ComputeNMode, ComputeModeCross/Laplacian operate on the correct state.
  */
 void DOVelocityCorrectionScheme::DOExplicitRhs(
     const Array<OneD, const Array<OneD, NekDouble>> &in,
     Array<OneD, Array<OneD, NekDouble>>             &out,
     const NekDouble                                  time)
 {
-    boost::ignore_unused(time);                                                 // explicit terms here are autonomous in t
+    boost::ignore_unused(time);     // no explicit t-dependence
     if (m_nDOModes == 0) return;
 
-    const int S       = m_nDOModes;
     const int nVel    = m_velocity.size();
     const int nPhys   = m_fields[0]->GetTotPoints();
     const int nCoeffs = m_fields[0]->GetNcoeffs();
     const int nPC     = m_pressure->GetNcoeffs();
     const int nPP     = m_pressure->GetTotPoints();
 
-    // 1) sync m_DOModePhys / m_DOModeCoeffs / m_Yi from `in`
-    //
-    // BC bracket: m_fields[velocity] carries the BASE flow's Dirichlet values
-    // (u=1 at inlet/walls). Modes have HOMOGENEOUS Dirichlet BCs. Without
-    // homogenizing the velocity BCs around FwdTrans, ContField::v_FwdTrans ->
-    // GlobalSolve -> v_ImposeDirichletConditions writes the base-flow BC values
-    // (e.g. u=1) into the boundary local DOFs of `tmpCoef`, which then
-    // contaminate m_DOModeCoeffs. This contamination is what was producing
-    // the noisy t=0 do_panels frame: TimeIntegrationAlgorithmGLM::InitializeData
-    // calls DOExplicitRhs once at t=0 (for the multistep history's f_y_0); that
-    // single un-bracketed call wrote BC values into m_DOModeCoeffs *after*
-    // v_DoInitialise's own FE-projection bracket had cleaned them, and the
-    // FilterDOArchive::v_Initialise dump that follows immediately captured the
-    // contaminated state. Same pattern that ReOrthonormalise / v_DoInitialise
-    // already use around their per-mode FwdTrans.
+    // TimeIntegrationAlgorithmGLM::InitializeData calls DOExplicitRhs at t=0:
+    // bracket BCs to avoid mean-field-BC contamination
     auto bcState = CaptureVelocityBCState(m_fields, m_velocity);
     HomogenizeVelocityBCsForModes(m_fields, m_velocity);
-
-    // tmpCoef MUST be zero-initialised — Nektar's Array<OneD,NekDouble>(size)
-    // constructor leaves fundamental types uninitialised (heap garbage), and
-    // FwdTrans uses outarray as the iterative solver's initial guess. Garbage
-    // initial guess => garbage output. Reset to 0 each iteration.
-    Array<OneD, NekDouble> tmpPhys(nPhys, 0.0), tmpCoef(nCoeffs, 0.0);
-    for (int i = 0; i < S; ++i)                                                 // loop over modes
-        for (int c = 0; c < nVel; ++c)                                          // loop over components
+    // copy modes from `in` to m_DOModePhys, m_DOModeCoeffs
+    Array<OneD, NekDouble> tmpCoef(nCoeffs, 0.0);
+    for (int i = 0; i < m_nDOModes; ++i)    // loop over modes
+        for (int c = 0; c < nVel; ++c)      // loop over components
         {
             const int v    = i*nVel + c;
             const int pOff = v*nPhys;
             const int cOff = v*nCoeffs;
-            Vmath::Vcopy(nPhys, in[v].data(), 1,
+            Vmath::Vcopy(nPhys, in[v].data(), 1,                // copy mode phys values
                          m_DOModePhys.data() + pOff, 1);
-            Vmath::Vcopy(nPhys, in[v].data(), 1, tmpPhys.data(), 1);            // FwdTrans wants its own buffer
-            Vmath::Zero(nCoeffs, tmpCoef.data(), 1);                            // reset initial guess
-            m_fields[m_velocity[c]]->FwdTrans(tmpPhys, tmpCoef);                // refresh coeffs (homogeneous Dir DOFs)
+            Vmath::Zero(nCoeffs, tmpCoef.data(), 1);
+            m_fields[m_velocity[c]]->FwdTrans(in[v], tmpCoef);  // refresh coeffs
             Vmath::Vcopy(nCoeffs, tmpCoef.data(), 1,
                          m_DOModeCoeffs.data() + cOff, 1);
         }
-
     RestoreVelocityBCState(m_fields, bcState);
+    // copy Y from `in` to m_Yi
+    Vmath::Vcopy(m_nDOParticles*m_nDOModes, in[m_doYIdx].data(), 1, m_Yi.data(), 1);
 
-    Vmath::Vcopy(m_nDOParticles*S, in[m_doYIdx].data(), 1, m_Yi.data(), 1);
-
-    // 2) swap m_fields phys to mean^n (so ComputeModeCross/DOMeanCoupling read
-    //    the right time level), saving current mean^{n+1} aside for restore
+    // swap m_fields phys to m_meanAtTn, save mean^{n+1} aside for restore
     Array<OneD, Array<OneD, NekDouble>> meanSaved(nVel);
     if (m_meanSnapshotValid)
     {
-        for (int c = 0; c < nVel; ++c)
+        for (int c = 0; c < nVel; ++c)  // loop over components
         {
             meanSaved[c] = Array<OneD, NekDouble>(nPhys);
-            Vmath::Vcopy(nPhys, m_fields[m_velocity[c]]->GetPhys().data(), 1,
+            Vmath::Vcopy(nPhys, m_fields[m_velocity[c]]->GetPhys().data(), 1,   // copy mean in m_fields at n+1 to meanSaved
                          meanSaved[c].data(), 1);
-            Vmath::Vcopy(nPhys, m_meanAtTn[c].data(), 1,
+            Vmath::Vcopy(nPhys, m_meanAtTn[c].data(), 1,                        // copy m_meanAtTn to m_fields
                          m_fields[m_velocity[c]]->UpdatePhys().data(), 1);
         }
     }
 
-    ComputeYMoments();                                                          // refresh m_Cij, m_Mkli for current Y
+    ComputeYMoments();
 
-    // 3) explicit RHS for each mode: out[i*nVel+c] = N_i,c (cross + triple +
-    //    addStochN; the constant projection + ⊥ to span{u_p} are inside ComputeNMode).
-    Array<OneD, Array<OneD, NekDouble>> N(nVel);
+    // explicit RHS for each mode
+    Array<OneD, Array<OneD, NekDouble>> N(nVel);    // initialise N
     for (int c = 0; c < nVel; ++c) N[c] = Array<OneD, NekDouble>(nPhys, 0.0);
-    for (int i = 0; i < S; ++i)
+    for (int i = 0; i < m_nDOModes; ++i)
     {
-        ComputeNMode(i, N);                                                     // existing helper, untouched
-        for (int c = 0; c < nVel; ++c)
+        ComputeNMode(i, N);                         // fill N for mode i
+        for (int c = 0; c < nVel; ++c)              // loop over components to copy N into correct place in `out`
         {
             const int v = i*nVel + c;
             Vmath::Vcopy(nPhys, N[c].data(), 1, out[v].data(), 1);
         }
     }
 
-    // 4) explicit RHS for Y: out[m_doYIdx][p*S+i] = R^t[p,i]
-    //    R^t[p,i] = Σ_k Y_p,k <F_k − ∇p_k, u_i> + Σ_{k,l}(Y_p,k Y_p,l − C_kl)<F_kl, u_i> + Σ_k η_p,k G[i,k].
-    //    First compute the inner-product tensors ipKi (linear) and ipKli (quadratic).
-    std::vector<NekDouble> ipKi (S*S,   0.0);
-    std::vector<NekDouble> ipKli(S*S*S, 0.0);
+    // explicit RHS for Y: out[m_doYIdx][p*S+i] = R^t[p,i]
+    // R^t[p,i] = Σ_k Y_p,k <F_k − ∇p_k, u_i> + Σ_{k,l}(Y_p,k Y_p,l − C_kl)<F_kl, u_i> + Σ_k η_p,k G[i,k].
+    // First compute the inner-product tensors ipKi (linear) and ipKli (quadratic).
+    std::vector<NekDouble> ipKi (m_nDOModes*m_nDOModes, 0.0);
+    std::vector<NekDouble> ipKli(m_nDOModes*m_nDOModes*m_nDOModes, 0.0);
     Array<OneD, NekDouble> ip(nCoeffs);
     Array<OneD, Array<OneD, NekDouble>> Fk(nVel), Lk(nVel);
     Array<OneD, NekDouble> pkPhys(nPP), dpk(nPhys);
@@ -1445,7 +1403,7 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
     }
 
     // 4a) ipKi[k,i] = <F_k − ∇p_k, u_i>_M
-    for (int k = 0; k < S; ++k)                                                 // loop over modes k
+    for (int k = 0; k < m_nDOModes; ++k)                                                 // loop over modes k
     {
         ComputeModeCross(k, Fk);                                                // cross_k = -[(ū·∇)u_k + (u_k·∇)ū]
         ComputeModeLaplacian(k, Lk);                                            // lap_k = Δu_k
@@ -1464,7 +1422,7 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
                         Fk[c].data(), 1);                                       // Fk[c] -= dpk
         }
 
-        for (int i = 0; i < S; ++i)                                             // <F_k − ∇p_k, u_i>
+        for (int i = 0; i < m_nDOModes; ++i)                                             // <F_k − ∇p_k, u_i>
         {
             NekDouble s = 0.0;
             for (int c = 0; c < nVel; ++c)
@@ -1473,16 +1431,16 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
                 const NekDouble *u_ic = m_DOModeCoeffs.data() + (i*nVel + c)*nCoeffs;
                 s += Vmath::Dot(nCoeffs, ip.data(), 1, u_ic, 1);
             }
-            ipKi[k*S + i] = s;
+            ipKi[k*m_nDOModes + i] = s;
         }
     }
 
     // 4b) ipKli[k,l,i] = <F_kl, u_i>_M with F_kl,c = -(u_k·∇)u_{l,c}
-    Array<OneD, NekDouble> duLcd(S * nVel * nVel * nPhys);                      // cached ∂_d u_{l,c}
+    Array<OneD, NekDouble> duLcd(m_nDOModes * nVel * nVel * nPhys);                      // cached ∂_d u_{l,c}
     Array<OneD, NekDouble> tmp(nPhys), prod(nPhys);
     Array<OneD, Array<OneD, NekDouble>> Fkl(nVel);
     for (int c = 0; c < nVel; ++c) Fkl[c] = Array<OneD, NekDouble>(nPhys);
-    for (int l = 0; l < S; ++l)                                                 // precompute derivatives
+    for (int l = 0; l < m_nDOModes; ++l)                                                 // precompute derivatives
         for (int c = 0; c < nVel; ++c)
         {
             const NekDouble *u_lc = m_DOModePhys.data() + (l*nVel + c)*nPhys;
@@ -1494,8 +1452,8 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
                 m_fields[m_velocity[c]]->PhysDeriv(d, tmp, duOut);
             }
         }
-    for (int k = 0; k < S; ++k)                                                 // assemble F_kl + project
-        for (int l = 0; l < S; ++l)
+    for (int k = 0; k < m_nDOModes; ++k)                                                 // assemble F_kl + project
+        for (int l = 0; l < m_nDOModes; ++l)
         {
             for (int c = 0; c < nVel; ++c) Vmath::Zero(nPhys, Fkl[c].data(), 1);
             for (int c = 0; c < nVel; ++c)                                      // output spatial component
@@ -1507,7 +1465,7 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
                     Vmath::Svtvp(nPhys, -1.0, prod.data(), 1,
                                  Fkl[c].data(), 1, Fkl[c].data(), 1);           // Fkl[c] -= u_kd · ∂_d u_lc
                 }
-            for (int i = 0; i < S; ++i)
+            for (int i = 0; i < m_nDOModes; ++i)
             {
                 NekDouble s = 0.0;
                 for (int c = 0; c < nVel; ++c)
@@ -1516,7 +1474,7 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
                     const NekDouble *u_ic = m_DOModeCoeffs.data() + (i*nVel + c)*nCoeffs;
                     s += Vmath::Dot(nCoeffs, ip.data(), 1, u_ic, 1);
                 }
-                ipKli[(k*S + l)*S + i] = s;
+                ipKli[(k*m_nDOModes + l)*m_nDOModes + i] = s;
             }
         }
 
@@ -1532,18 +1490,18 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
     NekDouble maxLin = 0.0, maxTri = 0.0, maxFor = 0.0;
     for (int p = 0; p < m_nDOParticles; ++p)                                    // loop over particles
     {
-        const NekDouble *Yp = m_Yi.data()         + p*S;
+        const NekDouble *Yp = m_Yi.data() + p*m_nDOModes;
         const NekDouble *Ep = (Kf > 0) ? (m_forcingEta.data() + p*Kf) : nullptr;
-        NekDouble       *Rp = Rout + p*S;
-        for (int i = 0; i < S; ++i)
+        NekDouble       *Rp = Rout + p*m_nDOModes;
+        for (int i = 0; i < m_nDOModes; ++i)
         {
             NekDouble lin = 0.0, tri = 0.0, frc = 0.0;
-            for (int k = 0; k < S; ++k)
-                lin += Yp[k] * ipKi[k*S + i];                                   // Σ_k Y_p,k <F_k − ∇p_k, u_i>
-            for (int k = 0; k < S; ++k)
-                for (int l = 0; l < S; ++l)
-                    tri += (Yp[k]*Yp[l] - m_Cij[k*S + l])
-                         * ipKli[(k*S + l)*S + i];                              // demeaned-quadratic
+            for (int k = 0; k < m_nDOModes; ++k)
+                lin += Yp[k] * ipKi[k*m_nDOModes + i];                                   // Σ_k Y_p,k <F_k − ∇p_k, u_i>
+            for (int k = 0; k < m_nDOModes; ++k)
+                for (int l = 0; l < m_nDOModes; ++l)
+                    tri += (Yp[k]*Yp[l] - m_Cij[k*m_nDOModes + l])
+                         * ipKli[(k*m_nDOModes + l)*m_nDOModes + i];                              // demeaned-quadratic
             for (int k = 0; k < Kf; ++k)
                 frc += Ep[k] * m_forcingG[i*Kf + k];                            // <f̃_p, u_i>
             Rp[i]  = lin + tri + frc;
