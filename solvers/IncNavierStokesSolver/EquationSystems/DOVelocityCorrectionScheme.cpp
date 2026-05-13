@@ -971,9 +971,11 @@ void DOVelocityCorrectionScheme::ComputeModeLaplacian(int i,
  *      - calls ComputeModeCross for the `cross` contribution;
  *      - computes the triple moment contribution `triple`;
  *      - computes the stochastic forcing contribution `addStochN`;
- *      - computes the laplacian `lap` for the viscous term;
- *      
- *      - assembles: N = cross + invMuReg * (triple + addStochN) + nu*lap
+ *      - computes the laplacian `lap` for the viscous term;     
+ *      - assembles:
+ *          N = cross + invMuReg * (triple + addStochN)
+ *          innerArg = N  + nu*lap
+ *      - enforces DO constraint: N -= \sum_p <innerArg, u_p> u_p
  */
 void DOVelocityCorrectionScheme::ComputeNMode(int i,
                           Array<OneD, Array<OneD, NekDouble>> &N)
@@ -1100,26 +1102,24 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
     {ProjectOutConstantsFromN(m_fields, m_velocity, innerArg, N);}
 
     // DO mode projection: N -= \sum_p <innerArg, u_p> u_p
-    NekDouble maxBeta = 0.0;
     Array<OneD, NekDouble> ip(nCoeffs);
-    // Pre-AllReduce: assemble all S β_p into one buffer, single global reduce.
+    // assemble all <innerArg, u_p> into one buffer, single global reduce.
     std::vector<NekDouble> betas(m_nDOModes, 0.0);
-    for (int p = 0; p < m_nDOModes; ++p)
+    for (int p = 0; p < m_nDOModes; ++p)    // loop over modes
     {
-        for (int c = 0; c < nVel; ++c)
+        for (int c = 0; c < nVel; ++c)      // loop over components
         {
-            m_fields[m_velocity[c]]->IProductWRTBase(innerArg[c], ip);
+            m_fields[m_velocity[c]]->IProductWRTBase(innerArg[c], ip);      // ip = M innerArg_coeffs
             const NekDouble *u_pc_coeffs = m_DOModeCoeffs.data()
                                   + (p*nVel + c)*nCoeffs;
-            betas[p] += Vmath::Dot(nCoeffs, ip.data(), 1, u_pc_coeffs, 1);
+            betas[p] += Vmath::Dot(nCoeffs, ip.data(), 1, u_pc_coeffs, 1);  // betas[p] += <innerArg, u_p> contribution from component c
         }
     }
     m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
         betas, LibUtilities::ReduceSum);
     for (int p = 0; p < m_nDOModes; ++p)    // loop over modes
     {
-        const NekDouble beta_p = betas[p];
-        maxBeta = std::max(maxBeta, std::abs(beta_p));
+        const NekDouble beta_p = betas[p];  // beta_p = <innerArg, u_p>
         for (int c = 0; c < nVel; ++c)                                   // subtract β_p * u_p from N
         {
             const NekDouble *u_pc = m_DOModePhys.data()                  // pointer to u_p[c]
@@ -1128,23 +1128,19 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
                          N[c].data(), 1);
         }
     }
-    if (m_verbose && m_doStepCounter == 1)
-        std::cout << "[DOVelocityCorrectionScheme][diag] mode i=" << i
-                  << " DO-projection |beta_p|max=" << maxBeta << "\n";
 }
 
 /**
- * VCS override. Adds the `doCorr` correction to the mean velocity's explicit RHS (`outarray`)
- * on top of the VCS advection. Also captures the t^n mean field into
- * m_meanAtTn: the integrator passes `inarray` = mean phys at t^n, which is
- * EXACTLY what the DO subsystem needs later (in DOExplicitRhs) to evaluate the
- * mode RHS cross/triple/mean-coupling terms at the same t^n as modes/Y.
+ * VCS override:
+ *      - adds correction `doCorr` to mean's explicit RHS `outarray` on top of advection;
+ *      - also captures the current mean field into `m_meanAtTn` for use in DOExplicitRhs
+ *        (needed by DO subsystem to evaluate mean-coupling terms).
  */
 void DOVelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(
     const Array<OneD, const Array<OneD, NekDouble>> &inarray,
     Array<OneD, Array<OneD, NekDouble>> &outarray, const NekDouble time)
 {
-    VelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(   // base VCS: outarray = -(ū . grad)ū + pressure BCs
+    VelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(   // base VCS: outarray = -(u_mean . grad)u_mean + pressure BCs
         inarray, outarray, time);
 
     if (m_nDOModes == 0) return;
@@ -1152,23 +1148,21 @@ void DOVelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(
     const int nVel  = m_velocity.size();
     const int nPhys = m_fields[0]->GetTotPoints();
 
-    // Snapshot mean^n. `inarray` carries the velocity components at the time
-    // level the integrator is currently evaluating (= t^n for IMEX BDF2/EXT2).
-    if (m_meanAtTn.size() == 0)                                         // lazy-allocate
+    if (m_meanAtTn.size() == 0)     // allocate m_meanAtTn if empty
     {
         m_meanAtTn = Array<OneD, Array<OneD, NekDouble>>(nVel);
         for (int c = 0; c < nVel; ++c)
             m_meanAtTn[c] = Array<OneD, NekDouble>(nPhys, 0.0);
     }
-    for (int c = 0; c < nVel; ++c)                                      // copy mean^n
+    for (int c = 0; c < nVel; ++c)  // capture current mean (`inarray`) into m_meanAtTn
         Vmath::Vcopy(nPhys, inarray[c].data(), 1, m_meanAtTn[c].data(), 1);
     m_meanSnapshotValid = true;
 
     ComputeYMoments();
 
-    Array<OneD, Array<OneD, NekDouble>> doCorr(nVel);                   // initialise correction
+    Array<OneD, Array<OneD, NekDouble>> doCorr(nVel);                   // initialise doCorr & its components
     for (int c = 0; c < nVel; ++c)
-        doCorr[c] = Array<OneD, NekDouble>(nPhys, 0.0);                 // initialise each component's arrays
+        doCorr[c] = Array<OneD, NekDouble>(nPhys, 0.0);
     ComputeDOMeanCoupling(doCorr);                                      // call `ComputeDOMeanCoupling` for the full vector
 
     for (int c = 0; c < nVel; ++c)
@@ -1177,17 +1171,16 @@ void DOVelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(
 }
 
 /**
- * Solves the pressure Poisson equation for one DO mode (spec eq. 92-95):
+ * Solves the pressure Poisson equation for one DO mode:
+ *      - saves mean pressure state and BCs
+ *      - 
  *
- *     Δ p_i^{n+1} = ∇·uhat / Δt        (HelmSolve with lambda = 0)
+ *      lap(p_i^{n+1}) = (\nabla . uhat) / dt   (HelmSolve with lambda = 0)
  *
- * with homogeneous Neumann BCs on the pressure mode. `Δt` here is the
- * full timestep `m_timestep` — DOImplicitSolve always passes this exact
- * value as `Dt`; the BDF order is encoded only in the `uhat` predictor
- * (see DOImplicitSolve's "scale" logic), not in `Dt`.
+ * with homogeneous Neumann BCs on the pressure mode.
  *
- * The mean-field pressure (m_pressure) is saved before the solve and
- * restored after — otherwise this call would mutate the VCS solver
+ * The mean-field pressure is saved before the solve and restored
+ * after — otherwise this call would mutate the VCS solver
  * state mid-step.
  */
 void DOVelocityCorrectionScheme::ModePressureSolve(
@@ -1199,40 +1192,36 @@ void DOVelocityCorrectionScheme::ModePressureSolve(
     const int npC   = m_pressure->GetNcoeffs();
     const int npP   = m_pressure->GetTotPoints();
 
-    // saved pressure coeffs and physical values to restore later
+    // save pressure state (savedPC, savedPP) & BCs (savedPBnd) to restore later; zeroes BCs
     Array<OneD, NekDouble> savedPC(npC), savedPP(npP);  
     Vmath::Vcopy(npC, m_pressure->GetCoeffs().data(), 1, savedPC.data(), 1);
     Vmath::Vcopy(npP, m_pressure->GetPhys().data(),   1, savedPP.data(), 1);
-
-    // save and zero pressure mode BC coeffs
-    auto pbnd = m_pressure->GetBndCondExpansions();
+    auto pbnd = m_pressure->GetBndCondExpansions();         // ExpListSharedPtr for each boundary region
     std::vector<std::vector<NekDouble>> savedPBnd(pbnd.size());
-    for (int n = 0; n < (int)pbnd.size(); ++n)
+    for (int n = 0; n < (int)pbnd.size(); ++n)              // loop over boundary region's expansions
     {
         const int nc = pbnd[n]->GetNcoeffs();
-        savedPBnd[n].assign(pbnd[n]->GetCoeffs().data(),                // savedPBnd[n] = pbnd[n] (coeffs)
+        savedPBnd[n].assign(pbnd[n]->GetCoeffs().data(),
                             pbnd[n]->GetCoeffs().data() + nc);
-        Vmath::Zero(nc, pbnd[n]->UpdateCoeffs().data(), 1);             // zero pbnd[n] (coeffs)
+        Vmath::Zero(nc, pbnd[n]->UpdateCoeffs().data(), 1); // zero pbnd[n]
     }
 
-    // Poisson RHS: divUhat = ∇·uhat / Δt
+    // Poisson RHS: divUhat = (\nabla . uhat) / dt
     Array<OneD, NekDouble> divUhat(nPhys, 0.0), tmp(nPhys, 0.0);
-    m_fields[m_velocity[0]]->PhysDeriv(0, uhatPhys[0], divUhat);        // divUhat =  ∂_0 uhat[0] (derivative wrt first spatial direction (x))
-    for (int c = 1; c < nVel; ++c)                                      // accumulate  ∂_c uhat[c]
+    for (int c = 0; c < nVel; ++c)                                      // accumulate  ∂_c uhat[c]
     {
         m_fields[m_velocity[c]]->PhysDeriv(c, uhatPhys[c], tmp);
         Vmath::Vadd(nPhys, tmp.data(), 1, divUhat.data(), 1, divUhat.data(), 1);
     }
-    Vmath::Smul(nPhys, 1.0/Dt, divUhat.data(), 1, divUhat.data(), 1);   // divUhat /= Δt
+    Vmath::Smul(nPhys, 1.0/Dt, divUhat.data(), 1, divUhat.data(), 1);   // divUhat /= dt
 
     // solve Δp = divUhat with homogeneous Neumann
     StdRegions::ConstFactorMap factors;
     factors[StdRegions::eFactorLambda] = 0.0;
-    // Zero pressure coeffs before iterative solve so the initial guess is
-    // clean. With λ=0 (pure Poisson) and periodic BC, the operator has a
-    // constant null space; a biased initial guess (the saved mean pressure)
-    // shifts the iterative solution by an arbitrary constant and contaminates
-    // the gradient downstream.
+    // Zero mean pressure coeffs before iterative solve. With λ=0 (pure Poisson)
+    // and periodic BC, the operator has a constant null space. Without this zeroing,
+    // the mean pressure is used as initial guess, shifting the solution by an
+    // arbitrary constant (gradient blows up downstream).
     Vmath::Zero(npC, m_pressure->UpdateCoeffs().data(), 1);
     m_pressure->HelmSolve(divUhat, m_pressure->UpdateCoeffs(), factors);
 

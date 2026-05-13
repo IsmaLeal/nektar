@@ -331,6 +331,42 @@ def _guess_pressure_column(ncols: int, dim: int = 2) -> int:
     )
 
 
+def _default_fieldconvert() -> Path:
+    # Resolution order: $NEKTAR_FIELDCONVERT env var, then PATH lookup, then a
+    # last-ditch hardcoded fallback for the legacy install layout.
+    env = os.environ.get("NEKTAR_FIELDCONVERT")
+    if env:
+        return Path(env)
+    found = shutil.which("FieldConvert")
+    if found:
+        return Path(found)
+    return Path("/home/isma/nektar_repro/build/utilities/FieldConvert/FieldConvert")
+
+
+def _fieldconvert_env(fieldconvert: Path) -> dict[str, str]:
+    # Locate the Nektar build root by walking up from the FieldConvert binary
+    # until we find a sibling `library/` dir, then prepend every immediate
+    # subdir of library/ to LD_LIBRARY_PATH so the binary's .so deps resolve.
+    env = os.environ.copy()
+    build_root: Path | None = None
+    try:
+        parents = list(fieldconvert.resolve().parents)
+    except OSError:
+        return env
+    for parent in parents:
+        if (parent / "library").is_dir():
+            build_root = parent
+            break
+    if build_root is None:
+        return env
+    lib_dirs = [str(p) for p in (build_root / "library").iterdir() if p.is_dir()]
+    if not lib_dirs:
+        return env
+    existing = env.get("LD_LIBRARY_PATH", "")
+    env["LD_LIBRARY_PATH"] = ":".join(lib_dirs + ([existing] if existing else []))
+    return env
+
+
 def _run_fieldconvert(
     fieldconvert: Path,
     xml_path: Path,
@@ -360,6 +396,7 @@ def _run_fieldconvert(
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        env=_fieldconvert_env(fieldconvert),
     )
     if proc.returncode != 0:
         raise RuntimeError(
@@ -1099,8 +1136,11 @@ def main() -> int:
     ap.add_argument(
         "--fieldconvert",
         type=Path,
-        default=Path("/home/isma/nektar_repro/build/utilities/FieldConvert/FieldConvert"),
-        help="Path to FieldConvert binary",
+        default=_default_fieldconvert(),
+        help=(
+            "Path to FieldConvert binary "
+            "(default: $NEKTAR_FIELDCONVERT, then PATH lookup, then fallback)."
+        ),
     )
     ap.add_argument(
         "--chk-dir",

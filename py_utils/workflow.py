@@ -80,11 +80,17 @@ def _parse_pipeline_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--case-dir", type=Path, required=True, help="Case directory root.")
     ap.add_argument(
         "--stages",
-        default="extract,suite,reg-derive-stats",
+        default="extract,derive,panels",
         help=(
             "Comma-separated stages. Allowed: "
             "extract,derive,suite,check,video,panels,reg-derive-stats"
         ),
+    )
+    ap.add_argument(
+        "--fieldconvert",
+        type=Path,
+        default=None,
+        help="Path to FieldConvert binary (forwarded to extract).",
     )
     ap.add_argument("--xml", type=Path, default=None, help="Override case XML path.")
     ap.add_argument("--chk-dir", type=Path, default=None, help="Override checkpoint directory.")
@@ -158,8 +164,8 @@ def _run_case(root: Path, argv: list[str]) -> int:
                 cmd.extend(["--dt", str(args.dt)])
             if args.chk_stride is not None:
                 cmd.extend(["--chk-stride", str(args.chk_stride)])
-            # DO workflow default: always reconstruct/interpolate modes when archive data allows it.
-            cmd.append("--interp-modes-from-archive")
+            if args.fieldconvert is not None:
+                cmd.extend(["--fieldconvert", str(args.fieldconvert)])
             rc = _run_script(root, "extract", cmd)
         elif stg == "derive":
             rc = _run_script(root, "derive", [str(out_h5), "--out", str(reconstructed_out)])
