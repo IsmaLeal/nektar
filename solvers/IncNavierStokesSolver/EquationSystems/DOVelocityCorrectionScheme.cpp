@@ -1172,16 +1172,10 @@ void DOVelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(
 
 /**
  * Solves the pressure Poisson equation for one DO mode:
- *      - saves mean pressure state and BCs
- *      - 
- *
- *      lap(p_i^{n+1}) = (\nabla . uhat) / dt   (HelmSolve with lambda = 0)
- *
- * with homogeneous Neumann BCs on the pressure mode.
- *
- * The mean-field pressure is saved before the solve and restored
- * after — otherwise this call would mutate the VCS solver
- * state mid-step.
+ *      - saves mean pressure state and BCs;
+ *      - builds Poisson RHS divUhat;
+ *      - solves lap(p_i) = divUhat, with homogeneous Neumann BCs, zeroing the mean pressure
+ *        coeffs before the solve to fix the null space constant, and restoring afterwards.
  */
 void DOVelocityCorrectionScheme::ModePressureSolve(
     const Array<OneD, Array<OneD, NekDouble>> &uhatPhys,
@@ -1215,7 +1209,7 @@ void DOVelocityCorrectionScheme::ModePressureSolve(
     }
     Vmath::Smul(nPhys, 1.0/Dt, divUhat.data(), 1, divUhat.data(), 1);   // divUhat /= dt
 
-    // solve Δp = divUhat with homogeneous Neumann
+    // solve lap(p) = divUhat with homogeneous Neumann
     StdRegions::ConstFactorMap factors;
     factors[StdRegions::eFactorLambda] = 0.0;
     // Zero mean pressure coeffs before iterative solve. With λ=0 (pure Poisson)
@@ -1225,10 +1219,10 @@ void DOVelocityCorrectionScheme::ModePressureSolve(
     Vmath::Zero(npC, m_pressure->UpdateCoeffs().data(), 1);
     m_pressure->HelmSolve(divUhat, m_pressure->UpdateCoeffs(), factors);
 
-    Vmath::Vcopy(npC, m_pressure->GetCoeffs().data(), 1,                // pCoeffsOut = m_pressure coeffs
+    Vmath::Vcopy(npC, m_pressure->GetCoeffs().data(), 1,    // pCoeffsOut = mode pressure coeffs solution
                  pCoeffsOut.data(), 1);
 
-    // restore pressure BCs and m_pressure state
+    // restore m_pressure state & BCs
     for (int n = 0; n < (int)pbnd.size(); ++n)
         std::copy(savedPBnd[n].begin(), savedPBnd[n].end(),
                   pbnd[n]->UpdateCoeffs().data());
@@ -1240,7 +1234,7 @@ void DOVelocityCorrectionScheme::ModePressureSolve(
  * Solves the viscous Helmholtz step for one DO mode, component-wise
  * (spec eq. 97-99):
  *
- *     (Δ - 3/(2νΔt)) u_k^{n+1} = -uhat_k/(νΔt) + ∂_k p^{n+1} / ν
+ *     (lap - 3/(2\nu dt)) u_k^{n+1} = -uhat_k/(\nu dt) + ∂_k p^{n+1} / \nu
  *
  * The implicit weight aii_Dt = (2/3)·Dt is hard-coded for BDF2; on the
  * BDF1 startup step (DOImplicitSolve passes the same `Dt = m_timestep`)
