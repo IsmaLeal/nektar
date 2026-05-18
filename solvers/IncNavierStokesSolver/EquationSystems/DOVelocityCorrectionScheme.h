@@ -128,7 +128,6 @@ protected:
 
     /// verbose-only
     int m_doStepCounter   = 0;  // integrator-step counter
-    int m_doExplicitRhsCallIdx = 0;  // DOExplicitRhs invocation counter (reset at each integrator step)
 
     static std::string solverTypeLookupId;
 
@@ -160,6 +159,9 @@ protected:
     /// compute the explicit N (cross + triple-moment + DO projection) for one mode (phys-space, vector).
     void ComputeNMode(int i,
                       Array<OneD, Array<OneD, NekDouble>> &N);
+    
+    /// compute the explicit RHS for the Y coefficients per particle (vector)
+    void ComputeYRhs(Array<OneD, NekDouble> &rhs);
 
     /// Poisson explicit solve for one mode
     void ModePressureSolve(
