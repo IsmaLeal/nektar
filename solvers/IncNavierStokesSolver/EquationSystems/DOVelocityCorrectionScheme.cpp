@@ -498,7 +498,7 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
         if (m_doInitBasis == "POD"){ InitialiseModesFromPOD(); }
         else { InitialiseModesFromEllipticEigenbasis(); }
         InitialiseYi();            // Y: i.i.d. Gaussian, sample mean removed
-        RotateToEigenbasisOfC();
+        DiagonaliseCov();
         ReOrthonormalise();
 
         // re-project snapshots onto the new basis
@@ -527,7 +527,7 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
             // ComputeNMode in step 1 would otherwise read mu_i = m_Cij[i,i]
             // from a non-diagonal C, giving meaningless 1/mu_i factors and
             // a divergent mode RHS. Re-diagonalise to restore C(Yi) = diag.
-            RotateToEigenbasisOfC();
+            DiagonaliseCov();
         }
         InitialiseForcingBasis();   // forcing channels
 
@@ -565,7 +565,7 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
  * Decorrelation: the resulting sample covariance C[i,j] can have non-zero
  * diagonals (of order m_doYiSigma^2/sqrt(Np)). Since `ComputeNMode` uses the
  * simplification μ_i = C[i,i], the caller (`v_DoInitialise`) must invoke
- * `RotateToEigenbasisOfC` once after this routine to diagonalise the initial C
+ * `DiagonaliseCov` once after this routine to diagonalise the initial C
  * and rotate the modes/Y consistently before the first integration step.
  */
 void DOVelocityCorrectionScheme::InitialiseYi()
@@ -992,11 +992,12 @@ void DOVelocityCorrectionScheme::ComputeModeLaplacian(int i,
                               + (i*nVel + c)*nPhys;
         Vmath::Vcopy(nPhys, u_ic, 1,                // phys = u_i[c]
                      phys.data(), 1);
-        for (int d = 0; d < nVel; ++d)              // sum over derivative directions
+        for (int d = 0; d < nVel; ++d)              // contraction directions
         {
-            m_fields[m_velocity[c]]->PhysDeriv(d, phys, du);    // du = ∂_d u_i[c]
-            m_fields[m_velocity[c]]->PhysDeriv(d, du, d2u);     // d2u = ∂²_d u_i[c]
-            Vmath::Vadd(nPhys, d2u.data(), 1, lap[c].data(),    // lap[c] += d2u
+            // du = \partial_d u_i[c]; d2u = \partial_d^2 u_i[c]
+            m_fields[m_velocity[c]]->PhysDeriv(d, phys, du);
+            m_fields[m_velocity[c]]->PhysDeriv(d, du, d2u);
+            Vmath::Vadd(nPhys, d2u.data(), 1, lap[c].data(),
                         1, lap[c].data(), 1);
         }
     }
@@ -1004,7 +1005,7 @@ void DOVelocityCorrectionScheme::ComputeModeLaplacian(int i,
 
 /**
  * Computes the nonlinear term of mode i's PDE:
- *      - computes the regularisation parameter `invMuReg` for the inverse of C;
+ *      - computes the regularisation parameter `invMuReg` for C inverse;
  *      - calls ComputeModeCross for the `cross` contribution;
  *      - computes the triple moment contribution `triple`;
  *      - computes the stochastic forcing contribution `addStochN`;
@@ -1062,11 +1063,12 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
                 const NekDouble *u_lc = m_DOModePhys.data() // points to u_l[c]
                                        + (l*nVel + c)*nPhys;
                 Vmath::Vcopy(nPhys, u_lc, 1, tmp.data(), 1);    // tmp = u_l[c]
-                for (int d = 0; d < nVel; ++d)  // loop over directions to differentiate
+                for (int d = 0; d < nVel; ++d)  // contraction direction
                 {
-                    Array<OneD, NekDouble> duOut = duLcd                // pointer to duLcd
-                                                  + ((l*nVel + c)*nVel + d)*nPhys;
-                    m_fields[m_velocity[c]]->PhysDeriv(d, tmp, duOut);  // duOut = ∂_d u_l[c]
+                    Array<OneD, NekDouble> duOut = duLcd    // pointer to duLcd
+                        + ((l*nVel + c)*nVel + d)*nPhys;
+                    // duOut = \partial_d u_l[c]
+                    m_fields[m_velocity[c]]->PhysDeriv(d, tmp, duOut);
                 }
             }
         }
@@ -1096,9 +1098,13 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         }
     }
 
-    // stochastic contribution: addStochN[c](x) = \sum_k m_forcingA[i*K + k] g_k[c](x)
+    // stochastic contribution:
+    // addStochN[c](x) = \sum_k m_forcingA[i*K + k] g_k[c](x)
     Array<OneD, Array<OneD, NekDouble>> addStochN(nVel);
-    for (int c = 0; c < nVel; ++c) addStochN[c] = Array<OneD, NekDouble>(nPhys, 0.0);
+    for (int c = 0; c < nVel; ++c)
+    {
+        addStochN[c] = Array<OneD, NekDouble>(nPhys, 0.0);
+    }
     if (m_nForcingChannels > 0 && invMuReg > eps)
     {
         for (int k = 0; k < m_nForcingChannels; ++k)    // loop over channels
@@ -1107,8 +1113,11 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
             if (std::abs(Aik) < eps) continue;
             for (int c = 0; c < nVel; ++c)              // loop over components
             {
-                const NekDouble *gk = m_forcingBasisPhys.data() + (k*nVel + c)*nPhys;
-                Vmath::Svtvp(nPhys, Aik, gk, 1, addStochN[c].data(), 1, addStochN[c].data(), 1); // addStochN[c] += Aik * gk
+                const NekDouble *gk =
+                    m_forcingBasisPhys.data() + (k*nVel + c)*nPhys;
+                // addStochN[c] += Aik * gk
+                Vmath::Svtvp(nPhys, Aik, gk, 1, addStochN[c].data(),
+                             1, addStochN[c].data(), 1);
             }
         }
     }
@@ -1117,7 +1126,7 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
 
     // assemble
     //  - N         = cross + invMuReg * (triple + addStoch)
-    //  - innerArg  = N + nu * Lap u_i        (consumed by step 6 DO projection)
+    //  - innerArg  = N + nu * Lap u_i
     NekDouble maxTriple = 0.0, maxCross = 0.0, maxStoch = 0.0;
     for (int c = 0; c < nVel; ++c)      // loop over components
         for (int k = 0; k < nPhys; ++k) // loop over points
@@ -1137,16 +1146,18 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
 
     // DO mode projection: N -= \sum_p <innerArg, u_p> u_p
     Array<OneD, NekDouble> ip(nCoeffs);
-    // assemble all <innerArg, u_p> into one buffer, single global reduce.
+    // assemble all <innerArg, u_p> into one buffer, single global reduce
     std::vector<NekDouble> betas(m_nDOModes, 0.0);
     for (int p = 0; p < m_nDOModes; ++p)    // loop over modes
     {
         for (int c = 0; c < nVel; ++c)      // loop over components
         {
-            m_fields[m_velocity[c]]->IProductWRTBase(innerArg[c], ip);      // ip = M innerArg_coeffs
+            // ip = M innerArg_coeffs
+            m_fields[m_velocity[c]]->IProductWRTBase(innerArg[c], ip);
             const NekDouble *u_pc_coeffs = m_DOModeCoeffs.data()
                                   + (p*nVel + c)*nCoeffs;
-            betas[p] += Vmath::Dot(nCoeffs, ip.data(), 1, u_pc_coeffs, 1);  // betas[p] += <innerArg, u_p> contribution from component c
+            // betas[p] += <innerArg, u_p> contribution from component c
+            betas[p] += Vmath::Dot(nCoeffs, ip.data(), 1, u_pc_coeffs, 1);
         }
     }
     m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
@@ -1219,7 +1230,8 @@ void DOVelocityCorrectionScheme::ComputeYRhs(Array<OneD, NekDouble> &rhs)
             for (int c = 0; c < nVel; ++c)
             {
                 m_fields[m_velocity[c]]->IProductWRTBase(Fk[c], ip);
-                const NekDouble *u_ic = m_DOModeCoeffs.data() + (i*nVel + c)*nCoeffs;
+                const NekDouble *u_ic =
+                    m_DOModeCoeffs.data() + (i*nVel + c)*nCoeffs;
                 s += Vmath::Dot(nCoeffs, ip.data(), 1, u_ic, 1);
             }
             ipKi[k*m_nDOModes + i] = s;
@@ -1286,11 +1298,11 @@ void DOVelocityCorrectionScheme::ComputeYRhs(Array<OneD, NekDouble> &rhs)
     // per-particle Y RHS
     const int Kf = m_nForcingChannels;
     NekDouble *Rout = rhs.data();
-    NekDouble maxLin = 0.0, maxTri = 0.0, maxFor = 0.0;
     for (int p = 0; p < m_nDOParticles; ++p)    // loop over particles
     {
         const NekDouble *Yp = m_Yi.data() + p*m_nDOModes;
-        const NekDouble *Ep = (Kf > 0) ? (m_forcingEta.data() + p*Kf) : nullptr;
+        const NekDouble *Ep =
+            (Kf > 0) ? (m_forcingEta.data() + p*Kf) : nullptr;
         NekDouble       *Rp = Rout + p*m_nDOModes;
         for (int i = 0; i < m_nDOModes; ++i)    // loop over modes
         {
@@ -1687,7 +1699,7 @@ void DOVelocityCorrectionScheme::DOImplicitSolve(
  *   - per-particle Y:   m_Yi (Y_new = V^T Y_old);
  *   - history values in the integrator.
  */
-void DOVelocityCorrectionScheme::RotateToEigenbasisOfC()
+void DOVelocityCorrectionScheme::DiagonaliseCov()
 {
     if (m_nDOModes <= 1) return;
     ComputeYMoments();
@@ -1884,7 +1896,7 @@ void DOVelocityCorrectionScheme::RotateToEigenbasisOfC()
  *        a single `in` snapshot to DOExplicitRhs / DOImplicitSolve. Mean^n is
  *        read from m_meanAtTn (snapshotted by the EXT operator at t^n).
  *      - unpacks the post-step (modes, Y) back into m_DOModePhys / m_Yi
- *        (the ground-truth members consumed by RotateToEigenbasisOfC,
+ *        (the ground-truth members consumed by DiagonaliseCov,
  *        ReOrthonormalise, the archive writer, and the next step's DOExplicitRhs).
  *      - diagonalises the covariance and orthonormalises the basis.
  */
@@ -1912,7 +1924,8 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
             {
                 Vmath::Vcopy(nPhys, advanced[i*nVel + c].data(), 1,
                              m_DOModePhys.data() + (i*nVel + c)*nPhys, 1);
-                Vmath::Vcopy(nPhys, advanced[v].data(), 1, tmpPhys.data(), 1);
+                Vmath::Vcopy(nPhys, advanced[i*nVel + c].data(), 1,
+                             tmpPhys.data(), 1);
                 Vmath::Zero(nCoeffs, tmpCoef.data(), 1);
                 m_fields[m_velocity[c]]->FwdTrans(tmpPhys, tmpCoef);
                 Vmath::Vcopy(nCoeffs, tmpCoef.data(), 1,
@@ -1922,11 +1935,11 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
         Vmath::Vcopy(m_nDOParticles*m_nDOModes, advanced[m_doYIdx].data(), 1,
                      m_Yi.data(), 1);
 
-        RotateToEigenbasisOfC();
+        DiagonaliseCov();
         ReOrthonormalise();
 
         // calling ReOrthonormalise modifies m_DOModePhys and m_Yi after
-        // RotateToEigenbasisOfC, which rotates solVec[*]. Thus, we need to
+        // DiagonaliseCov, which rotates solVec[*]. Thus, we need to
         // update solVec[] so that DOExplicitRhs uses the orthonormalised basis
         {
             auto &solVec = m_doScheme->UpdateSolutionVector();
@@ -2194,7 +2207,7 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
                 }
             }
         }
-        // history (Y, modes) in m_doScheme: Y_new = G Y_old, u_new = G^{-1} u_old.
+        // rotate history
         std::vector<NekDouble> Ginv(m_nDOModes*m_nDOModes, 0.0);
         for (int k = 0; k < m_nDOModes; ++k)
             for (int i = m_nDOModes-1; i >= 0; --i)

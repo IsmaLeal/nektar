@@ -70,7 +70,7 @@ protected:
     NekDouble m_invCovRegEps = 1e-2;
     /// selected initial-mode basis: "Laplacian" or "POD".
     std::string m_doInitBasis = "Laplacian";
-    /// Opt-in: allow modes to have non-zero spatial mean (constant component).
+    /// allow modes to have non-zero spatial mean (constant component).
     /// Required for fully-periodic ICs whose dominant variability is a uniform
     /// flow direction (e.g. Mowlavi & Sapsis 2018 Fig. 10). When false (default)
     /// the strip-constants gauge is enforced both at init and during evolution.
@@ -196,18 +196,14 @@ protected:
         const NekDouble                                  time,
         const NekDouble                                  lambda);
 
-    /// rotate to make C = E[Y Y^T] diagonal
-    void RotateToEigenbasisOfC();
-
+    void DiagonaliseCov();
     void ReOrthonormalise();
 
 private:
     void InitialiseModesFromEllipticEigenbasis();
     void InitialiseModesFromPOD();
     void InitialiseYi();
-    /// read ForcingChannels XML, evaluate at quadrature points, FwdTrans, mass-normalise.
     void InitialiseForcingBasis();
-    /// one OU step of m_forcingEta + per-channel centering + recompute G[i,k] and A[i,k].
     void AdvanceForcingState();
 };
 
