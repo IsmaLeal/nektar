@@ -101,7 +101,7 @@ protected:
     bool                                m_meanSnapshotValid = false;
 
     // ========== Stochastic forcing ==========
-    /// additive stochastic forcing
+    /// number of spatial shapes to force
     int m_nForcingChannels = 0;
     /// OU equilibrium std
     NekDouble m_forcingSigma = 0.0;
@@ -166,13 +166,13 @@ protected:
     /// Poisson explicit solve for one mode
     void ModePressureSolve(
         const Array<OneD, Array<OneD, NekDouble>> &uhatPhys,
-        NekDouble Dt,
+        NekDouble aii_Dt,
         Array<OneD, NekDouble> &pCoeffsOut);
     /// Helmholtz implicit solve for one mode
     void ModeViscousSolve(
         const Array<OneD, Array<OneD, NekDouble>> &uhatPhys,
         const Array<OneD, NekDouble> &pCoeffsIn,
-        NekDouble Dt,
+        NekDouble aii_Dt,
         Array<OneD, Array<OneD, NekDouble>> &uNewPhys,
         Array<OneD, Array<OneD, NekDouble>> &uNewCoeffs);
 
@@ -186,13 +186,10 @@ protected:
         Array<OneD, Array<OneD, NekDouble>>             &out,
         const NekDouble                                  time);
 
-    /// DO subsystem implicit-solve callback registered with m_doScheme.
-    /// For each mode variable, runs the Poisson + Helmholtz pipeline 
-    /// (ModePressureSolve + ModeViscousSolve). The Y
-    /// variable has no implicit term (identity copy in→out).
-    /// `lambda` (= a_iixDt from the integrator) carries the IMEX/BDF2 weight
-    /// (2/3)·dt; ModePressureSolve / ModeViscousSolve are called with
-    /// Dt = (3/2)·lambda since they hard-code aii_Dt = (2/3)·Dt internally.
+    /// DO subsystem implicit-solve callback registered with m_doScheme. For
+    /// each mode variable, runs the Poisson + Helmholtz pipeline 
+    /// (ModePressureSolve + ModeViscousSolve). The Y variable has no implicit
+    /// term (identity copy).
     void DOImplicitSolve(
         const Array<OneD, const Array<OneD, NekDouble>> &in,
         Array<OneD, Array<OneD, NekDouble>>             &out,
