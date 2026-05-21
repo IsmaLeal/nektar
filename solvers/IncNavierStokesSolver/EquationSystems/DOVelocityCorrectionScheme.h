@@ -39,12 +39,14 @@ public:
     static std::string className;
 
     /// Accessors for FilterDOArchive
-    int GetNumDOModes()      const { return m_nDOModes; }
-    int GetNumDOParticles()  const { return m_nDOParticles; }
-    const Array<OneD, NekDouble> &GetDOModePhys()   const { return m_DOModePhys; }
-    const Array<OneD, NekDouble> &GetDOModeCoeffs() const { return m_DOModeCoeffs; }
-    const Array<OneD, NekDouble> &GetYi()           const { return m_Yi; }
-    const Array<OneD, int>       &GetVelocityIdx()  const { return m_velocity; }
+    int GetNumDOModes() const { return m_nDOModes; }
+    int GetNumDOParticles() const { return m_nDOParticles; }
+    const Array<OneD, NekDouble>
+        &GetDOModePhys() const { return m_DOModePhys; }
+    const Array<OneD, NekDouble>
+        &GetDOModeCoeffs() const { return m_DOModeCoeffs; }
+    const Array<OneD, NekDouble> &GetYi() const { return m_Yi; }
+    const Array<OneD, int> &GetVelocityIdx()  const { return m_velocity; }
 
 protected:
     // ========== DO parameters ==========
@@ -55,7 +57,8 @@ protected:
     /// velocity modes layout: (mode * nVel + comp) * nPhys/nCoeffs
     Array<OneD, NekDouble> m_DOModePhys;
     Array<OneD, NekDouble> m_DOModeCoeffs;
-    /// pressure modes coefficients, updated by DOImplicitSolve and needed by Yi RHS for ∇p_k.
+    /// pressure modes coefficients, updated by DOImplicitSolve and needed by
+    /// Yi RHS for grad(p_k).
     Array<OneD, NekDouble> m_DOModePCoeffs;
     /// Yi coefficients, particle-major: Y_{i,p} = m_Yi[p*m_nDOModes + i]
     Array<OneD, NekDouble> m_Yi;
@@ -66,21 +69,21 @@ protected:
     int m_doYiSeed = 0;
     /// std of the Gaussian Yi initialisation
     NekDouble m_doYiSigma = 0.5;
-    /// relative Tikhonov regularisation strength for the inverse-covariance operator
+    /// relative Tikhonov regularisation strength for the inverse-covariance
     NekDouble m_invCovRegEps = 1e-2;
     /// selected initial-mode basis: "Laplacian" or "POD".
     std::string m_doInitBasis = "Laplacian";
     /// allow modes to have non-zero spatial mean (constant component).
     /// Required for fully-periodic ICs whose dominant variability is a uniform
-    /// flow direction (e.g. Mowlavi & Sapsis 2018 Fig. 10). When false (default)
-    /// the strip-constants gauge is enforced both at init and during evolution.
+    /// flow direction (e.g. Mowlavi & Sapsis 2018 Fig. 10). When false, the
+    /// strip-constants gauge is enforced both at init and during evolution.
     bool m_doAllowConstantModes = false;
     /// POD-init outputs (empty unless POD init ran successfully)
     std::vector<NekDouble>              m_podSigmas;    ///< POD singular values
-    std::vector<std::vector<NekDouble>> m_podEigVecs;   ///< POD (temporal) eigenvectors
+    std::vector<std::vector<NekDouble>> m_podEigVecs;   ///< POD eigenvectors
     int                                 m_podNumSnapshots = 0;
-    /// POD initialiser: kept after `InitialiseModesFromPOD()` for the Y re-projection,
-    /// reset after (null if Laplacian init)
+    /// POD initialiser: kept after `InitialiseModesFromPOD()` for the Y
+    /// re-projection, reset after (null if Laplacian init)
     std::unique_ptr<DOPODInitialiser>   m_podInitialiser;
 
     // ========== IMEX integration ==========
@@ -96,7 +99,7 @@ protected:
     /// index of the first Yi variable in `m_doState`
     int m_doYIdx = 0;
     /// snapshot of the mean velocity (phys) at t^n. Needed to advance modes
-    /// with consistent mean-mode coupling. See v_EvaluateAdvection_SetPressureBCs.
+    /// with consistent mean-mode coupling
     Array<OneD, Array<OneD, NekDouble>> m_meanAtTn;
     bool                                m_meanSnapshotValid = false;
 
@@ -131,8 +134,9 @@ protected:
 
     static std::string solverTypeLookupId;
 
-    DOVelocityCorrectionScheme(const LibUtilities::SessionReaderSharedPtr &pSession,
-           const SpatialDomains::MeshGraphSharedPtr &pGraph);
+    DOVelocityCorrectionScheme(
+        const LibUtilities::SessionReaderSharedPtr &pSession,
+        const SpatialDomains::MeshGraphSharedPtr &pGraph);
 
     ~DOVelocityCorrectionScheme() override = default;
 
@@ -141,7 +145,8 @@ protected:
     bool v_PostIntegrate(int step) override;
     void v_EvaluateAdvection_SetPressureBCs(
         const Array<OneD, const Array<OneD, NekDouble>> &inarray,
-        Array<OneD, Array<OneD, NekDouble>> &outarray, const NekDouble time) override;
+        Array<OneD, Array<OneD, NekDouble>>             &outarray,
+        const NekDouble                                 time) override;
 
     /// compute moments C_ij, M_kli from m_Yi
     void ComputeYMoments();
@@ -149,14 +154,16 @@ protected:
     /// compute the DO contribution to the mean explicit term (vector)
     void ComputeDOMeanCoupling(Array<OneD, Array<OneD, NekDouble>> &doCorr);
 
-    /// compute the cross terms -(u_bar . ∇ u_i + u_i . ∇ u_bar) for one mode (vector)
+    /// compute the cross terms -((u_bar . \nabla) u_i + (u_i . \nabla) u_bar)
+    /// for one mode (vector)
     void ComputeModeCross(int i,
                           Array<OneD, Array<OneD, NekDouble>> &cross);
 
-    /// compute the strong Laplacian of one mode's vector field (phys-space, vector)
+    /// compute the strong Laplacian of one mode (phys-space, vector)
     void ComputeModeLaplacian(int i, Array<OneD, Array<OneD, NekDouble>> &lap);
 
-    /// compute the explicit N (cross + triple-moment + DO projection) for one mode (phys-space, vector).
+    /// compute the explicit N (cross + triple-moment + DO projection)
+    /// for one mode (phys-space, vector).
     void ComputeNMode(int i,
                       Array<OneD, Array<OneD, NekDouble>> &N);
     
