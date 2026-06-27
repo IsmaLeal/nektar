@@ -129,8 +129,24 @@ protected:
     /// third moment
     std::vector<NekDouble> m_Mkli;
 
+    // ========== Gradient caches (filled by PrecomputeGradients) ==========
+    // m_modeGrad1[(i*nVel+c)*nVel+d : *nPhys] = \partial_d u_i[c]
+    // m_modeGrad2[(i*nVel+c)*nVel+d : *nPhys] = \partial_d^2 u_i[c]
+    // m_meanGrad1[(c*nVel+d)*nPhys]           = \partial_d u_mean[c]
+    // m_modeLinRhs[(i*nVel+c)*nPhys]          = cross_i[c] + nu*lap_i[c]
+    Array<OneD, NekDouble> m_modeGrad1, m_modeGrad2, m_meanGrad1, m_modeLinRhs;
+    /// Quadrature weights times Jacobian at each physical point:
+    /// m_physWeights[k] = w_k * J_k.  Pre-computed in v_InitObject.
+    Array<OneD, NekDouble> m_physWeights;
+
     /// verbose-only
     int m_doStepCounter   = 0;  // integrator-step counter
+
+    // Set to true by v_EvaluateAdvection_SetPressureBCs after calling
+    // PrecomputeGradients with u^n.  DOExplicitRhs clears it and skips its
+    // own PrecomputeGradients call when the flag is set, because both see
+    // the same m_DOModePhys = u^n and the same mean field via m_meanAtTn.
+    bool m_gradientsStaged = false;
 
     static std::string solverTypeLookupId;
 
@@ -148,6 +164,8 @@ protected:
         Array<OneD, Array<OneD, NekDouble>>             &outarray,
         const NekDouble                                 time) override;
 
+    /// precompute mode and mean physical gradients into m_modeGrad1/2, m_meanGrad1
+    void PrecomputeGradients();
     /// compute moments C_ij, M_kli from m_Yi
     void ComputeYMoments();
 
