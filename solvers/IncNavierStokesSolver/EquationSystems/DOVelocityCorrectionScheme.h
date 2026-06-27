@@ -11,6 +11,7 @@
 #include <IncNavierStokesSolver/EquationSystems/DOPODInitialiser.h>
 #include <IncNavierStokesSolver/EquationSystems/VelocityCorrectionScheme.h>
 
+#include <LibUtilities/BasicUtils/Timer.h>
 #include <LibUtilities/TimeIntegration/TimeIntegrationScheme.h>
 
 #include <memory>
@@ -141,7 +142,9 @@ protected:
     Array<OneD, NekDouble> m_physWeights;
 
     /// verbose-only
-    int m_doStepCounter   = 0;  // integrator-step counter
+    int                   m_doStepCounter  = 0;
+    LibUtilities::Timer   m_stepTimer;
+    NekDouble             m_stepAccumTime  = 0.0;
 
     // Set to true by v_EvaluateAdvection_SetPressureBCs after calling
     // PrecomputeGradients with u^n.  DOExplicitRhs clears it and skips its
@@ -159,7 +162,9 @@ protected:
 
     void v_InitObject(bool DeclareField = true) override;
     void v_DoInitialise(bool dumpInitialConditions = true) override;
+    bool v_PreIntegrate(int step) override;
     bool v_PostIntegrate(int step) override;
+    void v_PrintStatusInformation(int step, NekDouble cpuTime) override;
     void v_EvaluateAdvection_SetPressureBCs(
         const Array<OneD, const Array<OneD, NekDouble>> &inarray,
         Array<OneD, Array<OneD, NekDouble>>             &outarray,

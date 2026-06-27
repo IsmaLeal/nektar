@@ -91,6 +91,15 @@ IF( NEKTAR_SOLVER_INCNAVIERSTOKES )
                           ${IncNavierStokesSolverHeaders} DEPENDS SolverUtils)
     ENDIF()
 
+    # OpenMP for DOVelocityCorrectionScheme triple-moment parallel loops
+    FIND_PACKAGE(OpenMP)
+    IF(OpenMP_CXX_FOUND)
+        TARGET_COMPILE_OPTIONS(IncNavierStokesSolver-obj PRIVATE
+                               ${OpenMP_CXX_FLAGS})
+        TARGET_LINK_LIBRARIES(IncNavierStokesSolver PRIVATE
+                              ${OpenMP_CXX_LIBRARIES})
+    ENDIF()
+
     SUBDIRS(Utilities)
 
     # The following test is disabled pending better integration with the CI system

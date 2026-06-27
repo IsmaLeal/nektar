@@ -37,6 +37,7 @@
 #include <LibUtilities/BasicUtils/FieldIO.h>
 #include <LibUtilities/BasicUtils/Filesystem.hpp>
 #include <LibUtilities/BasicUtils/Vmath.hpp>
+#include <LibUtilities/LinearAlgebra/Blas.hpp>
 #include <LibUtilities/LinearAlgebra/Lapack.hpp>
 
 #include <algorithm>
@@ -214,11 +215,18 @@ public:
                     m_snapCoeffs[k][c][j] -= mean[c][j];
         m_mean = mean;  // stash for ExportMean()
 
-        // 3) Build the K x K correlation matrix C[i,j] = <snap_i, snap_j>_M
-        //    using the velocity mass inner product summed over components.
-        //    Strategy: precompute IProductWRTBase(snap_j.phys[c]) once per
-        //    (j, c) and reuse against all i. Mass-IP: <a, b>_M = a.coeffs · M·b
-        //    where M·b = IProductWRTBase(b.phys); ExpList provides this.
+        // 3) Build the K x K correlation matrix C[i,j] = <snap_i, snap_j>_M.
+        //    snapMat[c] packs m_snapCoeffs[i][c] contiguously (K x nCoeffs
+        //    row-major = nCoeffs x K Fortran column-major, lda=nCoeffs).
+        //    For each j: compute mb = M*snap_j[c] once, then update the
+        //    upper triangle C[0..j, j] with one Dgemv('T') call.
+        std::vector<std::vector<NekDouble>> snapMat(
+            m_nVel, std::vector<NekDouble>((size_t)K * m_nCoeffs));
+        for (int c = 0; c < m_nVel; ++c)
+            for (int i = 0; i < K; ++i)
+                std::copy(m_snapCoeffs[i][c].begin(), m_snapCoeffs[i][c].end(),
+                          snapMat[c].data() + (size_t)i * m_nCoeffs);
+
         std::vector<NekDouble> C(K * K, 0.0);
         Array<OneD, NekDouble> ip(m_nCoeffs);
         Array<OneD, NekDouble> physBuf(m_nPhys);
@@ -235,13 +243,10 @@ public:
                 m_fields[m_velocity[c]]->IProductWRTBase(physBuf, ip);
                 std::memcpy(mb.data(), ip.data(),
                             sizeof(NekDouble) * m_nCoeffs);
-                for (int i = 0; i <= j; ++i)
-                {
-                    NekDouble s = 0.0;
-                    for (int q = 0; q < m_nCoeffs; ++q)
-                        s += m_snapCoeffs[i][c][q] * mb[q];
-                    C[i * K + j] += s;
-                }
+                Blas::Dgemv('T', m_nCoeffs, j + 1, 1.0,
+                            snapMat[c].data(), m_nCoeffs,
+                            mb.data(), 1,
+                            1.0, C.data() + j, K);
             }
         }
         // MPI: C entries are partial sums; one bulk AllReduce on K² values.
@@ -398,9 +403,6 @@ public:
                       << "\n";
         }
 
-        // Free per-snapshot storage to keep memory peak bounded after compute.
-        m_snapCoeffs.clear();
-        m_snapCoeffs.shrink_to_fit();
     }
 
     void ExportMean(Array<OneD, NekDouble> &meanCoeffs) const
@@ -449,11 +451,10 @@ public:
     }
 
     /// Project (snap_p - mean) onto the supplied post-reorth modes via the
-    /// velocity mass inner product. Re-loads snapshots from disk (Compute()
-    /// freed them) and rebuilds the mean from m_cfg.meanType. Writes
-    /// Yi[p * S + k] for p in [0, K) and k in [0, S); leaves Yi unchanged
-    /// for p in [K, nParticles). Inner products are AllReduced across MPI
-    /// ranks to give the global mass IP.
+    /// velocity mass inner product. Writes Yi[p*S + k] for p in [0, Kproj)
+    /// and k in [0, S); leaves Yi unchanged for p in [Kproj, nParticles).
+    /// m_snapCoeffs must be alive (Compute() was called and snapshots were
+    /// not freed). Inner products are AllReduced across MPI ranks.
     void RecomputeYiByProjection(
         const Array<OneD, NekDouble> &modePhys,
         const Array<OneD, NekDouble> &modeCoeffs,
@@ -462,54 +463,14 @@ public:
     {
         const int S = m_cfg.numModes;
         const int K = (int)m_cfg.snapshotFiles.size();
-        ASSERTL0(S > 0 && K > 0, "DOPODInitialiser::RecomputeYiByProjection: "
-                                  "Compute() must be called first.");
+        ASSERTL0(S > 0 && K > 0 && !m_snapCoeffs.empty(),
+                 "DOPODInitialiser::RecomputeYiByProjection: "
+                 "Compute() must be called first.");
         const int Kproj = std::min(K, nParticles);
 
-        // Re-load snapshots and rebuild the mean (Compute() freed both).
-        std::vector<std::vector<std::vector<NekDouble>>> snapCoeffs(
-            K, std::vector<std::vector<NekDouble>>(m_nVel));
-        for (int k = 0; k < K; ++k)
-        {
-            LoadSnapshot(m_cfg.snapshotFiles[k], snapCoeffs[k]);
-        }
-        std::vector<std::vector<NekDouble>> mean(
-            m_nVel, std::vector<NekDouble>(m_nCoeffs, 0.0));
-        switch (m_cfg.meanType)
-        {
-            case MeanType::TimeMean:
-            {
-                const NekDouble inv = 1.0 / static_cast<NekDouble>(K);
-                for (int k = 0; k < K; ++k)
-                    for (int c = 0; c < m_nVel; ++c)
-                        for (int j = 0; j < m_nCoeffs; ++j)
-                            mean[c][j] += inv * snapCoeffs[k][c][j];
-                break;
-            }
-            case MeanType::FirstSnapshot:
-                for (int c = 0; c < m_nVel; ++c) mean[c] = snapCoeffs[0][c];
-                break;
-            case MeanType::ProvidedMeanField:
-            {
-                std::vector<std::vector<NekDouble>> tmp(m_nVel);
-                LoadSnapshot(m_cfg.meanFile, tmp);
-                for (int c = 0; c < m_nVel; ++c) mean[c] = std::move(tmp[c]);
-                break;
-            }
-        }
-        for (int k = 0; k < Kproj; ++k)
-            for (int c = 0; c < m_nVel; ++c)
-                for (int j = 0; j < m_nCoeffs; ++j)
-                    snapCoeffs[k][c][j] -= mean[c][j];
-
-        // Precompute ip_kc = IProductWRTBase(mode_k_c_phys) once per (k, c),
-        // then Y[p, k] = sum_c snap_p_c.coeffs · ip_kc, summed over local
-        // elements, AllReduced once at the end.
-        // Tier B1: pass an OWNED scratch phys buffer to IProductWRTBase
-        // instead of a non-owning eArrayWrapper view aliased into modePhys
-        // (which is m_DOModePhys, owned by DOVelocityCorrectionScheme and shared with live
-        // solver state). The owned buffer guarantees no Array<> aliasing
-        // can persist past this function's return.
+        // Precompute ip[k][c] = IProductWRTBase(mode_k_c_phys) once per (k,c).
+        // Use an owned scratch buffer — modePhys is aliased into live solver
+        // state and must not be wrapped with eArrayWrapper here.
         Array<OneD, NekDouble> physScratch(m_nPhys);
         std::vector<std::vector<Array<OneD, NekDouble>>> ipKC(
             S, std::vector<Array<OneD, NekDouble>>(m_nVel));
@@ -522,7 +483,7 @@ public:
                              physScratch.data(), 1);
                 m_fields[m_velocity[c]]->IProductWRTBase(physScratch, ipKC[k][c]);
             }
-        (void)modeCoeffs; // not needed (use phys-> IP only)
+        (void)modeCoeffs;
 
         std::vector<NekDouble> Ylocal(Kproj * S, 0.0);
         for (int p = 0; p < Kproj; ++p)
@@ -531,7 +492,7 @@ public:
                 NekDouble s = 0.0;
                 for (int c = 0; c < m_nVel; ++c)
                     s += Vmath::Dot(m_nCoeffs,
-                                    snapCoeffs[p][c].data(), 1,
+                                    m_snapCoeffs[p][c].data(), 1,
                                     ipKC[k][c].data(), 1);
                 Ylocal[p * S + k] = s;
             }

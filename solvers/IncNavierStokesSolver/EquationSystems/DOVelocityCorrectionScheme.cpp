@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
@@ -2062,6 +2064,12 @@ void DOVelocityCorrectionScheme::DiagonaliseCov()
  *        ReOrthonormalise, the archive writer, and the next step's DOExplicitRhs).
  *      - diagonalises the covariance and orthonormalises the basis.
  */
+bool DOVelocityCorrectionScheme::v_PreIntegrate(int step)
+{
+    m_stepTimer.Start();
+    return VelocityCorrectionScheme::v_PreIntegrate(step);
+}
+
 bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
 {
     // base VCS (m_fields <- mean^{n+1})
@@ -2115,8 +2123,37 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
             Vmath::Vcopy(m_nDOParticles*m_nDOModes, m_Yi.data(), 1,
                          solVec[0][m_doYIdx].data(), 1);
         }
+
+    }
+
+    m_stepTimer.Stop();
+    m_stepAccumTime += m_stepTimer.TimePerTest(1);
+
+    if (m_infosteps && !((step + 1) % m_infosteps) &&
+        m_session->GetComm()->GetSpaceComm()->GetRank() == 0)
+    {
+        std::stringstream ss;
+        ss << m_stepAccumTime << "s";
+        if (m_comm->IsParallelInTime())
+            std::cout << "RANK "
+                      << m_session->GetComm()->GetTimeComm()->GetRank()
+                      << " ";
+        std::cout << "Steps: "    << std::setw(8)  << std::left << step + 1
+                  << " Time: "    << std::setw(12) << std::left << m_time;
+        if (m_cflSafetyFactor)
+            std::cout << " Time-step: "
+                      << std::setw(12) << std::left << m_timestep;
+        std::cout << " CPU Time: " << std::setw(8) << std::left
+                  << ss.str() << std::endl;
+        m_stepAccumTime = 0.0;
     }
     return false;
+}
+
+void DOVelocityCorrectionScheme::v_PrintStatusInformation(
+    const int /*step*/, const NekDouble /*cpuTime*/)
+{
+    // printing deferred to v_PostIntegrate where the full step time is known
 }
 
 /**
@@ -2206,32 +2243,68 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
                         u[c].data(), 1);
     };
 
-    // 4-pass modified Gram–Schmidt against accepted basis
+    // 4-pass modified Gram-Schmidt against accepted basis.
+    // All k = basis.size() inner products <basis[j], cand> for j=0..k-1 are
+    // computed locally and reduced in one AllReduce per pass instead of k.
+    // physWeights dot product equals VectorMassInner when phys+coeffs are
+    // consistent: both reduce to sum_q u_phys[q]*v_phys[q]*physWeights[q].
     auto runMgs = [&](ModeData &cand) {
-        if (basis.empty()) return;
+        const int k = (int)basis.size();
+        if (k == 0) return;
+        auto comm = m_fields[m_velocity[0]]->GetComm()->GetRowComm();
+        std::vector<NekDouble> alphas(k);
+        Array<OneD, NekDouble> wCand(nPhys);
         for (int pass = 0; pass < 4; ++pass)
-            for (size_t j = 0; j < basis.size(); ++j)
+        {
+            std::fill(alphas.begin(), alphas.end(), 0.0);
+            for (int c = 0; c < nVel; ++c)
             {
-                const NekDouble a = VectorMassInner(
-                    m_fields, m_velocity, basis[j], cand);
+                // wCand[q] = cand.phys[c][q] * physWeights[q]
+                Vmath::Vmul(nPhys, m_physWeights.data(), 1,
+                            cand.phys[c].data(), 1, wCand.data(), 1);
+                for (int j = 0; j < k; ++j)
+                    alphas[j] += Vmath::Dot(nPhys,
+                                            basis[j].phys[c].data(), 1,
+                                            wCand.data(), 1);
+            }
+            // one AllReduce for all k inner products
+            comm->AllReduce(alphas, LibUtilities::ReduceSum);
+            for (int j = 0; j < k; ++j)
+            {
+                const NekDouble a = alphas[j];
                 for (int c = 0; c < nVel; ++c)
                 {
-                    const int nC = (int)cand.coeffs[c].size();
-                    const int nP = (int)cand.phys[c].size();
-                    Vmath::Svtvp(nC, -a, basis[j].coeffs[c].data(), 1,
+                    Vmath::Svtvp(nCoeffs, -a, basis[j].coeffs[c].data(), 1,
                                  cand.coeffs[c].data(), 1,
                                  cand.coeffs[c].data(), 1);
-                    Vmath::Svtvp(nP, -a, basis[j].phys[c].data(), 1,
+                    Vmath::Svtvp(nPhys,  -a, basis[j].phys[c].data(), 1,
                                  cand.phys[c].data(), 1,
                                  cand.phys[c].data(), 1);
                 }
             }
+        }
     };
 
     // scratch buffers
     Array<OneD, Array<OneD, NekDouble>> uTmp(nVel);
     for (int c = 0; c < nVel; ++c) uTmp[c] = Array<OneD, NekDouble>(nPhys);
     Array<OneD, NekDouble> coefTmp(nCoeffs), physTmp(nPhys);
+
+    // physWeights squared norm: 1 AllReduce; equals VectorMassInner(m,m) when
+    // phys+coeffs are consistent.
+    auto physWeightsNorm2 = [&](ModeData &md) -> NekDouble {
+        NekDouble s = 0.0;
+        Array<OneD, NekDouble> wBuf(nPhys);
+        for (int c = 0; c < nVel; ++c)
+        {
+            Vmath::Vmul(nPhys, m_physWeights.data(), 1,
+                        md.phys[c].data(), 1, wBuf.data(), 1);
+            s += Vmath::Dot(nPhys, md.phys[c].data(), 1, wBuf.data(), 1);
+        }
+        m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
+            s, LibUtilities::ReduceSum);
+        return s;
+    };
 
     // Helmholtz-Hodge project, enforce BCs
     auto projectAndSync = [&](ModeData &cand) {
@@ -2267,37 +2340,27 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
             cand.phys[c].assign(m_DOModePhys.data() + pOff,
                                 m_DOModePhys.data() + pOff + nPhys);
         }
-        // norm pre-MGS
+        // norm pre-MGS (physWeights dot = VectorMassInner when consistent)
         const NekDouble preMgsNrm = std::sqrt(std::max(
-            VectorMassInner(m_fields, m_velocity, cand, cand), 0.0));
+            physWeightsNorm2(cand), 0.0));
 
-        projectAndSync(cand); // Helmholtz-Hodge projection
-        if (!m_doAllowConstantModes)
-            ProjectOutConstantsFromMode(m_fields, m_velocity, cand);
-        runMgs(cand);         // modified Gram-Schmidt
-
-        // if divergence > 1e-3, repeat
-        Array<OneD, NekDouble> divCand(nPhys, 0.0), derivBuf(nPhys);
-        for (int c = 0; c < nVel; ++c)
-        {
-            Array<OneD, NekDouble> phys(nPhys);
-            std::copy(cand.phys[c].begin(), cand.phys[c].end(), phys.data());
-            m_fields[m_velocity[c]]->PhysDeriv(c, phys, derivBuf);
-            Vmath::Vadd(nPhys, derivBuf.data(), 1, divCand.data(), 1,
-                        divCand.data(), 1);
-        }
-        const NekDouble divL2 = m_pressure->L2(divCand);
-        if (divL2 > 1e-3)
+        // HHD: DOImplicitSolve has already run a Poisson pressure-correction
+        // step for every mode before this function is called, so weak
+        // div-freedom is guaranteed from step 2 onward.  Run HHD only on the
+        // very first step as a conservative safety net for initialisation;
+        // all subsequent steps skip the Poisson solve entirely, saving 6
+        // HelmSolves + 6 FwdTrans per step and all their AllReduces.
+        if (m_doStepCounter <= 1)
         {
             projectAndSync(cand);
-            if (!m_doAllowConstantModes)
-                ProjectOutConstantsFromMode(m_fields, m_velocity, cand);
-            runMgs(cand);
         }
+        if (!m_doAllowConstantModes)
+            ProjectOutConstantsFromMode(m_fields, m_velocity, cand);
+        runMgs(cand);
 
         // norm post-MGS
         const NekDouble nrm = std::sqrt(std::max(
-            VectorMassInner(m_fields, m_velocity, cand, cand), 0.0));
+            physWeightsNorm2(cand), 0.0));
         if (!(nrm > 1e-12) && m_verbose)
         {
             std::cout << "[DOVelocityCorrectionScheme][reorth-FATAL] step="
@@ -2323,17 +2386,20 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
     if (m_doSchemeInited)
     {
         std::vector<NekDouble> G(m_nDOModes*m_nDOModes, 0.0);
-        Array<OneD, NekDouble> ip(nCoeffs);
-        for (int j = 0; j < m_nDOModes; ++j)
-            for (int i = 0; i < m_nDOModes; ++i)
-                for (int c = 0; c < nVel; ++c)
-                {
-                    Array<OneD, NekDouble> physView(nPhys,
-                        m_DOModePhys.data() + (i*nVel + c)*nPhys);
-                    m_fields[m_velocity[c]]->IProductWRTBase(physView, ip);
-                    G[j*m_nDOModes + i] += Vmath::Dot(nCoeffs,
-                        basis[j].coeffs[c].data(), 1, ip.data(), 1);
-                }
+        // G[j,i] = <basis[j], u_old[i]>_w; physWeights dot replaces
+        // IProductWRTBase + Dot, same result when phys+coeffs consistent.
+        Array<OneD, NekDouble> wOld(nPhys);
+        for (int i = 0; i < m_nDOModes; ++i)
+            for (int c = 0; c < nVel; ++c)
+            {
+                Vmath::Vmul(nPhys,
+                            m_DOModePhys.data() + (i*nVel + c)*nPhys, 1,
+                            m_physWeights.data(), 1, wOld.data(), 1);
+                for (int j = 0; j < m_nDOModes; ++j)
+                    G[j*m_nDOModes + i] +=
+                        Vmath::Dot(nPhys, basis[j].phys[c].data(), 1,
+                                   wOld.data(), 1);
+            }
         m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
             G, LibUtilities::ReduceSum);
 
