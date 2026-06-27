@@ -475,9 +475,15 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     m_Cij.assign(m_nDOModes*m_nDOModes, 0.0);
     m_Mkli.assign(m_nDOModes*m_nDOModes*m_nDOModes, 0.0);
 
-    // physWeights[k] = w_k * J_k at quadrature point k (2D only).
-    ASSERTL0(nDim == 2,
-        "DOVelocityCorrectionScheme: physWeights requires 2D.");
+    // physWeights[k] = w_k * J_k at each quadrature point k.
+    // Supports tensor-product elements: 2D quads, 3D hexahedra.
+    // Tet/prism/pyramid (non-tensor-product) are not supported.
+    // Flat index convention: direction 0 is innermost (stride 1),
+    // direction 1 next, direction 2 outermost -- matching Nektar's
+    // physical array layout and GeomFactors::GetJac() storage order.
+    ASSERTL0(nDim == 2 || nDim == 3,
+        "DOVelocityCorrectionScheme: physWeights supports "
+        "2D and 3D only.");
     m_physWeights = Array<OneD, NekDouble>(nPhys, 0.0);
     for (int e = 0; e < m_fields[0]->GetExpSize(); ++e)
     {
@@ -491,13 +497,33 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
         const bool deformed =
             (gf->GetGtype() == SpatialDomains::eDeformed);
         const int off = m_fields[0]->GetPhys_Offset(e);
-        for (int i = 0; i < nq0; ++i)
-            for (int j = 0; j < nq1; ++j)
-            {
-                const NekDouble J = deformed
-                    ? jac[i*nq1 + j] : jac[0];
-                m_physWeights[off + i*nq1 + j] = w0[i] * w1[j] * J;
-            }
+        if (nDim == 2)
+        {
+            // q increments in the same order as the phys array:
+            // dir0 innermost (stride 1), dir1 outer (stride nq0).
+            int q = 0;
+            for (int k1 = 0; k1 < nq1; ++k1)
+                for (int k0 = 0; k0 < nq0; ++k0, ++q)
+                {
+                    const NekDouble J = deformed ? jac[q] : jac[0];
+                    m_physWeights[off + q] = w0[k0] * w1[k1] * J;
+                }
+        }
+        else  // nDim == 3
+        {
+            const int nq2  = exp_e->GetBasis(2)->GetNumPoints();
+            const auto &w2 = exp_e->GetBasis(2)->GetW();
+            int q = 0;
+            for (int k2 = 0; k2 < nq2; ++k2)
+                for (int k1 = 0; k1 < nq1; ++k1)
+                    for (int k0 = 0; k0 < nq0; ++k0, ++q)
+                    {
+                        const NekDouble J = deformed
+                            ? jac[q] : jac[0];
+                        m_physWeights[off + q] =
+                            w0[k0] * w1[k1] * w2[k2] * J;
+                    }
+        }
     }
 
     // Time integrator state-vector layout:
