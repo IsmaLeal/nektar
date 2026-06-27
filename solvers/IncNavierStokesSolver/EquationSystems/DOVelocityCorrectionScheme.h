@@ -131,10 +131,11 @@ protected:
 
     // ========== Gradient caches (filled by PrecomputeGradients) ==========
     // m_modeGrad1[(i*nVel+c)*nVel+d : *nPhys] = \partial_d u_i[c]
-    // m_modeGrad2[(i*nVel+c)*nVel+d : *nPhys] = \partial_d^2 u_i[c]
     // m_meanGrad1[(c*nVel+d)*nPhys]           = \partial_d u_mean[c]
     // m_modeLinRhs[(i*nVel+c)*nPhys]          = cross_i[c] + nu*lap_i[c]
-    Array<OneD, NekDouble> m_modeGrad1, m_modeGrad2, m_meanGrad1, m_modeLinRhs;
+    // m_modeGrad2 (\partial_d^2 u_i[c]) is not cached; recomputed on
+    // the fly in ComputeNMode to avoid ~nModes*nVel^2*nPhys overhead.
+    Array<OneD, NekDouble> m_modeGrad1, m_meanGrad1, m_modeLinRhs;
     /// Quadrature weights times Jacobian at each physical point:
     /// m_physWeights[k] = w_k * J_k.  Pre-computed in v_InitObject.
     Array<OneD, NekDouble> m_physWeights;
@@ -164,7 +165,7 @@ protected:
         Array<OneD, Array<OneD, NekDouble>>             &outarray,
         const NekDouble                                 time) override;
 
-    /// precompute mode and mean physical gradients into m_modeGrad1/2, m_meanGrad1
+    /// precompute mode and mean physical gradients into m_modeGrad1, m_meanGrad1
     void PrecomputeGradients();
     /// compute moments C_ij, M_kli from m_Yi
     void ComputeYMoments();

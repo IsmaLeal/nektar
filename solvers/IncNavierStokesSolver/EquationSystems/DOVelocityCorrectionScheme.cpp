@@ -948,8 +948,10 @@ void DOVelocityCorrectionScheme::ComputeYMoments()
  *
  * Fills (nP = GetTotPoints()):
  *   m_modeGrad1[(i*nVel+c)*nVel+d : *nP] = \partial_d u_i[c]
- *   m_modeGrad2[(i*nVel+c)*nVel+d : *nP] = \partial_d^2 u_i[c]
  *   m_meanGrad1[(c*nVel+d)*nP]           = \partial_d u_mean[c]
+ * m_modeGrad2 (\partial_d^2 u_i[c]) is no longer cached; the Laplacian
+ * in ComputeNMode is recomputed on the fly from u_i to avoid the memory
+ * cost (~nModes * nVel^2 * nPhys doubles, ~720 MB for 3D at scale).
  */
 void DOVelocityCorrectionScheme::PrecomputeGradients()
 {
@@ -961,8 +963,6 @@ void DOVelocityCorrectionScheme::PrecomputeGradients()
 
     if ((int)m_modeGrad1.size() != n1)
         m_modeGrad1 = Array<OneD, NekDouble>(n1);
-    if ((int)m_modeGrad2.size() != n1)
-        m_modeGrad2 = Array<OneD, NekDouble>(n1);
     if ((int)m_meanGrad1.size() != nm)
         m_meanGrad1 = Array<OneD, NekDouble>(nm);
     if ((int)m_modeLinRhs.size() != nLin)
@@ -980,9 +980,6 @@ void DOVelocityCorrectionScheme::PrecomputeGradients()
                 Array<OneD, NekDouble> g1 =
                     m_modeGrad1 + ((i*nVel+c)*nVel+d)*nPhys;
                 m_fields[m_velocity[c]]->PhysDeriv(d, tmp, g1);
-                Array<OneD, NekDouble> g2 =
-                    m_modeGrad2 + ((i*nVel+c)*nVel+d)*nPhys;
-                m_fields[m_velocity[c]]->PhysDeriv(d, g1, g2);
             }
         }
 
@@ -1275,15 +1272,23 @@ void DOVelocityCorrectionScheme::ComputeNMode(int i,
         }
     }
 
-    // lap[c] = \sum_d \partial_d^2 u_i[c]  (sum over m_modeGrad2 cache)
-    for (int c = 0; c < nVel; ++c)
+    // lap[c] = \sum_d \partial_d^2 u_i[c]
+    // Recomputed from u_i on the fly; m_modeGrad2 is no longer cached.
     {
-        Vmath::Zero(nPhys, lap[c].data(), 1);
-        for (int d = 0; d < nVel; ++d)
+        Array<OneD, NekDouble> phys(nPhys), du(nPhys), d2u(nPhys);
+        for (int c = 0; c < nVel; ++c)
         {
-            const NekDouble *g2 = m_modeGrad2.data()
-                                  + ((i*nVel+c)*nVel+d)*nPhys;
-            Vmath::Vadd(nPhys, g2, 1, lap[c].data(), 1, lap[c].data(), 1);
+            Vmath::Zero(nPhys, lap[c].data(), 1);
+            const NekDouble *u_ic =
+                m_DOModePhys.data() + (i*nVel + c)*nPhys;
+            Vmath::Vcopy(nPhys, u_ic, 1, phys.data(), 1);
+            for (int d = 0; d < nVel; ++d)
+            {
+                m_fields[m_velocity[c]]->PhysDeriv(d, phys, du);
+                m_fields[m_velocity[c]]->PhysDeriv(d, du, d2u);
+                Vmath::Vadd(nPhys, d2u.data(), 1,
+                            lap[c].data(), 1, lap[c].data(), 1);
+            }
         }
     }
 
