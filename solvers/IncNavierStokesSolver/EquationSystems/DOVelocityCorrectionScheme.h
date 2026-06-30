@@ -31,7 +31,8 @@ public:
         const SpatialDomains::MeshGraphSharedPtr &pGraph)
     {
         SolverUtils::EquationSystemSharedPtr p =
-            MemoryManager<DOVelocityCorrectionScheme>::AllocateSharedPtr(pSession, pGraph);
+            MemoryManager<DOVelocityCorrectionScheme>::AllocateSharedPtr(
+                pSession, pGraph);
         p->InitObject();
         return p;
     }
@@ -47,7 +48,13 @@ public:
     const Array<OneD, NekDouble>
         &GetDOModeCoeffs() const { return m_DOModeCoeffs; }
     const Array<OneD, NekDouble> &GetYi() const { return m_Yi; }
+    const Array<OneD, NekDouble>
+        &GetDOModePCoeffs() const { return m_DOModePCoeffs; }
     const Array<OneD, int> &GetVelocityIdx()  const { return m_velocity; }
+    int GetNumForcingChannels() const { return m_nForcingChannels; }
+    const Array<OneD, NekDouble>
+        &GetForcingEta() const { return m_forcingEta; }
+    void SerializeForcingRng(std::ostream &os) const { os << m_forcingRng; }
 
 protected:
     // ========== DO parameters ==========
@@ -115,12 +122,12 @@ protected:
     int m_forcingSeed = 0;
     /// fixed channel templates
     Array<OneD, NekDouble> m_forcingBasisPhys;
-    ///  FE coefficients of channels
+    /// FE coefficients of channels
     Array<OneD, NekDouble> m_forcingBasisCoeffs;
     /// per-particle, per-channel OU amplitudes at current times
     Array<OneD, NekDouble> m_forcingEta;
     /// RNG state
-    std::mt19937           m_forcingRng;
+    std::mt19937 m_forcingRng;
     /// m_forcingG[k,i]: projection of forcing shape k onto mode i
     std::vector<NekDouble> m_forcingG;
     /// m_forcingA[k,i]: Monte-Carlo estimate of the expectation E[eta_k Y_i]
@@ -140,19 +147,24 @@ protected:
     /// Quadrature weights times Jacobian at each physical point:
     /// m_physWeights[k] = w_k * J_k.  Pre-computed in v_InitObject.
     Array<OneD, NekDouble> m_physWeights;
+    /// Pre-allocated scratch for parallel ComputeNModeBody in DOExplicitRhs.
+    /// Layout: (i*nVel+c)*nPhys for mode i, component c.
+    Array<OneD, NekDouble> m_NAllBuf;
+    /// Laplacian cache: m_modeLap[(i*nVel+c)*nPhys] = sum_d d^2/dx_d^2 u_i[c].
+    /// Filled by PrecomputeGradients so ComputeNModeBody needs no PhysDeriv.
+    Array<OneD, NekDouble> m_modeLap;
+    /// Per-mode scratch for ComputeNModeBody: (4*nVel+2)*nPhys doubles.
+    /// Eliminates all MemPool allocations inside the OMP parallel region.
+    Array<OneD, NekDouble> m_NBodyBuf;
+    /// Scratch for PrecomputeGradients: 2*nPhys doubles (tmp copy + d2u).
+    Array<OneD, NekDouble> m_gradScratch;
 
     /// verbose-only
-    int                   m_doStepCounter  = 0;
-    LibUtilities::Timer   m_stepTimer;
-    NekDouble             m_stepAccumTime  = 0.0;
+    int m_doStepCounter = 0;
+    LibUtilities::Timer m_stepTimer;
+    NekDouble m_stepAccumTime = 0.0;
 
-    // Set to true by v_EvaluateAdvection_SetPressureBCs after calling
-    // PrecomputeGradients with u^n.  DOExplicitRhs clears it and skips its
-    // own PrecomputeGradients call when the flag is set, because both see
-    // the same m_DOModePhys = u^n and the same mean field via m_meanAtTn.
-    bool m_gradientsStaged = false;
-
-    static std::string solverTypeLookupId;
+    static std::string solverTypeLookupId;  // Nektar++ class registration key
 
     DOVelocityCorrectionScheme(
         const LibUtilities::SessionReaderSharedPtr &pSession,
@@ -170,7 +182,7 @@ protected:
         Array<OneD, Array<OneD, NekDouble>>             &outarray,
         const NekDouble                                 time) override;
 
-    /// precompute mode and mean physical gradients into m_modeGrad1, m_meanGrad1
+    /// precompute mode and mean gradients into m_modeGrad1, m_meanGrad1
     void PrecomputeGradients();
     /// compute moments C_ij, M_kli from m_Yi
     void ComputeYMoments();
@@ -178,18 +190,21 @@ protected:
     /// compute the DO contribution to the mean explicit term (vector)
     void ComputeDOMeanCoupling(Array<OneD, Array<OneD, NekDouble>> &doCorr);
 
-    /// compute the cross terms -((u_bar . \nabla) u_i + (u_i . \nabla) u_bar)
-    /// for one mode (vector)
-    void ComputeModeCross(int i,
-                          Array<OneD, Array<OneD, NekDouble>> &cross);
-
-    /// compute the strong Laplacian of one mode (phys-space, vector)
-    void ComputeModeLaplacian(int i, Array<OneD, Array<OneD, NekDouble>> &lap);
-
     /// compute the explicit N (cross + triple-moment + DO projection)
     /// for one mode (phys-space, vector).
     void ComputeNMode(int i,
                       Array<OneD, Array<OneD, NekDouble>> &N);
+    /// Inner body of ComputeNMode: fills N (pre-projection) and localBetas
+    /// (pre-AllReduce inner products).  Thread-safe: uses only pre-allocated
+    /// scratch (bodyBuf) and reads shared arrays; no MemPool allocations.
+    /// domainArea / admissible come from GetConstantSubspaceCache (call once
+    /// before the OMP region).
+    void ComputeNModeBody(int i,
+                          Array<OneD, Array<OneD, NekDouble>> &N,
+                          NekDouble                           *bodyBuf,
+                          NekDouble                            domainArea,
+                          const std::vector<bool>             &admissible,
+                          std::vector<NekDouble>              &localBetas);
     
     /// compute the explicit RHS for the Y coefficients per particle (vector)
     void ComputeYRhs(Array<OneD, NekDouble> &rhs);
@@ -236,9 +251,11 @@ private:
     void InitialiseYi();
     void InitialiseForcingBasis();
     void AdvanceForcingState();
+    void RestoreFromDOArchive(const std::string &fldPath);
 };
 
-typedef std::shared_ptr<DOVelocityCorrectionScheme> DOVelocityCorrectionSchemeSharedPtr;
+typedef std::shared_ptr<DOVelocityCorrectionScheme>
+    DOVelocityCorrectionSchemeSharedPtr;
 
 } // namespace Nektar
 

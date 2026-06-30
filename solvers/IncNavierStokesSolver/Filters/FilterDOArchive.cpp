@@ -47,9 +47,9 @@ FilterDOArchive::FilterDOArchive(
     }
 
     // Format selector:
-    //   Text  (default) — legacy plain-text DO_ARCHIVE_V2; single-rank only
-    //   Hdf5             — single-file DO_ARCHIVE_H5_V1 schema; single-rank only
-    //   Field            — per-snapshot Nektar FieldIO .fld files (HDF5 under
+    //   Text  (default) -- legacy plain-text DO_ARCHIVE_V2; single-rank only
+    //   Hdf5             -- single-file DO_ARCHIVE_H5_V1; single-rank only
+    //   Field            -- per-snapshot Nektar FieldIO .fld files (HDF5 under
     //                      MPI); fully MPI-aware. Output is a directory of
     //                      files named <basename>.do_<step>.fld.
     auto fit = pParams.find("Format");
@@ -63,13 +63,14 @@ FilterDOArchive::FilterDOArchive(
         else if (fit->second == "Field" || fit->second == "FieldIO")
         {
             m_fmt = Fmt::Field;
-            // m_outName came from SetupOutput with ".do_archive" appended; strip
-            // it so the per-snapshot files become <basename>.do_<step>.fld.
+            // strip ".do_archive" so snapshots become
+            // <basename>.do_<step>.fld.
             const std::string suff(".do_archive");
             m_outBase = (m_outName.size() >= suff.size() &&
                          m_outName.compare(m_outName.size() - suff.size(),
                                            suff.size(), suff) == 0)
-                            ? m_outName.substr(0, m_outName.size() - suff.size())
+                            ? m_outName.substr(
+                                0, m_outName.size() - suff.size())
                             : m_outName;
         }
     }
@@ -82,8 +83,10 @@ void FilterDOArchive::v_Initialise(
     m_index   = 0;
     auto comm = m_session->GetComm();
 
-    auto dom = std::dynamic_pointer_cast<Nektar::DOVelocityCorrectionScheme>(m_equ.lock());
-    ASSERTL0(dom, "FilterDOArchive requires SolverType=DOVelocityCorrectionScheme.");
+    auto dom = std::dynamic_pointer_cast<
+        Nektar::DOVelocityCorrectionScheme>(m_equ.lock());
+    ASSERTL0(dom, "FilterDOArchive requires "
+             "SolverType=DOVelocityCorrectionScheme.");
 
     // MPI > 1: only Format=Field is MPI-aware. Suppress for Text/Hdf5 with
     // a clear warning so the simulation runs uninterrupted.
@@ -91,7 +94,8 @@ void FilterDOArchive::v_Initialise(
     {
         if (comm->GetRank() == 0)
         {
-            std::cerr << "[DOVelocityCorrectionScheme][FilterDOArchive] WARNING: MPI ranks="
+            std::cerr << "[DOVelocityCorrectionScheme][FilterDOArchive]"
+                         " WARNING: MPI ranks="
                       << comm->GetSize()
                       << "; DOArchive Format="
                       << (m_fmt == Fmt::Hdf5 ? "Hdf5" : "Text")
@@ -117,7 +121,8 @@ void FilterDOArchive::v_Initialise(
             namespace H5 = LibUtilities::H5;
             m_h5File           = H5::File::Create(m_outName, H5F_ACC_TRUNC);
             auto hdr           = m_h5File->CreateGroup("header");
-            hdr->SetAttribute("format_version", std::string("DO_ARCHIVE_H5_V1"));
+            hdr->SetAttribute("format_version",
+                              std::string("DO_ARCHIVE_H5_V1"));
             hdr->SetAttribute("n_modes",        dom->GetNumDOModes());
             hdr->SetAttribute("n_particles",    dom->GetNumDOParticles());
             hdr->SetAttribute("n_vel",          nVel);
@@ -178,8 +183,10 @@ void FilterDOArchive::WriteSnapshot(
     const Array<OneD, const MultiRegions::ExpListSharedPtr> &pFields,
     int step, NekDouble time)
 {
-    auto dom = std::dynamic_pointer_cast<Nektar::DOVelocityCorrectionScheme>(m_equ.lock());
-    ASSERTL0(dom, "FilterDOArchive requires SolverType=DOVelocityCorrectionScheme.");
+    auto dom = std::dynamic_pointer_cast<
+        Nektar::DOVelocityCorrectionScheme>(m_equ.lock());
+    ASSERTL0(dom, "FilterDOArchive requires "
+             "SolverType=DOVelocityCorrectionScheme.");
 
     const auto &velocity     = dom->GetVelocityIdx();
     const int   nVel         = velocity.size();
@@ -200,7 +207,7 @@ void FilterDOArchive::WriteSnapshot(
             pFields[0]->GetFieldDefinitions();
         std::vector<std::vector<NekDouble>> FieldData(FieldDef.size());
 
-        // Mean fields: u, v, [w], p — one per session variable.
+        // Mean fields: u, v, [w], p -- one per session variable.
         for (size_t j = 0; j < varNames.size(); ++j)
         {
             for (size_t i = 0; i < FieldDef.size(); ++i)
@@ -216,7 +223,7 @@ void FilterDOArchive::WriteSnapshot(
         // ExpList m_coeffs); AppendFieldData reads per-element blocks and the
         // collective FieldIO::Write below assembles them globally via element
         // IDs. Shared-DOF inconsistencies at the FP-noise level may exist but
-        // are bounded — empirically <2 in mode_u/v after one POD-init step.
+        // are bounded -- empirically <2 in mode_u/v after one POD-init step.
         for (int m = 0; m < nDOModes; ++m)
         {
             for (int c = 0; c < nVel; ++c)
@@ -246,11 +253,15 @@ void FilterDOArchive::WriteSnapshot(
         LibUtilities::FieldMetaDataMap meta;
         meta["DOVelocityCorrectionScheme_step"]        = std::to_string(step);
         meta["DOVelocityCorrectionScheme_time"]        = std::to_string(time);
-        meta["DOVelocityCorrectionScheme_n_modes"]     = std::to_string(nDOModes);
-        meta["DOVelocityCorrectionScheme_n_particles"] = std::to_string(nDOParticles);
-        meta["DOVelocityCorrectionScheme_n_vel"]       = std::to_string(nVel);
-        meta["DOVelocityCorrectionScheme_dt"]          = std::to_string(dom->GetTimeStep());
-        // Yi as hex (rank 0 has the same Yi as everyone — replicated).
+        meta["DOVelocityCorrectionScheme_n_modes"] =
+            std::to_string(nDOModes);
+        meta["DOVelocityCorrectionScheme_n_particles"] =
+            std::to_string(nDOParticles);
+        meta["DOVelocityCorrectionScheme_n_vel"] =
+            std::to_string(nVel);
+        meta["DOVelocityCorrectionScheme_dt"] =
+            std::to_string(dom->GetTimeStep());
+        // Yi as hex (rank 0 has the same Yi as everyone -- replicated).
         {
             const int nFlat = nDOParticles * nDOModes;
             std::ostringstream hex;
@@ -262,6 +273,39 @@ void FilterDOArchive::WriteSnapshot(
                 hex << std::setw(2) << static_cast<unsigned>(bytes[b]);
             }
             meta["DOVelocityCorrectionScheme_Yi_hex"] = hex.str();
+        }
+        // Pressure mode coefficients as hex for lossless restart.
+        {
+            const auto &pCoeffs = dom->GetDOModePCoeffs();
+            const int nFlatP = pCoeffs.size();
+            std::ostringstream hexP;
+            hexP << std::hex << std::setfill('0');
+            const unsigned char *bytesP =
+                reinterpret_cast<const unsigned char *>(pCoeffs.data());
+            for (int b = 0; b < nFlatP * (int)sizeof(NekDouble); ++b)
+            {
+                hexP << std::setw(2) << static_cast<unsigned>(bytesP[b]);
+            }
+            meta["DOVelocityCorrectionScheme_PCoeffs_hex"] = hexP.str();
+        }
+
+        // Stochastic forcing state (only when forcing is active).
+        const int nForcingChannels = dom->GetNumForcingChannels();
+        if (nForcingChannels > 0)
+        {
+            const auto &eta    = dom->GetForcingEta();
+            const int nFlatEta = nDOParticles * nForcingChannels;
+            std::ostringstream hexEta;
+            hexEta << std::hex << std::setfill('0');
+            const unsigned char *bytesEta =
+                reinterpret_cast<const unsigned char *>(eta.data());
+            for (int b = 0; b < nFlatEta * (int)sizeof(NekDouble); ++b)
+                hexEta << std::setw(2) << static_cast<unsigned>(bytesEta[b]);
+            meta["DOVelocityCorrectionScheme_ForcingEta_hex"] = hexEta.str();
+
+            std::ostringstream rngSs;
+            dom->SerializeForcingRng(rngSs);
+            meta["DOVelocityCorrectionScheme_ForcingRng"] = rngSs.str();
         }
 
         m_fld->Write(fn.str(), FieldDef, FieldData, meta);
@@ -280,7 +324,8 @@ void FilterDOArchive::WriteSnapshot(
         for (size_t i = 0; i < varNames.size(); ++i)
         {
             const auto &c = pFields[i]->GetCoeffs();
-            std::vector<double> v(c.data(), c.data() + pFields[i]->GetNcoeffs());
+            std::vector<double> v(c.data(),
+                                  c.data() + pFields[i]->GetNcoeffs());
             g->CreateWriteDataSet("mean_" + varNames[i], v);
         }
         const int nMP = nDOModes * nVel * nPhys;
@@ -300,6 +345,7 @@ void FilterDOArchive::WriteSnapshot(
     }
 
     // ---- Text snapshot (legacy DO_ARCHIVE_V2 format) ----
+    // OU state is not serialized in Text format (legacy limitation).
     m_outFile << "SNAPSHOT " << step << " " << time << "\n"
               << "RNG 0\n";
     m_outFile << "MEAN_FIELDS_BEGIN\n";
@@ -308,33 +354,51 @@ void FilterDOArchive::WriteSnapshot(
         const int   nc     = pFields[i]->GetNcoeffs();
         const auto &coeffs = pFields[i]->GetCoeffs();
         m_outFile << "FIELD " << varNames[i] << " " << nc << "\n";
-        for (int k = 0; k < nc; ++k) m_outFile << coeffs[k] << "\n";
+        for (int k = 0; k < nc; ++k)
+        {
+            m_outFile << coeffs[k] << "\n";
+        }
     }
     m_outFile << "MEAN_FIELDS_END\n";
 
     m_outFile << "MODE_FIELDS_BEGIN " << nDOModes << " " << nVel << " "
               << nPhys << "\n";
     const int nTot = nDOModes * nVel * nPhys;
-    for (int k = 0; k < nTot; ++k) m_outFile << doModePhys[k] << "\n";
+    for (int k = 0; k < nTot; ++k)
+    {
+        m_outFile << doModePhys[k] << "\n";
+    }
     m_outFile << "MODE_FIELDS_END\n";
 
     m_outFile << "MODE_COEFFS_BEGIN " << nDOModes << " " << nVel << "\n";
     for (int m = 0; m < nDOModes; ++m)
+    {
         for (int c = 0; c < nVel; ++c)
         {
             m_outFile << "MODE_COEFF " << m << " " << c << " " << nCo << "\n";
             const NekDouble *p = doModeCoeffs.data() + (m * nVel + c) * nCo;
-            for (int k = 0; k < nCo; ++k) m_outFile << p[k] << "\n";
+            for (int k = 0; k < nCo; ++k)
+            {
+                m_outFile << p[k] << "\n";
+            }
         }
+    }
     m_outFile << "MODE_COEFFS_END\n";
 
     m_outFile << "YI_BEGIN " << nDOParticles << " " << nDOModes << "\n";
     const int nFlat = nDOParticles * nDOModes;
-    for (int k = 0; k < nFlat; ++k) m_outFile << Yi[k] << "\n";
+    for (int k = 0; k < nFlat; ++k)
+    {
+        m_outFile << Yi[k] << "\n";
+    }
     m_outFile << "YI_END\n";
 
+    // OU amplitudes not serialized in Text format; write placeholder zeros.
     m_outFile << "OU_BEGIN " << nDOParticles << " " << nDOModes << "\n";
-    for (int k = 0; k < nFlat; ++k) m_outFile << "0\n";
+    for (int k = 0; k < nFlat; ++k)
+    {
+        m_outFile << "0\n";
+    }
     m_outFile << "OU_END\n";
 
     m_outFile << "END_SNAPSHOT\n";
