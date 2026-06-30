@@ -86,6 +86,10 @@ TripleArray &TimeIntegrationSchemeGEM::v_UpdateSolutionVector()
 void TimeIntegrationSchemeGEM::v_SetSolutionVector(const size_t Offset,
                                                    const DoubleArray &y)
 {
+    if (m_varSizes.size() == 0)
+    {
+        SetVarSizes(BuildVarSizes(const_cast<DoubleArray &>(y)));
+    }
     m_Y[Offset] = y;
 }
 
@@ -97,21 +101,21 @@ void TimeIntegrationSchemeGEM::v_InitializeScheme(
     const NekDouble time, const TimeIntegrationSchemeOperators &op)
 
 {
-    if (m_initialized)
+    m_op   = op;
+    m_time = time;
+
+    if (CanReuseStorage(y_0))
     {
-        m_time = time;
         for (size_t i = 0; i < m_nvars; ++i)
         {
             // Store the initial values as the first previous state.
-            Vmath::Vcopy(m_npoints, y_0[i], 1, m_Y[0][i], 1);
+            Vmath::Vcopy(GetVarSize(i), y_0[i], 1, m_Y[0][i], 1);
         }
     }
     else
     {
-        m_op      = op;
-        m_time    = time;
-        m_nvars   = y_0.size();
-        m_npoints = y_0[0].size();
+        m_nvars = y_0.size();
+        SetVarSizes(BuildVarSizes(y_0));
 
         size_t nodes = m_order;
         if (m_variant == "ExplicitMidpoint" || m_variant == "ImplicitMidpoint")
@@ -130,12 +134,13 @@ void TimeIntegrationSchemeGEM::v_InitializeScheme(
 
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                m_Y[m][i] = SingleArray(m_npoints, 0.0);
+                const size_t npoints = GetVarSize(i);
+                m_Y[m][i]            = SingleArray(npoints, 0.0);
 
                 // Store the initial values as the first previous state.
                 if (m == 0)
                 {
-                    Vmath::Vcopy(m_npoints, y_0[i], 1, m_Y[m][i], 1);
+                    Vmath::Vcopy(npoints, y_0[i], 1, m_Y[m][i], 1);
                 }
             }
         }
@@ -153,8 +158,8 @@ void TimeIntegrationSchemeGEM::v_InitializeScheme(
 
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                m_T[m][i]  = SingleArray(m_npoints, 0.0);
-                m_T0[m][i] = SingleArray(m_npoints, 0.0);
+                m_T[m][i]  = SingleArray(GetVarSize(i), 0.0);
+                m_T0[m][i] = SingleArray(GetVarSize(i), 0.0);
             }
         }
 
@@ -165,8 +170,8 @@ void TimeIntegrationSchemeGEM::v_InitializeScheme(
 
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            m_F[i]  = SingleArray(m_npoints, 0.0);
-            m_F0[i] = SingleArray(m_npoints, 0.0);
+            m_F[i]  = SingleArray(GetVarSize(i), 0.0);
+            m_F0[i] = SingleArray(GetVarSize(i), 0.0);
         }
 
         m_initialized = true;
@@ -212,7 +217,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
                     {
                         for (size_t i = 0; i < m_nvars; ++i)
                         {
-                            Vmath::Svtvp(m_npoints, delta_t / m, m_F0[i], 1,
+                            Vmath::Svtvp(GetVarSize(i), delta_t / m, m_F0[i], 1,
                                          m_Y[k - 1][i], 1, m_Y[k][i], 1);
                         }
                     }
@@ -223,7 +228,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
                                       m_time + (k - 1) * (delta_t / m));
                         for (size_t i = 0; i < m_nvars; ++i)
                         {
-                            Vmath::Svtvp(m_npoints, delta_t / m, m_F[i], 1,
+                            Vmath::Svtvp(GetVarSize(i), delta_t / m, m_F[i], 1,
                                          m_Y[k - 1][i], 1, m_Y[k][i], 1);
                         }
                     }
@@ -246,7 +251,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
             // Save solution to m_T0
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                Vmath::Vcopy(m_npoints, m_Y[m][i], 1, m_T0[m - 1][i], 1);
+                Vmath::Vcopy(GetVarSize(i), m_Y[m][i], 1, m_T0[m - 1][i], 1);
             }
         }
 
@@ -255,7 +260,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
         {
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                Vmath::Vcopy(m_npoints, m_Y[1][i], 1, m_Y[0][i], 1);
+                Vmath::Vcopy(GetVarSize(i), m_Y[1][i], 1, m_Y[0][i], 1);
             }
             m_time += delta_t;
             return m_Y[0];
@@ -269,9 +274,10 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
             {
                 for (size_t i = 0; i < m_nvars; ++i)
                 {
-                    Vmath::Vsub(m_npoints, m_T0[k][i], 1, m_T0[k - 1][i], 1,
+                    const size_t npoints = GetVarSize(i);
+                    Vmath::Vsub(npoints, m_T0[k][i], 1, m_T0[k - 1][i], 1,
                                 m_T[k][i], 1);
-                    Vmath::Svtvp(m_npoints,
+                    Vmath::Svtvp(npoints,
                                  (k - m + 1.0) / ((k + 1.0) - (k - m + 1.0)),
                                  m_T[k][i], 1, m_T0[k][i], 1, m_T[k][i], 1);
                 }
@@ -282,7 +288,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
             {
                 for (size_t i = 0; i < m_nvars; ++i)
                 {
-                    Vmath::Vcopy(m_npoints, m_T[k][i], 1, m_T0[k][i], 1);
+                    Vmath::Vcopy(GetVarSize(i), m_T[k][i], 1, m_T0[k][i], 1);
                 }
             }
         }
@@ -290,7 +296,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
         // Copy final solution
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            Vmath::Vcopy(m_npoints, m_T[m_order - 1][i], 1, m_Y[0][i], 1);
+            Vmath::Vcopy(GetVarSize(i), m_T[m_order - 1][i], 1, m_Y[0][i], 1);
         }
     }
     // Midpoint approach
@@ -310,7 +316,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
                                          0.25 * delta_t / m);
                     for (size_t i = 0; i < m_nvars; ++i)
                     {
-                        Vmath::Svtsvtp(m_npoints, 2.0, m_Y[2 * k - 1][i], 1,
+                        Vmath::Svtsvtp(GetVarSize(i), 2.0, m_Y[2 * k - 1][i], 1,
                                        -1.0, m_Y[2 * k - 2][i], 1,
                                        m_Y[2 * k][i], 1);
                     }
@@ -319,9 +325,10 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
                                          0.25 * delta_t / m);
                     for (size_t i = 0; i < m_nvars; ++i)
                     {
-                        Vmath::Vsub(m_npoints, m_F[i], 1, m_Y[2 * k][i], 1,
+                        const size_t npoints = GetVarSize(i);
+                        Vmath::Vsub(npoints, m_F[i], 1, m_Y[2 * k][i], 1,
                                     m_F[i], 1);
-                        Vmath::Svtvp(m_npoints, 2.0, m_F[i], 1, m_Y[2 * k][i],
+                        Vmath::Svtvp(npoints, 2.0, m_F[i], 1, m_Y[2 * k][i],
                                      1, m_Y[2 * k][i], 1);
                     }
                 }
@@ -333,7 +340,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
                 // Use precomputed rhs for initial Euler stage
                 for (size_t i = 0; i < m_nvars; ++i)
                 {
-                    Vmath::Svtvp(m_npoints, delta_t / (2 * m), m_F0[i], 1,
+                    Vmath::Svtvp(GetVarSize(i), delta_t / (2 * m), m_F0[i], 1,
                                  m_Y[0][i], 1, m_Y[1][i], 1);
                 }
                 m_op.DoProjection(m_Y[1], m_Y[1], m_time + delta_t / (2 * m));
@@ -345,7 +352,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
                                   m_time + (k - 1) * (delta_t / (2 * m)));
                     for (size_t i = 0; i < m_nvars; ++i)
                     {
-                        Vmath::Svtvp(m_npoints, delta_t / m, m_F[i], 1,
+                        Vmath::Svtvp(GetVarSize(i), delta_t / m, m_F[i], 1,
                                      m_Y[k - 2][i], 1, m_Y[k][i], 1);
                     }
                     m_op.DoProjection(m_Y[k], m_Y[k],
@@ -356,7 +363,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
             // Save solution to m_T0
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                Vmath::Vcopy(m_npoints, m_Y[2 * m][i], 1, m_T0[m - 1][i], 1);
+                Vmath::Vcopy(GetVarSize(i), m_Y[2 * m][i], 1, m_T0[m - 1][i], 1);
             }
         }
 
@@ -365,7 +372,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
         {
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                Vmath::Vcopy(m_npoints, m_Y[2][i], 1, m_Y[0][i], 1);
+                Vmath::Vcopy(GetVarSize(i), m_Y[2][i], 1, m_Y[0][i], 1);
             }
             m_time += delta_t;
             return m_Y[0];
@@ -379,10 +386,11 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
             {
                 for (size_t i = 0; i < m_nvars; ++i)
                 {
-                    Vmath::Vsub(m_npoints, m_T0[k][i], 1, m_T0[k - 1][i], 1,
+                    const size_t npoints = GetVarSize(i);
+                    Vmath::Vsub(npoints, m_T0[k][i], 1, m_T0[k - 1][i], 1,
                                 m_T[k][i], 1);
                     Vmath::Svtvp(
-                        m_npoints,
+                        npoints,
                         std::pow(k - m + 1.0, 2) /
                             (std::pow(k + 1.0, 2) - std::pow(k - m + 1.0, 2)),
                         m_T[k][i], 1, m_T0[k][i], 1, m_T[k][i], 1);
@@ -394,7 +402,7 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
             {
                 for (size_t i = 0; i < m_nvars; ++i)
                 {
-                    Vmath::Vcopy(m_npoints, m_T[k][i], 1, m_T0[k][i], 1);
+                    Vmath::Vcopy(GetVarSize(i), m_T[k][i], 1, m_T0[k][i], 1);
                 }
             }
         }
@@ -402,7 +410,8 @@ ConstDoubleArray &TimeIntegrationSchemeGEM::v_TimeIntegrate(
         // Copy final solution
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            Vmath::Vcopy(m_npoints, m_T[m_order / 2 - 1][i], 1, m_Y[0][i], 1);
+            Vmath::Vcopy(GetVarSize(i), m_T[m_order / 2 - 1][i], 1, m_Y[0][i],
+                         1);
         }
     }
 

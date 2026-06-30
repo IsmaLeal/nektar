@@ -38,3 +38,22 @@ library/MatrixFreeOps/SwitchLimits.h
 *.dat
 cases/**/output*/
 solvers/**/Tests/output*/
+
+# Per-run outputs and large intermediates inside cases/ — only sources
+# (XMLs, meshes, scripts) should be committed; results are regenerable.
+cases/**/runs/
+cases/**/snapshots/
+cases/**/samples/
+cases/**/samples_generic/
+cases/**/*.do_archive
+cases/**/*.bak*
+cases/**/*.log
+cases/**/*.pvd
+cases/**/*.csv
+cases/**/geometry_xml/
+cases/**/casefile_xml/
+cases/**/mesh/geometry_*.chk
+cases/**/mesh/casefile_*.chk
+
+# Top-level run outputs
+runs/

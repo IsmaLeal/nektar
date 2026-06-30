@@ -39,6 +39,27 @@
 namespace Nektar::LibUtilities
 {
 
+namespace
+{
+
+Array<OneD, size_t> BuildVarSizesFromState(ConstDoubleArray &y)
+{
+    Array<OneD, size_t> varSizes(y.size(), size_t(0));
+    for (size_t i = 0; i < y.size(); ++i)
+    {
+        varSizes[i] = y[i].size();
+    }
+
+    return varSizes;
+}
+
+Array<OneD, size_t> GetUniformVarSizes(const size_t nvar, const size_t npoints)
+{
+    return Array<OneD, size_t>(nvar, npoints);
+}
+
+} // namespace
+
 TimeIntegrationSolutionGLM::TimeIntegrationSolutionGLM(
     const TimeIntegrationAlgorithmGLM *schemeAlgorithm, const DoubleArray &y,
     const NekDouble time, const NekDouble timestep)
@@ -49,14 +70,16 @@ TimeIntegrationSolutionGLM::TimeIntegrationSolutionGLM(
 {
     size_t nsteps         = m_schemeAlgorithm->m_numsteps;
     size_t nvar           = y.size();
-    size_t npoints        = y[0].size();
     size_t nMultiStepVals = m_schemeAlgorithm->GetNmultiStepValues();
+    SetVarSizes(BuildVarSizesFromState(y));
+
     for (size_t i = 0; i < nsteps; i++)
     {
         m_solVector[i] = Array<OneD, Array<OneD, NekDouble>>(nvar);
         for (size_t j = 0; j < nvar; j++)
         {
-            m_solVector[i][j] = Array<OneD, NekDouble>(npoints, 0.0);
+            const size_t npoints = GetVarSize(j);
+            m_solVector[i][j]    = Array<OneD, NekDouble>(npoints, 0.0);
             if (i == 0)
             {
                 Vmath::Vcopy(npoints, y[j].data(), 1, m_solVector[i][j].data(),
@@ -80,17 +103,27 @@ TimeIntegrationSolutionGLM::TimeIntegrationSolutionGLM(
 TimeIntegrationSolutionGLM::TimeIntegrationSolutionGLM(
     const TimeIntegrationAlgorithmGLM *schemeAlgorithm, const size_t nvar,
     const size_t npoints)
+    : TimeIntegrationSolutionGLM(schemeAlgorithm, GetUniformVarSizes(nvar,
+                                                                     npoints))
+{
+}
+
+TimeIntegrationSolutionGLM::TimeIntegrationSolutionGLM(
+    const TimeIntegrationAlgorithmGLM *schemeAlgorithm,
+    const Array<OneD, size_t> &varSizes)
     : m_schemeAlgorithm(schemeAlgorithm),
       m_solVector(schemeAlgorithm->m_numsteps),
       m_t(schemeAlgorithm->m_numsteps),
       m_setflag(m_schemeAlgorithm->m_numsteps, true)
 {
+    SetVarSizes(varSizes);
+
     for (size_t i = 0; i < m_schemeAlgorithm->m_numsteps; i++)
     {
-        m_solVector[i] = Array<OneD, Array<OneD, NekDouble>>(nvar);
-        for (size_t j = 0; j < nvar; j++)
+        m_solVector[i] = Array<OneD, Array<OneD, NekDouble>>(m_varSizes.size());
+        for (size_t j = 0; j < m_varSizes.size(); j++)
         {
-            m_solVector[i][j] = Array<OneD, NekDouble>(npoints);
+            m_solVector[i][j] = Array<OneD, NekDouble>(GetVarSize(j));
         }
     }
 }
@@ -102,6 +135,7 @@ TimeIntegrationSolutionGLM::TimeIntegrationSolutionGLM(
       m_t(m_schemeAlgorithm->m_numsteps),
       m_setflag(m_schemeAlgorithm->m_numsteps, false)
 {
+    SetVarSizes(Array<OneD, size_t>());
 }
 
 } // namespace Nektar::LibUtilities

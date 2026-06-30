@@ -106,19 +106,11 @@ void IMEXTimeIntegrationSchemeSDC::v_InitializeScheme(
     const NekDouble deltaT, ConstDoubleArray &y_0, const NekDouble time,
     const TimeIntegrationSchemeOperators &op)
 {
-    if (m_initialized)
-    {
-        m_time = time;
-        for (size_t i = 0; i < m_nvars; ++i)
-        {
-            // Store the initial values as the first previous state.
-            Vmath::Vcopy(m_npoints, y_0[i], 1, m_Y[0][i], 1);
-        }
-    }
-    else
-    {
-        TimeIntegrationSchemeSDC::v_InitializeScheme(deltaT, y_0, time, op);
+    const bool reuseStorage = CanReuseStorage(y_0);
+    TimeIntegrationSchemeSDC::v_InitializeScheme(deltaT, y_0, time, op);
 
+    if (!reuseStorage)
+    {
         m_Fexp = TripleArray(m_nQuadPts);
         m_Fimp = TripleArray(m_nQuadPts);
         for (size_t m = 0; m < m_nQuadPts; ++m)
@@ -127,15 +119,15 @@ void IMEXTimeIntegrationSchemeSDC::v_InitializeScheme(
             m_Fimp[m] = DoubleArray(m_nvars);
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                m_Fexp[m][i] = SingleArray(m_npoints, 0.0);
-                m_Fimp[m][i] = SingleArray(m_npoints, 0.0);
+                m_Fexp[m][i] = SingleArray(GetVarSize(i), 0.0);
+                m_Fimp[m][i] = SingleArray(GetVarSize(i), 0.0);
             }
         }
 
         m_tmp = DoubleArray(m_nvars);
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            m_tmp[i] = SingleArray(m_npoints, 0.0);
+            m_tmp[i] = SingleArray(GetVarSize(i), 0.0);
         }
     }
 }
@@ -177,7 +169,7 @@ void IMEXTimeIntegrationSchemeSDC::v_ComputeInitialGuess(
             // Add explicit contribution to rhs
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                Vmath::Svtvp(m_npoints, dtn, m_Fexp[n - 1][i], 1, m_Y[n - 1][i],
+                Vmath::Svtvp(GetVarSize(i), dtn, m_Fexp[n - 1][i], 1, m_Y[n - 1][i],
                              1, m_tmp[i], 1);
             }
 
@@ -188,9 +180,9 @@ void IMEXTimeIntegrationSchemeSDC::v_ComputeInitialGuess(
             // Compute implicit flux from updated solution
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                Vmath::Vsub(m_npoints, m_Y[n][i], 1, m_tmp[i], 1, m_Fimp[n][i],
+                Vmath::Vsub(GetVarSize(i), m_Y[n][i], 1, m_tmp[i], 1, m_Fimp[n][i],
                             1);
-                Vmath::Smul(m_npoints, 1.0 / dtn, m_Fimp[n][i], 1, m_Fimp[n][i],
+                Vmath::Smul(GetVarSize(i), 1.0 / dtn, m_Fimp[n][i], 1, m_Fimp[n][i],
                             1);
             }
         }
@@ -223,13 +215,13 @@ void IMEXTimeIntegrationSchemeSDC::v_SDCIterationLoop(const NekDouble &delta_t)
         for (size_t i = 0; i < m_nvars; ++i)
         {
             // Add SFint contribution to rhs
-            Vmath::Vadd(m_npoints, m_Y[n - 1][i], 1, m_SFint[n][i], 1, m_tmp[i],
+            Vmath::Vadd(GetVarSize(i), m_Y[n - 1][i], 1, m_SFint[n][i], 1, m_tmp[i],
                         1);
 
             // Add explicit contribution to rhs
             if (n > 1)
             {
-                Vmath::Svtvp(m_npoints, m_theta * dtn, m_Fexp[n - 1][i], 1,
+                Vmath::Svtvp(GetVarSize(i), m_theta * dtn, m_Fexp[n - 1][i], 1,
                              m_tmp[i], 1, m_tmp[i], 1);
             }
 
@@ -237,12 +229,12 @@ void IMEXTimeIntegrationSchemeSDC::v_SDCIterationLoop(const NekDouble &delta_t)
             if (n < m_nQuadPts - 1)
             {
                 NekDouble dtnp = delta_t * (m_tau[n + 1] - m_tau[n]);
-                Vmath::Svtvp(m_npoints, -m_theta * dtnp, m_Fexp[n][i], 1,
+                Vmath::Svtvp(GetVarSize(i), -m_theta * dtnp, m_Fexp[n][i], 1,
                              m_SFint[n + 1][i], 1, m_SFint[n + 1][i], 1);
             }
 
             // Add implicit contribution to rhs
-            Vmath::Svtvp(m_npoints, -m_theta * dtn, m_Fimp[n][i], 1, m_tmp[i],
+            Vmath::Svtvp(GetVarSize(i), -m_theta * dtn, m_Fimp[n][i], 1, m_tmp[i],
                          1, m_tmp[i], 1);
         }
 
@@ -253,8 +245,8 @@ void IMEXTimeIntegrationSchemeSDC::v_SDCIterationLoop(const NekDouble &delta_t)
         // Compute implicit residual from updated solution
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            Vmath::Vsub(m_npoints, m_Y[n][i], 1, m_tmp[i], 1, m_Fimp[n][i], 1);
-            Vmath::Smul(m_npoints, 1.0 / (m_theta * dtn), m_Fimp[n][i], 1,
+            Vmath::Vsub(GetVarSize(i), m_Y[n][i], 1, m_tmp[i], 1, m_Fimp[n][i], 1);
+            Vmath::Smul(GetVarSize(i), 1.0 / (m_theta * dtn), m_Fimp[n][i], 1,
                         m_Fimp[n][i], 1);
         }
 
@@ -273,7 +265,7 @@ void IMEXTimeIntegrationSchemeSDC::ComputeTotalResidual(const size_t n)
 {
     for (size_t i = 0; i < m_nvars; ++i)
     {
-        Vmath::Vadd(m_npoints, m_Fimp[n][i], 1, m_Fexp[n][i], 1, m_F[n][i], 1);
+        Vmath::Vadd(GetVarSize(i), m_Fimp[n][i], 1, m_Fexp[n][i], 1, m_F[n][i], 1);
     }
 }
 

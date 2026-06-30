@@ -1,0 +1,26 @@
+Merge "domain.msh";
+General.GraphicsFontSize = 14;
+General.SmallAxes = 1;
+General.Trackball = 0;
+Mesh.SurfaceFaces = 1;
+Mesh.SurfaceEdges = 1;
+Mesh.VolumeFaces = 0;
+Mesh.VolumeEdges = 0;
+Mesh.ColorCarousel = 0;
+Mesh.LineWidth = 1.0;
+General.Color.Background = White;
+General.Color.Foreground = Black;
+General.Color.Text = Black;
+General.Color.AmbientLight = White;
+General.Color.DiffuseLight = White;
+Mesh.Color.Lines = Black;
+Mesh.Color.Quadrangles = LightGrey;
+General.Axes = 2;
+View "vortex_center" {
+    SP(3.141592653589793, 3.141592653589793, 0){1};
+};
+View[0].PointSize = 14;
+View[0].PointType = 6;
+View[0].ColorTable = {Red};
+Print "/tmp/m03_mesh.png";
+Exit;

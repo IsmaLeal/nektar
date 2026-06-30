@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<NEKTAR>
+	<!-- C[100,101] is my physical surface -->
+	<EXPANSIONS>
+        <E COMPOSITE="C[100,101]" NUMMODES="3" FIELDS="u,v,p" TYPE=        /> 
+    </EXPANSIONS>
+
+    <CONDITIONS>
+
+    	<SOLVERINFO>
+            <I PROPERTY="SolverType"                    VALUE=         />
+            <I PROPERTY="EQTYPE"                        VALUE=         />
+            <I PROPERTY="EvolutionOperator"             VALUE=         />
+            <I PROPERTY="Projection"                    VALUE="Galerkin"                />
+            <I PROPERTY="GlobalSysSoln"                 VALUE="DirectStaticCond"        />
+            <I PROPERTY="TimeIntegrationMethod"         VALUE="IMEXOrder2"              />
+            <I PROPERTY="Driver"                        VALUE="Standard"                />
+            
+            <I PROPERTY="SpectralVanishingViscosity"    VALUE="DGKernel"                />
+
+	        <I PROPERTY="SPECTRALHPDEALIASING"          VALUE="True"                    />
+	
+       </SOLVERINFO>
+
+       <PARAMETERS>
+	    
+            <P> TimeStep       =                      </P>
+             <!--  Final time -->
+            <P> FinTime        =                      </P>
+            <P> NumSteps       = FinTime/TimeStep     </P>
+            <P> IO_InfoSteps   = 5                    </P>
+            <P> IO_FiltersInfoSteps   = 100           </P>
+            <P> IO_CFLSteps    = 10	                  </P>
+            <!-- Reynolds number -->
+            <P> Re             =                      </P>
+            <P> Kinvis         = 1/Re                 </P>
+            <!-- SVV parameters -->
+	    <P> SVVCutoffRatio = 0.5                      </P> 
+        </PARAMETERS>
+
+
+        <VARIABLES>
+            <V ID="0">u</V>
+            <V ID=   >v</V>
+            <V ID="2">p</V>
+        </VARIABLES>
+
+        <BOUNDARYREGIONS>
+            <B ID="0"> C[5-8] </B>  	<!-- wall     -->
+            <B ID="1"> C[1]   </B>  	<!-- inflow   -->
+            <B ID="2"> C[3]   </B>  	<!-- outflow  -->
+            <B ID="3"> C[   ] </B>  	<!-- farfield -->      
+        </BOUNDARYREGIONS>
+
+        <BOUNDARYCONDITIONS>
+            <REGION REF="0"> <!-- Wall  -->
+                <D VAR="u" VALUE="0" />
+                <D VAR="v" VALUE="0" />
+               <N VAR="p" VALUE="0" USERDEFINEDTYPE="H" />
+            </REGION>
+            <REGION REF="1"> <!-- inflow   -->
+                <D VAR="u" VALUE=    />
+                <D VAR="v" VALUE=    />        
+           	<N VAR="p" VALUE="0" USERDEFINEDTYPE="H" />
+            </REGION>
+            <REGION REF="2"> <!-- outflow  -->
+                <N VAR="u" VALUE="0.0" />
+                <N VAR="v" VALUE="0.0" />
+               	<D VAR="p" VALUE="0.0" />
+            </REGION>
+            <REGION REF="3"> <!-- farfield --> 
+                <D VAR="u" VALUE="1" />
+                <D VAR="v" VALUE="0" />        
+              	<N VAR="p" VALUE="0" USERDEFINEDTYPE="H" />
+            </REGION> 
+                                  
+        </BOUNDARYCONDITIONS>
+
+        <FUNCTION NAME="InitialConditions">
+                 <E VAR="u" VALUE=    />
+                 <E VAR="v" VALUE=    />
+                 <E VAR="p" VALUE=    />
+	</FUNCTION>
+    </CONDITIONS>
+
+    <FILTERS>
+	<FILTER TYPE="AeroForces">
+			<PARAM NAME="OutputFile">             </PARAM>
+            <PARAM NAME="OutputFrequency">        </PARAM>
+            <PARAM NAME="Boundary">               </PARAM>
+        </FILTER>
+	<FILTER TYPE="HistoryPoints">
+		<PARAM NAME="OutputFile">HistoryFields</PARAM>
+		<PARAM NAME="OutputFrequency">5</PARAM>
+		<PARAM NAME="Points"> 5 1 0 </PARAM>
+	</FILTER>
+        <FILTER TYPE="ModalEnergy">
+		<PARAM NAME="OutputFile">EnergyFile</PARAM>	
+		<PARAM NAME="OutputFrequency">10</PARAM>
+	</FILTER>
+    </FILTERS>
+
+  </NEKTER>
+

@@ -225,8 +225,10 @@ public:
     NekDouble m_lastDeltaT{0}; /// Last delta T
     NekDouble m_lastNVars{0};  /// Last number of vars
 
-    size_t m_nvars;   /// The number of variables in integration scheme.
-    size_t m_npoints; /// The size of inner data which is stored for reuse.
+    size_t m_nvars{0};   /// The number of variables in integration scheme.
+    size_t m_npoints{0}; /// Uniform inner size stored for the fast path.
+    Array<OneD, size_t> m_varSizes; /// Per-variable inner sizes.
+    bool m_uniformVarSizes{false};  /// Whether all variables have one size.
 
     // Friend classes
     LUE friend std::ostream &operator<<(std::ostream &os,
@@ -373,9 +375,71 @@ private:
         return y[0].size();
     }
 
-    inline size_t GetSecondDim(ConstTripleArray &y) const
+    inline Array<OneD, size_t> GetVarSizes(ConstDoubleArray &y) const
     {
-        return y[0][0].size();
+        Array<OneD, size_t> varSizes(y.size(), size_t(0));
+        for (size_t i = 0; i < y.size(); ++i)
+        {
+            varSizes[i] = y[i].size();
+        }
+
+        return varSizes;
+    }
+
+    inline Array<OneD, size_t> GetVarSizes(ConstTripleArray &y) const
+    {
+        return GetVarSizes(y[0]);
+    }
+
+    inline bool IsUniform(const Array<OneD, size_t> &varSizes) const
+    {
+        if (varSizes.size() == 0)
+        {
+            return true;
+        }
+
+        const size_t npoints = varSizes[0];
+        for (size_t i = 1; i < varSizes.size(); ++i)
+        {
+            if (varSizes[i] != npoints)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    inline void SetVarSizes(const Array<OneD, size_t> &varSizes)
+    {
+        m_varSizes        = varSizes;
+        m_uniformVarSizes = IsUniform(varSizes);
+        m_npoints         = (m_uniformVarSizes && varSizes.size() > 0)
+                                ? varSizes[0]
+                                : 0;
+    }
+
+    inline size_t GetVarSize(const size_t var) const
+    {
+        return m_uniformVarSizes ? m_npoints : m_varSizes[var];
+    }
+
+    inline bool HasMatchingVarSizes(const Array<OneD, size_t> &varSizes) const
+    {
+        if (m_varSizes.size() != varSizes.size())
+        {
+            return false;
+        }
+
+        for (size_t i = 0; i < varSizes.size(); ++i)
+        {
+            if (m_varSizes[i] != varSizes[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
 }; // end class TimeIntegrationAlgorithmGLM

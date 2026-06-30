@@ -86,6 +86,11 @@ TripleArray &TimeIntegrationSchemeSDC::v_UpdateSolutionVector()
 void TimeIntegrationSchemeSDC::v_SetSolutionVector(const size_t Offset,
                                                    const DoubleArray &y)
 {
+    if (m_varSizes.size() == 0)
+    {
+        SetVarSizes(BuildVarSizes(const_cast<DoubleArray &>(y)));
+    }
+    CheckVarSizes(y);
     m_Y[Offset] = y;
 }
 
@@ -96,21 +101,21 @@ void TimeIntegrationSchemeSDC::v_InitializeScheme(
     [[maybe_unused]] const NekDouble deltaT, ConstDoubleArray &y_0,
     const NekDouble time, const TimeIntegrationSchemeOperators &op)
 {
-    if (m_initialized)
+    m_op   = op;
+    m_time = time;
+
+    if (CanReuseStorage(y_0))
     {
-        m_time = time;
         for (size_t i = 0; i < m_nvars; ++i)
         {
             // Store the initial values as the first previous state.
-            Vmath::Vcopy(m_npoints, y_0[i], 1, m_Y[0][i], 1);
+            Vmath::Vcopy(GetVarSize(i), y_0[i], 1, m_Y[0][i], 1);
         }
     }
     else
     {
-        m_op      = op;
-        m_time    = time;
-        m_nvars   = y_0.size();
-        m_npoints = y_0[0].size();
+        m_nvars = y_0.size();
+        SetVarSizes(BuildVarSizes(y_0));
 
         // Compute integration matrix.
         size_t colOffset = m_first_quadrature ? 0 : 1;
@@ -140,14 +145,15 @@ void TimeIntegrationSchemeSDC::v_InitializeScheme(
             m_QFint[m] = DoubleArray(m_nvars);
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                m_Y[m][i]     = SingleArray(m_npoints, 0.0);
-                m_F[m][i]     = SingleArray(m_npoints, 0.0);
-                m_SFint[m][i] = SingleArray(m_npoints, 0.0);
-                m_QFint[m][i] = SingleArray(m_npoints, 0.0);
+                const size_t npoints = GetVarSize(i);
+                m_Y[m][i]            = SingleArray(npoints, 0.0);
+                m_F[m][i]            = SingleArray(npoints, 0.0);
+                m_SFint[m][i]        = SingleArray(npoints, 0.0);
+                m_QFint[m][i]        = SingleArray(npoints, 0.0);
                 // Store the initial values as the first previous state.
                 if (m == 0)
                 {
-                    Vmath::Vcopy(m_npoints, y_0[i], 1, m_Y[m][i], 1);
+                    Vmath::Vcopy(npoints, y_0[i], 1, m_Y[m][i], 1);
                 }
             }
         }
@@ -157,7 +163,7 @@ void TimeIntegrationSchemeSDC::v_InitializeScheme(
             m_Y_f = DoubleArray(m_nvars);
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                m_Y_f[i] = SingleArray(m_npoints, 0.0);
+                m_Y_f[i] = SingleArray(GetVarSize(i), 0.0);
             }
         }
 
@@ -169,7 +175,7 @@ void TimeIntegrationSchemeSDC::v_InitializeScheme(
                 m_FAScorr[m] = DoubleArray(m_nvars);
                 for (size_t i = 0; i < m_nvars; ++i)
                 {
-                    m_FAScorr[m][i] = SingleArray(m_npoints, 0.0);
+                    m_FAScorr[m][i] = SingleArray(GetVarSize(i), 0.0);
                 }
             }
         }
@@ -219,7 +225,7 @@ void TimeIntegrationSchemeSDC::UpdateFirstQuadrature(void)
     DoubleArray Y_f = m_last_quadrature ? m_Y[m_nQuadPts - 1] : m_Y_f;
     for (size_t i = 0; i < m_nvars; ++i)
     {
-        Vmath::Vcopy(m_npoints, Y_f[i], 1, m_Y[0][i], 1);
+        Vmath::Vcopy(GetVarSize(i), Y_f[i], 1, m_Y[0][i], 1);
     }
 }
 
@@ -232,10 +238,10 @@ void TimeIntegrationSchemeSDC::UpdateLastQuadrature(void)
     {
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            Vmath::Zero(m_npoints, m_Y_f[i], 1);
+            Vmath::Zero(GetVarSize(i), m_Y_f[i], 1);
             for (size_t n = 0; n < m_nQuadPts; ++n)
             {
-                Vmath::Svtvp(m_npoints, m_interp[n], m_Y[n][i], 1, m_Y_f[i], 1,
+                Vmath::Svtvp(GetVarSize(i), m_interp[n], m_Y[n][i], 1, m_Y_f[i], 1,
                              m_Y_f[i], 1);
             }
         }
@@ -254,9 +260,9 @@ void TimeIntegrationSchemeSDC::AddFASCorrectionToSFint(void)
         {
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                Vmath::Vadd(m_npoints, m_SFint[n][i], 1, m_FAScorr[n][i], 1,
+                Vmath::Vadd(GetVarSize(i), m_SFint[n][i], 1, m_FAScorr[n][i], 1,
                             m_SFint[n][i], 1);
-                Vmath::Vsub(m_npoints, m_SFint[n][i], 1, m_FAScorr[n - 1][i], 1,
+                Vmath::Vsub(GetVarSize(i), m_SFint[n][i], 1, m_FAScorr[n - 1][i], 1,
                             m_SFint[n][i], 1);
             }
         }
@@ -274,7 +280,7 @@ void TimeIntegrationSchemeSDC::UpdateIntegratedResidualSFint(
     {
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            Vmath::Zero(m_npoints, m_SFint[n][i], 1);
+            Vmath::Zero(GetVarSize(i), m_SFint[n][i], 1);
         }
     }
 
@@ -287,7 +293,7 @@ void TimeIntegrationSchemeSDC::UpdateIntegratedResidualSFint(
             for (size_t i = 0; i < m_nvars; ++i)
             {
                 Vmath::Svtvp(
-                    m_npoints,
+                    GetVarSize(i),
                     delta_t * (m_QMat[n * (m_nQuadPts - offset) + p] -
                                m_QMat[(n - 1) * (m_nQuadPts - offset) + p]),
                     m_F[p + offset][i], 1, m_SFint[n][i], 1, m_SFint[n][i], 1);
@@ -304,7 +310,7 @@ void TimeIntegrationSchemeSDC::UpdateIntegratedResidualQFint(
     {
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            Vmath::Zero(m_npoints, m_QFint[n][i], 1);
+            Vmath::Zero(GetVarSize(i), m_QFint[n][i], 1);
         }
     }
 
@@ -317,7 +323,8 @@ void TimeIntegrationSchemeSDC::UpdateIntegratedResidualQFint(
             for (size_t i = 0; i < m_nvars; ++i)
             {
                 Vmath::Svtvp(
-                    m_npoints, delta_t * m_QMat[n * (m_nQuadPts - offset) + p],
+                    GetVarSize(i),
+                    delta_t * m_QMat[n * (m_nQuadPts - offset) + p],
                     m_F[p + offset][i], 1, m_QFint[n][i], 1, m_QFint[n][i], 1);
             }
         }

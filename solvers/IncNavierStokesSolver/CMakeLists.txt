@@ -13,6 +13,9 @@ IF( NEKTAR_SOLVER_INCNAVIERSTOKES )
         ./EquationSystems/CoupledLinearNS.cpp
         ./EquationSystems/CoupledLocalToGlobalC0ContMap.cpp
         ./EquationSystems/IncNavierStokes.cpp
+        ./EquationSystems/DOVelocityCorrectionScheme.cpp
+        ./EquationSystems/DOReducedCGEigenBasis.cpp
+        ./EquationSystems/DOPODInitialiser.cpp
         ./EquationSystems/VelocityCorrectionScheme.cpp
         ./EquationSystems/VelocityCorrectionSchemeImplicit.cpp
         ./EquationSystems/VelocityCorrectionSchemeWeakPressure.cpp
@@ -34,6 +37,7 @@ IF( NEKTAR_SOLVER_INCNAVIERSTOKES )
         ./Filters/FilterReynoldsStresses.cpp
         ./Filters/FilterMovingBody.cpp
         ./Filters/FilterAeroForcesSPM.cpp
+        ./Filters/FilterDOArchive.cpp
         ./Forcing/ForcingIncNSSyntheticEddy.cpp
         ./Forcing/ForcingMovingBody.cpp
         ./Forcing/ForcingStabilityCoupledLNS.cpp
@@ -71,6 +75,7 @@ IF( NEKTAR_SOLVER_INCNAVIERSTOKES )
             Filters/FilterAeroForcesSPM.h
             Filters/FilterMovingBody.h
             Filters/FilterReynoldsStresses.h
+            Filters/FilterDOArchive.h
             Forcing/ForcingIncNSSyntheticEddy.h
             Forcing/ForcingMovingBody.h
             Forcing/ForcingStabilityCoupledLNS.h
@@ -84,6 +89,15 @@ IF( NEKTAR_SOLVER_INCNAVIERSTOKES )
         # LIBRARY_SOURCES objects will be reused
         ADD_SOLVER_LIBRARY(IncNavierStokesSolver HEADERS
                           ${IncNavierStokesSolverHeaders} DEPENDS SolverUtils)
+    ENDIF()
+
+    # OpenMP for DOVelocityCorrectionScheme triple-moment parallel loops
+    FIND_PACKAGE(OpenMP)
+    IF(OpenMP_CXX_FOUND)
+        TARGET_COMPILE_OPTIONS(IncNavierStokesSolver-obj PRIVATE
+                               ${OpenMP_CXX_FLAGS})
+        TARGET_LINK_LIBRARIES(IncNavierStokesSolver PRIVATE
+                              ${OpenMP_CXX_LIBRARIES})
     ENDIF()
 
     SUBDIRS(Utilities)

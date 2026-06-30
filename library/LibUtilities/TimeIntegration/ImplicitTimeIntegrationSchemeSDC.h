@@ -93,23 +93,15 @@ void ImplicitTimeIntegrationSchemeSDC::v_InitializeScheme(
     const NekDouble deltaT, ConstDoubleArray &y_0, const NekDouble time,
     const TimeIntegrationSchemeOperators &op)
 {
-    if (m_initialized)
-    {
-        m_time = time;
-        for (size_t i = 0; i < m_nvars; ++i)
-        {
-            // Store the initial values as the first previous state.
-            Vmath::Vcopy(m_npoints, y_0[i], 1, m_Y[0][i], 1);
-        }
-    }
-    else
-    {
-        TimeIntegrationSchemeSDC::v_InitializeScheme(deltaT, y_0, time, op);
+    const bool reuseStorage = CanReuseStorage(y_0);
+    TimeIntegrationSchemeSDC::v_InitializeScheme(deltaT, y_0, time, op);
 
+    if (!reuseStorage)
+    {
         m_tmp = DoubleArray(m_nvars);
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            m_tmp[i] = SingleArray(m_npoints, 0.0);
+            m_tmp[i] = SingleArray(GetVarSize(i), 0.0);
         }
     }
 }
@@ -154,9 +146,9 @@ void ImplicitTimeIntegrationSchemeSDC::v_ComputeInitialGuess(
             // Compute residual from updated solution
             for (size_t i = 0; i < m_nvars; ++i)
             {
-                Vmath::Vsub(m_npoints, m_Y[n][i], 1, m_Y[n - 1][i], 1,
+                Vmath::Vsub(GetVarSize(i), m_Y[n][i], 1, m_Y[n - 1][i], 1,
                             m_F[n][i], 1);
-                Vmath::Smul(m_npoints, 1.0 / dtn, m_F[n][i], 1, m_F[n][i], 1);
+                Vmath::Smul(GetVarSize(i), 1.0 / dtn, m_F[n][i], 1, m_F[n][i], 1);
             }
         }
     }
@@ -183,11 +175,11 @@ void ImplicitTimeIntegrationSchemeSDC::v_SDCIterationLoop(
         for (size_t i = 0; i < m_nvars; ++i)
         {
             // Add SFint contribution
-            Vmath::Vadd(m_npoints, m_Y[n - 1][i], 1, m_SFint[n][i], 1, m_tmp[i],
+            Vmath::Vadd(GetVarSize(i), m_Y[n - 1][i], 1, m_SFint[n][i], 1, m_tmp[i],
                         1);
 
             // Add implicit contribution
-            Vmath::Svtvp(m_npoints, -m_theta * dtn, m_F[n][i], 1, m_tmp[i], 1,
+            Vmath::Svtvp(GetVarSize(i), -m_theta * dtn, m_F[n][i], 1, m_tmp[i], 1,
                          m_tmp[i], 1);
         }
 
@@ -198,8 +190,8 @@ void ImplicitTimeIntegrationSchemeSDC::v_SDCIterationLoop(
         // Compute residual from updated solution
         for (size_t i = 0; i < m_nvars; ++i)
         {
-            Vmath::Vsub(m_npoints, m_Y[n][i], 1, m_tmp[i], 1, m_F[n][i], 1);
-            Vmath::Smul(m_npoints, 1.0 / (m_theta * dtn), m_F[n][i], 1,
+            Vmath::Vsub(GetVarSize(i), m_Y[n][i], 1, m_tmp[i], 1, m_F[n][i], 1);
+            Vmath::Smul(GetVarSize(i), 1.0 / (m_theta * dtn), m_F[n][i], 1,
                         m_F[n][i], 1);
         }
     }
