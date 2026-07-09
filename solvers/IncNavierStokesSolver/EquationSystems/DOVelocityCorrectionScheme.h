@@ -77,7 +77,6 @@ public:
         &GetDOModePhys() const { return m_DOModePhys; }
     const Array<OneD, NekDouble>
         &GetDOModeCoeffs() const { return m_DOModeCoeffs; }
-    const Array<OneD, NekDouble> &GetYi() const { return m_Yi; }
     /// gathers the sharded Yi into out (global Np * S, every rank); used by
     /// FilterDOArchive so the archive format stays rank-count independent
     void GatherYi(Array<OneD, NekDouble> &out) const;

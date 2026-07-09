@@ -2296,40 +2296,17 @@ void DOVelocityCorrectionScheme::DiagonaliseCov(
     rotateModeBlocks(m_DOModePCoeffs, nPC);
     rotateYi(m_Yi);
 
-    // apply V^T to all the time integrator's history, too -- unless the
-    // caller asked to defer it (v_PostIntegrate: ReOrthonormalise composes
-    // V with its own basis change into a single history pass)
+    // The integrator history is NOT rotated here: the only caller with a
+    // live history (v_PostIntegrate) defers the rotation, which
+    // ReOrthonormalise composes with its own basis change into a single
+    // history pass. All other call sites run before InitializeScheme.
     if (m_doSchemeInited)
     {
-        if (deferredV)
-        {
-            *deferredV = V;
-        }
-        else
-        {
-            auto &solVec = m_doScheme->UpdateSolutionVector();
-            const int nSteps = static_cast<int>(solVec.size());
-            Array<OneD, NekDouble> buf(m_nDOModes * nPhys);
-            for (int step = 0; step < nSteps; ++step)
-            {
-                for (int c = 0; c < nVel; ++c)
-                {
-                    for (int i = 0; i < m_nDOModes; ++i)
-                    {
-                        Vmath::Vcopy(nPhys,
-                                     solVec[step][i*nVel + c].data(), 1,
-                                     buf.data() + i*nPhys, 1);
-                    }
-                    rotateModeBlocks(buf, nPhys);
-                    for (int i = 0; i < m_nDOModes; ++i)
-                    {
-                        Vmath::Vcopy(nPhys, buf.data() + i*nPhys, 1,
-                                     solVec[step][i*nVel + c].data(), 1);
-                    }
-                }
-                rotateYi(solVec[step][m_doYIdx]);
-            }
-        }
+        ASSERTL0(deferredV,
+                 "DiagonaliseCov with a live integrator history requires "
+                 "deferredV; ReOrthonormalise applies the composed history "
+                 "rotation.");
+        *deferredV = V;
     }
     ComputeYMoments();
 }
