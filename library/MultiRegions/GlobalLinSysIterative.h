@@ -117,6 +117,21 @@ protected:
                       Array<OneD, NekDouble> &pOutput, const int pNumDir,
                       const bool isAconjugate);
 
+    /// Batched preconditioned conjugate gradient: nCol right-hand sides of
+    /// this object's (symmetric) operator advance in lockstep so that each
+    /// iteration performs a single AllReduce of 3*nCol values instead of
+    /// one reduction per column per iteration. Per-column recurrence,
+    /// convergence test and zero initial guess mirror
+    /// NekLinSysIterCG::DoConjugateGradient. Only reachable through
+    /// GlobalLinSysIterativeStaticCond::SolveBatched; no existing solver
+    /// path calls it.
+    void DoBatchedConjugateGradient(
+        const int nGlobal, const int nDir, const int nCol,
+        const Array<OneD, const NekDouble> &pInput,
+        Array<OneD, NekDouble> &pOutput,
+        const Array<OneD, const NekDouble> &rhsMagnitudes,
+        const NekDouble tolerance, const int maxIterations);
+
     bool isNonSymmetricLinSys(StdRegions::MatrixType mt);
 
     virtual void v_UniqueMap() = 0;

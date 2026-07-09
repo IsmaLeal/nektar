@@ -655,4 +655,188 @@ void GlobalLinSysIterativeStaticCond::v_SolveLinearSystem(
     }
 }
 
+/**
+ * Batched analogue of GlobalLinSysStaticCond::v_Solve for nCol right-hand
+ * sides of this system. The per-column local algebra (static condensation,
+ * rhs-magnitude normalisation, low-energy transforms, Dirichlet/initial-
+ * guess forcing subtraction and back-substitution) reproduces the scalar
+ * path step by step -- including the column-ordered smoothed update of
+ * m_rhs_magnitude, so each column converges against the same threshold a
+ * sequence of scalar Solve calls would use. The boundary systems are then
+ * solved together by DoBatchedConjugateGradient, whose iterations perform
+ * a single AllReduce for all columns.
+ *
+ * Returns false, leaving the outputs untouched, when the configuration is
+ * outside the supported envelope; the caller falls back to scalar Solve.
+ */
+bool GlobalLinSysIterativeStaticCond::SolveBatched(
+    const int nCol, const Array<OneD, const Array<OneD, NekDouble>> &pLocInputs,
+    Array<OneD, Array<OneD, NekDouble>> &pLocOutputs,
+    const AssemblyMapSharedPtr &pLocToGloMap)
+{
+    if (nCol < 1 || !pLocToGloMap->AtLastLevel() ||
+        pLocToGloMap->GetStaticCondLevel() != 0 || m_useProjection ||
+        m_linSysIterSolver != "ConjugateGradient")
+    {
+        return false;
+    }
+
+    const int nGlobDofs    = pLocToGloMap->GetNumGlobalCoeffs();
+    const int nLocBndDofs  = pLocToGloMap->GetNumLocalBndCoeffs();
+    const int nGlobBndDofs = pLocToGloMap->GetNumGlobalBndCoeffs();
+    const int nDirBndDofs  = pLocToGloMap->GetNumGlobalDirBndCoeffs();
+    const int nIntDofs     = nGlobDofs - nGlobBndDofs;
+
+    if ((nGlobDofs - nDirBndDofs) == 0 || (nGlobBndDofs - nDirBndDofs) == 0)
+    {
+        return false; // trivial or interior-only: scalar path handles it
+    }
+
+    // v_PreSolve builds the preconditioner on the first scalar solve
+    if (!m_precon)
+    {
+        m_precon = CreatePrecon(pLocToGloMap);
+        m_precon->BuildPreconditioner();
+    }
+
+    Array<OneD, NekDouble> F_bnd_All(nCol * nLocBndDofs);
+    Array<OneD, NekDouble> V_bnd_All(nCol * nLocBndDofs);
+    Array<OneD, NekDouble> F_int_All(nIntDofs > 0 ? nCol * nIntDofs : 1);
+    Array<OneD, NekDouble> F_bnd1(nLocBndDofs);
+    Array<OneD, NekDouble> rhsMag(nCol);
+    Array<OneD, NekDouble> tmp;
+
+    for (int s = 0; s < nCol; ++s)
+    {
+        Array<OneD, NekDouble> F_bnd = F_bnd_All + s * nLocBndDofs;
+        Array<OneD, NekDouble> V_bnd = V_bnd_All + s * nLocBndDofs;
+
+        pLocToGloMap->LocalToLocalBnd(pLocOutputs[s], V_bnd);
+        pLocToGloMap->LocalToLocalBnd(pLocInputs[s], F_bnd);
+
+        // rhs normalisation from the raw boundary forcing, replicating
+        // v_PreSolve at static-condensation level zero in column order
+        if (m_isAbsoluteTolerance)
+        {
+            m_rhs_magnitude = 1.0;
+        }
+        else
+        {
+            Array<OneD, NekDouble> F_gloBnd(nGlobBndDofs);
+            pLocToGloMap->AssembleBnd(F_bnd, F_gloBnd);
+            NekDouble vExchange(0.0);
+            if (m_map.size() > 0)
+            {
+                vExchange =
+                    Vmath::Dot2(nGlobBndDofs, F_gloBnd, F_gloBnd, m_map);
+            }
+            m_expList.lock()->GetComm()->GetRowComm()->AllReduce(
+                vExchange, Nektar::LibUtilities::ReduceSum);
+            NekDouble new_rhs_mag = (vExchange > 1e-6) ? vExchange : 1.0;
+            if (m_rhs_magnitude == NekConstants::kNekUnsetDouble)
+            {
+                m_rhs_magnitude = new_rhs_mag;
+            }
+            else
+            {
+                m_rhs_magnitude = (m_rhs_mag_sm * (m_rhs_magnitude) +
+                                   (1.0 - m_rhs_mag_sm) * new_rhs_mag);
+            }
+        }
+        rhsMag[s] = m_rhs_magnitude;
+
+        // construct boundary forcing
+        if (nIntDofs)
+        {
+            Array<OneD, NekDouble> F_int = F_int_All + s * nIntDofs;
+            m_locToGloMap.lock()->LocalToLocalInt(pLocInputs[s], F_int);
+            NekVector<NekDouble> F_Int(nIntDofs, F_int, eWrapper);
+            NekVector<NekDouble> F_Bnd(nLocBndDofs, F_bnd1, eWrapper);
+            DNekScalBlkMat &BinvD = *m_BinvD;
+            F_Bnd                 = BinvD * F_Int;
+            Vmath::Vsub(nLocBndDofs, F_bnd, 1, F_bnd1, 1, F_bnd, 1);
+        }
+
+        // transform to the preconditioner basis and subtract the
+        // Dirichlet/initial-guess forcing (solve for the difference)
+        v_BasisFwdTransform(F_bnd);
+        v_CoeffsFwdTransform(V_bnd, V_bnd);
+        NekVector<NekDouble> V_Bnd(nLocBndDofs, V_bnd, eWrapper);
+        NekVector<NekDouble> F_Bnd(nLocBndDofs, F_bnd1, eWrapper);
+        DNekScalBlkMat &SchurCompl = *m_schurCompl;
+        F_Bnd                      = SchurCompl * V_Bnd;
+        Vmath::Vsub(nLocBndDofs, F_bnd, 1, F_bnd1, 1, F_bnd, 1);
+    }
+
+    // assemble every column into the global boundary space
+    Array<OneD, NekDouble> gloIn(nCol * nGlobBndDofs);
+    Array<OneD, NekDouble> gloOut(nCol * nGlobBndDofs, 0.0);
+    for (int s = 0; s < nCol; ++s)
+    {
+        Array<OneD, NekDouble> gloIn_s = gloIn + s * nGlobBndDofs;
+        pLocToGloMap->AssembleBnd(F_bnd_All + s * nLocBndDofs, gloIn_s);
+    }
+
+    // solver settings resolved exactly as in v_SolveLinearSystem
+    LibUtilities::SessionReaderSharedPtr pSession =
+        m_expList.lock()->GetSession();
+    std::string variable = pLocToGloMap->GetVariable();
+    NekDouble tol;
+    int maxIter;
+    if (pSession->DefinesGlobalSysSolnInfo(variable,
+                                           "IterativeSolverTolerance"))
+    {
+        tol = boost::lexical_cast<double>(
+            pSession->GetGlobalSysSolnInfo(variable, "IterativeSolverTolerance")
+                .c_str());
+    }
+    else
+    {
+        pSession->LoadParameter("IterativeSolverTolerance", tol,
+                                NekConstants::kNekIterativeTol);
+    }
+    if (pSession->DefinesGlobalSysSolnInfo(variable, "NekLinSysMaxIterations"))
+    {
+        maxIter = std::stoi(
+            pSession->GetGlobalSysSolnInfo(variable, "NekLinSysMaxIterations")
+                .c_str());
+    }
+    else
+    {
+        pSession->LoadParameter("NekLinSysMaxIterations", maxIter, 5000);
+    }
+
+    if (m_map.size() == 0)
+    {
+        v_UniqueMap();
+    }
+    DoBatchedConjugateGradient(nGlobBndDofs, nDirBndDofs, nCol, gloIn, gloOut,
+                               rhsMag, tol, maxIter);
+
+    // per-column back-substitution, as in the scalar path
+    for (int s = 0; s < nCol; ++s)
+    {
+        Array<OneD, NekDouble> V_bnd = V_bnd_All + s * nLocBndDofs;
+        pLocToGloMap->GlobalToLocalBnd(gloOut + s * nGlobBndDofs, F_bnd1);
+        Vmath::Vadd(nLocBndDofs, V_bnd, 1, F_bnd1, 1, V_bnd, 1);
+        v_CoeffsBwdTransform(V_bnd);
+        m_locToGloMap.lock()->LocalBndToLocal(V_bnd, pLocOutputs[s]);
+
+        if (nIntDofs)
+        {
+            Array<OneD, NekDouble> F_int = F_int_All + s * nIntDofs;
+            Array<OneD, NekDouble> V_int(nIntDofs);
+            NekVector<NekDouble> F_Int(nIntDofs, F_int, eWrapper);
+            NekVector<NekDouble> V_Bnd(nLocBndDofs, V_bnd, eWrapper);
+            NekVector<NekDouble> V_Int(nIntDofs, V_int, eWrapper);
+            DNekScalBlkMat &invD = *m_invD;
+            DNekScalBlkMat &C    = *m_C;
+            F_Int                = F_Int - C * V_Bnd;
+            Multiply(V_Int, invD, F_Int);
+            m_locToGloMap.lock()->LocalIntToLocal(V_int, pLocOutputs[s]);
+        }
+    }
+    return true;
+}
+
 } // namespace Nektar::MultiRegions

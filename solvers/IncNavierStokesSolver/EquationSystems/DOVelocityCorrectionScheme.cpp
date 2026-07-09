@@ -385,6 +385,8 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
 
     m_session->MatchSolverInfo("DOAllowConstantModes", "True",
                                m_doAllowConstantModes, false);
+    m_session->MatchSolverInfo("DOBatchedSolve", "True",
+                               m_doBatchedSolve, false);
     m_session->LoadParameter("DOYiSeed", m_doYiSeed, m_doYiSeed);
     m_session->LoadParameter("DOYiSigma", m_doYiSigma, m_doYiSigma);
 
@@ -1919,48 +1921,57 @@ void DOVelocityCorrectionScheme::DOImplicitSolve(
     auto bcState = CaptureVelocityBCState(m_fields, m_velocity);
     HomogenizeVelocityBCsForModes(m_fields, m_velocity);
 
-    // arrays reused across modes
-    Array<OneD, Array<OneD, NekDouble>> uhat(nVel), uNewPhys(nVel),
-                                        uNewCoeffs(nVel);
-    Array<OneD, NekDouble> pMode(nPC, 0.0);
-    for (int c = 0; c < nVel; ++c)
-    {
-        uhat[c]       = Array<OneD, NekDouble>(nPhys, 0.0);
-        uNewPhys[c]   = Array<OneD, NekDouble>(nPhys, 0.0);
-        uNewCoeffs[c] = Array<OneD, NekDouble>(nCoeffs, 0.0);
-    }
-
     // Mode solves grouped by operator: all pressure Poissons first, then
     // all viscous Helmholtz solves. Consecutive solves of the same matrix
     // keep any SuccessiveRHS projection basis coherent and reuse the warm
     // preconditioner; each solve's inputs are unchanged, so direct-solver
     // results are identical to the interleaved ordering. The previous
     // solutions (m_DOModePCoeffs / m_DOModeCoeffs, still holding the last
-    // stage's values) warm-start the iterative solvers.
-    for (int i = 0; i < m_nDOModes; ++i)
+    // stage's values) warm-start the iterative solvers. With
+    // DOBatchedSolve, the same solves run through HelmSolveBatched so
+    // every CG iteration serves all modes with a single AllReduce.
+    if (m_doBatchedSolve && m_nConvectiveFields == (int)nVel)
     {
-        for (int c = 0; c < nVel; ++c)
-            Vmath::Vcopy(nPhys, in[i*nVel + c].data(), 1,
-                        uhat[c].data(), 1);
-        ModePressureSolve(uhat, lambda, m_DOModePCoeffs + i*nPC, pMode);
-        Vmath::Vcopy(nPC, pMode.data(), 1,      // cache p_i for next Y-RHS
-                     m_DOModePCoeffs.data() + i*nPC, 1);
+        DOImplicitSolveBatched(in, out, lambda);
     }
-    for (int i = 0; i < m_nDOModes; ++i)
+    else
     {
-        for (int c = 0; c < nVel; ++c)
-            Vmath::Vcopy(nPhys, in[i*nVel + c].data(), 1,
-                        uhat[c].data(), 1);
-        ModeViscousSolve(uhat, m_DOModePCoeffs + i*nPC, lambda,
-                         m_DOModeCoeffs + i*nVel*nCoeffs,
-                         uNewPhys, uNewCoeffs);
+        // arrays reused across modes
+        Array<OneD, Array<OneD, NekDouble>> uhat(nVel), uNewPhys(nVel),
+                                            uNewCoeffs(nVel);
+        Array<OneD, NekDouble> pMode(nPC, 0.0);
         for (int c = 0; c < nVel; ++c)
         {
-            Vmath::Vcopy(nPhys, uNewPhys[c].data(), 1,
-                         out[i*nVel + c].data(), 1);
-            Vmath::Vcopy(nCoeffs, uNewCoeffs[c].data(), 1,
-                         m_DOModeCoeffs.data()
-                         + (i*nVel + c)*nCoeffs, 1);
+            uhat[c]       = Array<OneD, NekDouble>(nPhys, 0.0);
+            uNewPhys[c]   = Array<OneD, NekDouble>(nPhys, 0.0);
+            uNewCoeffs[c] = Array<OneD, NekDouble>(nCoeffs, 0.0);
+        }
+
+        for (int i = 0; i < m_nDOModes; ++i)
+        {
+            for (int c = 0; c < nVel; ++c)
+                Vmath::Vcopy(nPhys, in[i*nVel + c].data(), 1,
+                            uhat[c].data(), 1);
+            ModePressureSolve(uhat, lambda, m_DOModePCoeffs + i*nPC, pMode);
+            Vmath::Vcopy(nPC, pMode.data(), 1,  // cache p_i for next Y-RHS
+                         m_DOModePCoeffs.data() + i*nPC, 1);
+        }
+        for (int i = 0; i < m_nDOModes; ++i)
+        {
+            for (int c = 0; c < nVel; ++c)
+                Vmath::Vcopy(nPhys, in[i*nVel + c].data(), 1,
+                            uhat[c].data(), 1);
+            ModeViscousSolve(uhat, m_DOModePCoeffs + i*nPC, lambda,
+                             m_DOModeCoeffs + i*nVel*nCoeffs,
+                             uNewPhys, uNewCoeffs);
+            for (int c = 0; c < nVel; ++c)
+            {
+                Vmath::Vcopy(nPhys, uNewPhys[c].data(), 1,
+                             out[i*nVel + c].data(), 1);
+                Vmath::Vcopy(nCoeffs, uNewCoeffs[c].data(), 1,
+                             m_DOModeCoeffs.data()
+                             + (i*nVel + c)*nCoeffs, 1);
+            }
         }
     }
 
@@ -1979,6 +1990,134 @@ void DOVelocityCorrectionScheme::DOImplicitSolve(
     }
     Vmath::Vcopy(nPC, sPC.data(), 1, m_pressure->UpdateCoeffs().data(), 1);
     Vmath::Vcopy(nPP, sPP.data(), 1, m_pressure->UpdatePhys().data(),   1);
+}
+
+/**
+ * Batched variant of the per-mode solves in DOImplicitSolve: the S mode
+ * Poisson systems are solved by one ContField::HelmSolveBatched call and
+ * the S viscous Helmholtz systems by one call per velocity component, so
+ * every conjugate-gradient iteration performs a single AllReduce covering
+ * all modes. RHS construction, warm starts and outputs mirror
+ * ModePressureSolve and ModeViscousSolve; configurations the batched
+ * library path does not support fall back to per-column scalar solves
+ * inside HelmSolveBatched, keeping the results equivalent either way.
+ * The caller has already homogenised the velocity BCs and saved the
+ * mean-field state.
+ */
+void DOVelocityCorrectionScheme::DOImplicitSolveBatched(
+    const Array<OneD, const Array<OneD, NekDouble>> &in,
+    Array<OneD, Array<OneD, NekDouble>>             &out,
+    const NekDouble                                  lambda)
+{
+    const int S       = m_nDOModes;
+    const int nVel    = m_velocity.size();
+    const int nPhys   = m_fields[0]->GetTotPoints();
+    const int nCoeffs = m_fields[0]->GetNcoeffs();
+    const int nPC     = m_pressure->GetNcoeffs();
+    const int nPP     = m_pressure->GetTotPoints();
+
+    auto press =
+        std::dynamic_pointer_cast<MultiRegions::ContField>(m_pressure);
+    ASSERTL0(press, "DOBatchedSolve requires a CG pressure field.");
+
+    // ---- S mode Poisson systems in one batch ----
+    // poisson_RHS_i = div(uhat_i) / lambda, as in ModePressureSolve
+    Array<OneD, Array<OneD, NekDouble>> pRhs(S), pOut(S);
+    Array<OneD, NekDouble> tmpDeriv(nPhys);
+    for (int i = 0; i < S; ++i)
+    {
+        pRhs[i] = Array<OneD, NekDouble>(nPhys, 0.0);
+        for (int c = 0; c < nVel; ++c)
+        {
+            m_fields[m_velocity[c]]->PhysDeriv(c, in[i*nVel + c], tmpDeriv);
+            Vmath::Vadd(nPhys, tmpDeriv.data(), 1, pRhs[i].data(), 1,
+                        pRhs[i].data(), 1);
+        }
+        Vmath::Smul(nPhys, 1.0/lambda, pRhs[i].data(), 1, pRhs[i].data(), 1);
+        // warm start: previous solution of this mode's pressure system
+        pOut[i] = Array<OneD, NekDouble>(nPC);
+        Vmath::Vcopy(nPC, m_DOModePCoeffs.data() + i*nPC, 1,
+                     pOut[i].data(), 1);
+    }
+
+    // zero pressure BCs for the whole batch (modes need homogeneous
+    // Neumann), restored afterwards as in ModePressureSolve
+    auto pbnd = m_pressure->GetBndCondExpansions();
+    std::vector<std::vector<NekDouble>> savedPBnd(pbnd.size());
+    for (int n = 0; n < (int)pbnd.size(); ++n)
+    {
+        const int nc = pbnd[n]->GetNcoeffs();
+        savedPBnd[n].assign(pbnd[n]->GetCoeffs().data(),
+                            pbnd[n]->GetCoeffs().data() + nc);
+        Vmath::Zero(nc, pbnd[n]->UpdateCoeffs().data(), 1);
+    }
+    StdRegions::ConstFactorMap pFactors;
+    pFactors[StdRegions::eFactorLambda] = 0.0;
+    press->HelmSolveBatched(S, pRhs, pOut, pFactors);
+    for (int n = 0; n < (int)pbnd.size(); ++n)
+    {
+        std::copy(savedPBnd[n].begin(), savedPBnd[n].end(),
+                  pbnd[n]->UpdateCoeffs().data());
+    }
+    for (int i = 0; i < S; ++i)
+    {
+        Vmath::Vcopy(nPC, pOut[i].data(), 1,    // cache p_i for the Y-RHS
+                     m_DOModePCoeffs.data() + i*nPC, 1);
+    }
+
+    // ---- pressure-mode gradients, one all-directions PhysDeriv each ----
+    Array<OneD, NekDouble> gradPAll(S*nVel*nPhys);
+    Array<OneD, NekDouble> pPhysMode(nPP);
+    for (int i = 0; i < S; ++i)
+    {
+        m_pressure->BwdTrans(pOut[i], pPhysMode);
+        Array<OneD, NekDouble> g0 = gradPAll + (i*nVel + 0)*nPhys;
+        Array<OneD, NekDouble> g1 = gradPAll + (i*nVel + 1)*nPhys;
+        if (nVel == 2)
+        {
+            m_pressure->PhysDeriv(pPhysMode, g0, g1);
+        }
+        else
+        {
+            Array<OneD, NekDouble> g2 = gradPAll + (i*nVel + 2)*nPhys;
+            m_pressure->PhysDeriv(pPhysMode, g0, g1, g2);
+        }
+    }
+
+    // ---- S viscous Helmholtz systems per component, batched ----
+    Array<OneD, Array<OneD, NekDouble>> vRhs(S), vOut(S);
+    for (int i = 0; i < S; ++i)
+    {
+        vRhs[i] = Array<OneD, NekDouble>(nPhys);
+        vOut[i] = Array<OneD, NekDouble>(nCoeffs);
+    }
+    for (int k = 0; k < nVel; ++k)
+    {
+        auto cf = std::dynamic_pointer_cast<MultiRegions::ContField>(
+            m_fields[m_velocity[k]]);
+        for (int i = 0; i < S; ++i)
+        {
+            // helmholtz_RHS = (-uhat_k/lambda + \partial_k p_i) / nu_k
+            Vmath::Svtvp(nPhys, -1.0/lambda, in[i*nVel + k].data(), 1,
+                         gradPAll.data() + (i*nVel + k)*nPhys, 1,
+                         vRhs[i].data(), 1);
+            Vmath::Smul(nPhys, 1.0/m_diffCoeff[k], vRhs[i].data(), 1,
+                        vRhs[i].data(), 1);
+            // warm start: previous solution of this mode and component
+            Vmath::Vcopy(nCoeffs,
+                         m_DOModeCoeffs.data() + (i*nVel + k)*nCoeffs, 1,
+                         vOut[i].data(), 1);
+        }
+        StdRegions::ConstFactorMap vFactors;
+        vFactors[StdRegions::eFactorLambda] = 1.0/lambda/m_diffCoeff[k];
+        cf->HelmSolveBatched(S, vRhs, vOut, vFactors);
+        for (int i = 0; i < S; ++i)
+        {
+            Vmath::Vcopy(nCoeffs, vOut[i].data(), 1,
+                         m_DOModeCoeffs.data() + (i*nVel + k)*nCoeffs, 1);
+            m_fields[m_velocity[k]]->BwdTrans(vOut[i], out[i*nVel + k]);
+        }
+    }
 }
 
 /**

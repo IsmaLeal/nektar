@@ -133,6 +133,12 @@ protected:
     NekDouble m_invCovRegEps = 1e-2;
     /// selected initial-mode basis: "Laplacian" or "POD".
     std::string m_doInitBasis = "Laplacian";
+    /// batch the per-mode pressure/viscous solves through
+    /// ContField::HelmSolveBatched (one AllReduce per CG iteration for all
+    /// modes). Set by SOLVERINFO DOBatchedSolve; only effective with
+    /// iterative solvers -- unsupported configurations fall back to the
+    /// scalar path inside the library.
+    bool m_doBatchedSolve = false;
     /// allow modes to have non-zero spatial mean (constant component).
     /// Required for fully-periodic ICs whose dominant variability is a uniform
     /// flow direction (e.g. Mowlavi & Sapsis 2018 Fig. 10). When false, the
@@ -305,6 +311,13 @@ protected:
         const Array<OneD, const Array<OneD, NekDouble>> &in,
         Array<OneD, Array<OneD, NekDouble>>             &out,
         const NekDouble                                  time,
+        const NekDouble                                  lambda);
+    /// batched variant of the mode solves in DOImplicitSolve: one
+    /// HelmSolveBatched call for the S Poisson systems and one per velocity
+    /// component for the S Helmholtz systems (DOBatchedSolve = True)
+    void DOImplicitSolveBatched(
+        const Array<OneD, const Array<OneD, NekDouble>> &in,
+        Array<OneD, Array<OneD, NekDouble>>             &out,
         const NekDouble                                  lambda);
 
     /// Rotates the basis to diagonalise C. When deferredV is non-null and

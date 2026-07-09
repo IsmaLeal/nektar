@@ -35,6 +35,7 @@
 
 #include <MultiRegions/AssemblyMap/AssemblyMapCG.h>
 #include <MultiRegions/ContField.h>
+#include <MultiRegions/GlobalLinSysIterativeStaticCond.h>
 #include <tuple>
 
 using namespace std;
@@ -1201,6 +1202,99 @@ void ContField::v_ImposeRobinConditions(Array<OneD, NekDouble> &outarray)
             }
         }
         bndcnt += m_bndCondExpansions[i]->GetNcoeffs();
+    }
+}
+
+/**
+ * Batched Helmholtz solve. The weak right-hand side of every column is
+ * constructed exactly as in v_HelmSolve with physical-space forcing (inner
+ * product, negation, weak Neumann/Robin additions) and the Dirichlet
+ * conditions are imposed on each initial guess as in GlobalSolve. The
+ * columns are then solved together through
+ * GlobalLinSysIterativeStaticCond::SolveBatched; when the resolved linear
+ * system is of any other kind, or reports an unsupported configuration,
+ * every column is solved by the scalar path instead, making this method a
+ * drop-in replacement for nCol HelmSolve calls. GJP stabilisation and
+ * variable coefficients are not supported here.
+ */
+void ContField::HelmSolveBatched(
+    const int nCol, const Array<OneD, const Array<OneD, NekDouble>> &physForcings,
+    Array<OneD, Array<OneD, NekDouble>> &outCoeffs,
+    const StdRegions::ConstFactorMap &factors)
+{
+    ASSERTL0(factors.count(StdRegions::eFactorGJP) == 0,
+             "HelmSolveBatched does not support GJP stabilisation.");
+
+    Array<OneD, NekDouble> sign =
+        m_locToGloMap->GetBndCondCoeffsToLocalCoeffsSign();
+    const Array<OneD, const int> map =
+        m_locToGloMap->GetBndCondCoeffsToLocalCoeffsMap();
+
+    Array<OneD, Array<OneD, NekDouble>> wsp(nCol);
+    for (int s = 0; s < nCol; ++s)
+    {
+        wsp[s] = Array<OneD, NekDouble>(m_ncoeffs);
+        IProductWRTBase(physForcings[s], wsp[s]);
+        // Note -1.0 term necessary to invert forcing function to
+        // be consistent with matrix definition
+        Vmath::Neg(m_ncoeffs, wsp[s], 1);
+
+        // Add weak boundary conditions to forcing
+        int bndcnt = 0;
+        for (int i = 0; i < (int)m_bndCondExpansions.size(); ++i)
+        {
+            if (m_bndConditions[i]->GetBoundaryConditionType() ==
+                    SpatialDomains::eNeumann ||
+                m_bndConditions[i]->GetBoundaryConditionType() ==
+                    SpatialDomains::eRobin)
+            {
+                const Array<OneD, const NekDouble> bndcoeff =
+                    (m_bndCondExpansions[i])->GetCoeffs();
+
+                if (m_locToGloMap->GetSignChange())
+                {
+                    for (int j = 0;
+                         j < (m_bndCondExpansions[i])->GetNcoeffs(); j++)
+                    {
+                        wsp[s][map[bndcnt + j]] +=
+                            sign[bndcnt + j] * bndcoeff[j];
+                    }
+                }
+                else
+                {
+                    for (int j = 0;
+                         j < (m_bndCondExpansions[i])->GetNcoeffs(); j++)
+                    {
+                        wsp[s][map[bndcnt + j]] += bndcoeff[j];
+                    }
+                }
+            }
+            bndcnt += m_bndCondExpansions[i]->GetNcoeffs();
+        }
+
+        v_ImposeDirichletConditions(outCoeffs[s]);
+    }
+
+    if (m_locToGloMap->GetNumGlobalCoeffs() -
+            m_locToGloMap->GetNumGlobalDirBndCoeffs() ==
+        0)
+    {
+        return; // nothing to solve beyond the Dirichlet values
+    }
+
+    GlobalLinSysKey key(StdRegions::eHelmholtz, m_locToGloMap, factors,
+                        StdRegions::NullVarCoeffMap, NullVarFactorsMap);
+    GlobalLinSysSharedPtr linSys = GetGlobalLinSys(key);
+
+    auto scLinSys =
+        std::dynamic_pointer_cast<GlobalLinSysIterativeStaticCond>(linSys);
+    if (!scLinSys ||
+        !scLinSys->SolveBatched(nCol, wsp, outCoeffs, m_locToGloMap))
+    {
+        for (int s = 0; s < nCol; ++s)
+        {
+            linSys->Solve(wsp[s], outCoeffs[s], m_locToGloMap);
+        }
     }
 }
 

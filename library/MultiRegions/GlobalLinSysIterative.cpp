@@ -495,4 +495,173 @@ bool GlobalLinSysIterative::isNonSymmetricLinSys(StdRegions::MatrixType mt)
            nonSymmetric.end();
 }
 
+/**
+ * Batched preconditioned conjugate gradient over nCol right-hand sides of
+ * the same operator. The per-column recurrence is the reduced-communication
+ * PCG of NekLinSysIterCG::DoConjugateGradient (Demmel, Heath and Vorst,
+ * 1993) with a zero initial guess and the eps < tol^2 * rhsMagnitude
+ * convergence test evaluated per column; the difference is that the three
+ * inner products of every column share a single AllReduce per iteration.
+ * Converged columns retire from matrix and preconditioner work and
+ * contribute zeros to the exchange, keeping its size fixed at 3*nCol.
+ *
+ * pInput and pOutput pack nCol columns of nGlobal values each (global
+ * boundary space, Dirichlet DOFs first, as in the scalar path). Memory:
+ * five nCol x (nGlobal - nDir) work slabs, the batched analogue of the
+ * five scalar CG vectors.
+ */
+void GlobalLinSysIterative::DoBatchedConjugateGradient(
+    const int nGlobal, const int nDir, const int nCol,
+    const Array<OneD, const NekDouble> &pInput,
+    Array<OneD, NekDouble> &pOutput,
+    const Array<OneD, const NekDouble> &rhsMagnitudes,
+    const NekDouble tolerance, const int maxIterations)
+{
+    const int nNonDir = nGlobal - nDir;
+
+    // full-size scratch for the operator calls (Dirichlet part stays zero)
+    Array<OneD, NekDouble> w_A(nGlobal, 0.0), s_A(nGlobal, 0.0);
+    // per-column CG vectors
+    Array<OneD, NekDouble> r_All(nCol*nNonDir, 0.0);
+    Array<OneD, NekDouble> w_All(nCol*nNonDir, 0.0);
+    Array<OneD, NekDouble> s_All(nCol*nNonDir, 0.0);
+    Array<OneD, NekDouble> p_All(nCol*nNonDir, 0.0);
+    Array<OneD, NekDouble> q_All(nCol*nNonDir, 0.0);
+    std::vector<NekDouble> alpha(nCol, 0.0), beta(nCol, 0.0);
+    std::vector<NekDouble> rho(nCol, 0.0), mu(nCol, 0.0), eps(nCol, 0.0);
+    std::vector<bool>      active(nCol, true);
+    Array<OneD, NekDouble> vExchange(3*nCol, 0.0);
+    Array<OneD, NekDouble> tmp;
+
+    // r = rhs (zero initial guess); initial residual norms in one exchange
+    for (int s = 0; s < nCol; ++s)
+    {
+        Vmath::Vcopy(nNonDir, pInput + s*nGlobal + nDir, 1,
+                     tmp = r_All + s*nNonDir, 1);
+        Vmath::Zero(nNonDir, tmp = pOutput + s*nGlobal + nDir, 1);
+        vExchange[3*s + 2] =
+            Vmath::Dot2(nNonDir, r_All + s*nNonDir, r_All + s*nNonDir,
+                        m_map + nDir);
+    }
+    m_expList.lock()->GetComm()->GetRowComm()->AllReduce(
+        vExchange, Nektar::LibUtilities::ReduceSum);
+
+    int nActive = 0;
+    for (int s = 0; s < nCol; ++s)
+    {
+        eps[s] = vExchange[3*s + 2];
+        active[s] =
+            (eps[s] >= tolerance * tolerance * rhsMagnitudes[s]);
+        nActive += active[s] ? 1 : 0;
+    }
+    if (nActive == 0)
+    {
+        m_totalIterations = 0;
+        return;
+    }
+
+    // first preconditioner application and operator evaluation per column
+    std::fill(vExchange.data(), vExchange.data() + 3*nCol, 0.0);
+    for (int s = 0; s < nCol; ++s)
+    {
+        if (!active[s]) continue;
+        Vmath::Zero(nNonDir, tmp = w_A + nDir, 1);
+        m_precon->DoPreconditioner(r_All + s*nNonDir, tmp = w_A + nDir);
+        v_DoMatrixMultiply(w_A, s_A);
+        Vmath::Vcopy(nNonDir, w_A + nDir, 1, tmp = w_All + s*nNonDir, 1);
+        Vmath::Vcopy(nNonDir, s_A + nDir, 1, tmp = s_All + s*nNonDir, 1);
+        vExchange[3*s + 0] = Vmath::Dot2(
+            nNonDir, r_All + s*nNonDir, w_All + s*nNonDir, m_map + nDir);
+        vExchange[3*s + 1] = Vmath::Dot2(
+            nNonDir, s_All + s*nNonDir, w_All + s*nNonDir, m_map + nDir);
+    }
+    m_expList.lock()->GetComm()->GetRowComm()->AllReduce(
+        vExchange, Nektar::LibUtilities::ReduceSum);
+    for (int s = 0; s < nCol; ++s)
+    {
+        if (!active[s]) continue;
+        rho[s]   = vExchange[3*s + 0];
+        mu[s]    = vExchange[3*s + 1];
+        beta[s]  = 0.0;
+        alpha[s] = rho[s] / mu[s];
+    }
+    m_totalIterations = 1;
+
+    while (true)
+    {
+        if (m_totalIterations > maxIterations)
+        {
+            if (m_root)
+            {
+                std::cout << "Batched CG: " << nActive << " of " << nCol
+                          << " columns unconverged after "
+                          << m_totalIterations << " iterations (tolerance "
+                          << tolerance << ") WARNING: Exceeded maxIt"
+                          << std::endl;
+            }
+            break;
+        }
+
+        std::fill(vExchange.data(), vExchange.data() + 3*nCol, 0.0);
+        for (int s = 0; s < nCol; ++s)
+        {
+            if (!active[s]) continue;
+            NekDouble *p_s = p_All.data() + s*nNonDir;
+            NekDouble *q_s = q_All.data() + s*nNonDir;
+            NekDouble *r_s = r_All.data() + s*nNonDir;
+            NekDouble *x_s = pOutput.data() + s*nGlobal + nDir;
+
+            // p_k, q_k; x_{k+1}; r_{k+1}
+            Vmath::Svtvp(nNonDir, beta[s], p_s, 1,
+                         w_All.data() + s*nNonDir, 1, p_s, 1);
+            Vmath::Svtvp(nNonDir, beta[s], q_s, 1,
+                         s_All.data() + s*nNonDir, 1, q_s, 1);
+            Vmath::Svtvp(nNonDir, alpha[s], p_s, 1, x_s, 1, x_s, 1);
+            Vmath::Svtvp(nNonDir, -alpha[s], q_s, 1, r_s, 1, r_s, 1);
+
+            // preconditioner and operator for this column
+            Vmath::Zero(nNonDir, tmp = w_A + nDir, 1);
+            m_precon->DoPreconditioner(r_All + s*nNonDir, tmp = w_A + nDir);
+            v_DoMatrixMultiply(w_A, s_A);
+            Vmath::Vcopy(nNonDir, w_A + nDir, 1, tmp = w_All + s*nNonDir, 1);
+            Vmath::Vcopy(nNonDir, s_A + nDir, 1, tmp = s_All + s*nNonDir, 1);
+
+            vExchange[3*s + 0] = Vmath::Dot2(
+                nNonDir, r_All + s*nNonDir, w_All + s*nNonDir, m_map + nDir);
+            vExchange[3*s + 1] = Vmath::Dot2(
+                nNonDir, s_All + s*nNonDir, w_All + s*nNonDir, m_map + nDir);
+            vExchange[3*s + 2] = Vmath::Dot2(
+                nNonDir, r_All + s*nNonDir, r_All + s*nNonDir, m_map + nDir);
+        }
+
+        // one exchange for every column's three inner products
+        m_expList.lock()->GetComm()->GetRowComm()->AllReduce(
+            vExchange, Nektar::LibUtilities::ReduceSum);
+
+        m_totalIterations++;
+
+        for (int s = 0; s < nCol; ++s)
+        {
+            if (!active[s]) continue;
+            const NekDouble rho_new = vExchange[3*s + 0];
+            mu[s]  = vExchange[3*s + 1];
+            eps[s] = vExchange[3*s + 2];
+
+            if (eps[s] < tolerance * tolerance * rhsMagnitudes[s])
+            {
+                active[s] = false;
+                --nActive;
+                continue;
+            }
+            beta[s]  = rho_new / rho[s];
+            alpha[s] = rho_new / (mu[s] - rho_new * beta[s] / alpha[s]);
+            rho[s]   = rho_new;
+        }
+        if (nActive == 0)
+        {
+            break;
+        }
+    }
+}
+
 } // namespace Nektar::MultiRegions

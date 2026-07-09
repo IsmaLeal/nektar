@@ -142,6 +142,20 @@ public:
         m_GJPData = GJPData;
     }
 
+    /// Batched Helmholtz solve: nCol physical-space forcings sharing the
+    /// same operator (factors), solved together so that each conjugate-
+    /// gradient iteration performs a single AllReduce for all columns.
+    /// outCoeffs carries initial guesses in and solutions out, matching
+    /// HelmSolve's inout semantics. Falls back internally to per-column
+    /// solves -- identical to nCol scalar HelmSolve calls -- whenever the
+    /// batched path is unsupported. Only called explicitly (DO solver);
+    /// no existing solver path reaches it.
+    MULTI_REGIONS_EXPORT void HelmSolveBatched(
+        const int nCol,
+        const Array<OneD, const Array<OneD, NekDouble>> &physForcings,
+        Array<OneD, Array<OneD, NekDouble>> &outCoeffs,
+        const StdRegions::ConstFactorMap &factors);
+
 protected:
     // private:
     /// (A shared pointer to) the object which contains all the

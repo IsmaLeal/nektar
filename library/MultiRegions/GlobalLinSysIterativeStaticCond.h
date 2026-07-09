@@ -101,6 +101,19 @@ public:
 
     ~GlobalLinSysIterativeStaticCond() override;
 
+    /// Batched analogue of Solve for nCol right-hand sides of this system:
+    /// per-column static condensation and back-substitution around a single
+    /// batched conjugate-gradient solve (one AllReduce per iteration for
+    /// all columns). Returns false without touching the outputs when the
+    /// configuration is unsupported (multi-level static condensation,
+    /// local-space or non-CG solver, successive-RHS projection), in which
+    /// case the caller must fall back to per-column Solve calls. Only
+    /// called explicitly (DO solver); no existing path reaches it.
+    MULTI_REGIONS_EXPORT bool SolveBatched(
+        const int nCol, const Array<OneD, const Array<OneD, NekDouble>> &pLocInputs,
+        Array<OneD, Array<OneD, NekDouble>> &pLocOutputs,
+        const AssemblyMapSharedPtr &pLocToGloMap);
+
 protected:
     void v_InitObject() override;
 
