@@ -116,14 +116,19 @@ public:
     ///   Yi[p*nVel*nModes + k] = <(snap_p - mean), mode_k>_M
     /// for p in [0, K) and k in [0, S). For p in [K, nParticles) Yi is left
     /// unchanged (filled by the caller via iid Gaussian).
-    /// `modePhys` is the post-reorth mode buffer with the DOVelocityCorrectionScheme packed layout
-    /// modePhys[(i*nVel + c)*nPhys .. +nPhys). nParticles is m_nDOParticles
-    /// from the caller; only the first K particles are projected here.
+    /// modePhys is the post-reorth mode buffer with the packed
+    /// DOVelocityCorrectionScheme layout
+    /// modePhys[(i*nVel + c)*nPhys .. +nPhys). nParticles is the GLOBAL
+    /// m_nDOParticles; Yi holds only this rank's shard of npLocal particles
+    /// starting at global index npOffset, and only the shard rows whose
+    /// global index is below K are written here.
     void RecomputeYiByProjection(
         const Array<OneD, NekDouble> &modePhys,
         const Array<OneD, NekDouble> &modeCoeffs,
         Array<OneD, NekDouble>       &Yi,
-        int                          nParticles);
+        int                          nParticles,
+        int                          npLocal,
+        int                          npOffset);
 
     /// Helper: expand a glob pattern (path with one '*' in the basename) into
     /// a sorted list of absolute file paths. Sorts numerically when filenames

@@ -1,12 +1,42 @@
-/**
- * DO extension of the velocity-correction incompressible solver.
- *
- * Auxiliary non-field time-integration state is currently supported only
- * for non-ALE runs. Moving-mesh / ALE configurations are not supported yet,
- * because the ALE helper path assumes a field-only state layout.
- */
-#ifndef NEKTAR_SOLVERS_DOMINE_H
-#define NEKTAR_SOLVERS_DOMINE_H
+///////////////////////////////////////////////////////////////////////////////
+//
+// File: DOVelocityCorrectionScheme.h
+//
+// For more information, please see: http://www.nektar.info
+//
+// The MIT License
+//
+// Copyright (c) 2006 Division of Applied Mathematics, Brown University (USA),
+// Department of Aeronautics, Imperial College London (UK), and Scientific
+// Computing and Imaging Institute, University of Utah (USA).
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+//
+// Description: DO (dynamically orthogonal) extension of the velocity-
+// correction incompressible solver. Auxiliary non-field time-integration
+// state is supported for non-ALE runs only; moving-mesh / ALE
+// configurations assume a field-only state layout and are not supported.
+//
+///////////////////////////////////////////////////////////////////////////////
+
+#ifndef NEKTAR_SOLVERS_DOVELOCITYCORRECTIONSCHEME_H
+#define NEKTAR_SOLVERS_DOVELOCITYCORRECTIONSCHEME_H
 
 #include <IncNavierStokesSolver/EquationSystems/DOPODInitialiser.h>
 #include <IncNavierStokesSolver/EquationSystems/VelocityCorrectionScheme.h>
@@ -48,6 +78,9 @@ public:
     const Array<OneD, NekDouble>
         &GetDOModeCoeffs() const { return m_DOModeCoeffs; }
     const Array<OneD, NekDouble> &GetYi() const { return m_Yi; }
+    /// gathers the sharded Yi into out (global Np * S, every rank); used by
+    /// FilterDOArchive so the archive format stays rank-count independent
+    void GatherYi(Array<OneD, NekDouble> &out) const;
     const Array<OneD, NekDouble>
         &GetDOModePCoeffs() const { return m_DOModePCoeffs; }
     const Array<OneD, int> &GetVelocityIdx()  const { return m_velocity; }
@@ -56,19 +89,38 @@ public:
         &GetForcingEta() const { return m_forcingEta; }
     void SerializeForcingRng(std::ostream &os) const { os << m_forcingRng; }
 
+    /// Constant-velocity-subspace data for the strip-constants gauge:
+    /// domainArea is |Omega|; onesCoeffs[c] holds the FE coefficients of
+    /// the constant function 1; admissible[c] is true iff component c has
+    /// no Dirichlet boundary anywhere (so constants are representable).
+    struct ConstantSubspaceCache
+    {
+        NekDouble                           domainArea = 0.0;
+        std::vector<Array<OneD, NekDouble>> onesCoeffs;
+        std::vector<bool>                   admissible;
+    };
+
 protected:
     // ========== DO parameters ==========
     /// number of modes
     int m_nDOModes;
-    /// number of Monte-Carlo particles for Yi evolution
+    /// GLOBAL number of Monte-Carlo particles for Yi evolution
     int m_nDOParticles;
+    /// Particle shard: this rank owns the contiguous global-index block
+    /// [m_npOffset, m_npOffset + m_npLocal). Random draws stay replicated
+    /// (identical streams on every rank), so the global population is
+    /// independent of the rank count; only storage and per-particle work
+    /// are distributed.
+    int m_npLocal  = 0;
+    int m_npOffset = 0;
     /// velocity modes layout: (mode * nVel + comp) * nPhys/nCoeffs
     Array<OneD, NekDouble> m_DOModePhys;
     Array<OneD, NekDouble> m_DOModeCoeffs;
     /// pressure modes coefficients, updated by DOImplicitSolve and needed by
     /// Yi RHS for grad(p_k).
     Array<OneD, NekDouble> m_DOModePCoeffs;
-    /// Yi coefficients, particle-major: Y_{i,p} = m_Yi[p*m_nDOModes + i]
+    /// LOCAL Yi shard, particle-major: Y_{i,p_local} =
+    /// m_Yi[p_local*m_nDOModes + i], global index p = m_npOffset + p_local
     Array<OneD, NekDouble> m_Yi;
 
     // ========== Mode/Yi init ==========
@@ -90,7 +142,7 @@ protected:
     std::vector<NekDouble>              m_podSigmas;    ///< POD singular values
     std::vector<std::vector<NekDouble>> m_podEigVecs;   ///< POD eigenvectors
     int                                 m_podNumSnapshots = 0;
-    /// POD initialiser: kept after `InitialiseModesFromPOD()` for the Y
+    /// POD initialiser: kept after InitialiseModesFromPOD() for the Y
     /// re-projection, reset after (null if Laplacian init)
     std::unique_ptr<DOPODInitialiser>   m_podInitialiser;
 
@@ -102,9 +154,9 @@ protected:
     /// current state for m_doScheme
     Array<OneD, Array<OneD, NekDouble>> m_doState;
     bool                                m_doSchemeInited = false;
-    /// number of mode variables in `m_doState` (i.e. m_nDOModes * nVel)
+    /// number of mode variables in m_doState (i.e. m_nDOModes * nVel)
     int m_doNumModeVars = 0;
-    /// index of the first Yi variable in `m_doState`
+    /// index of the first Yi variable in m_doState
     int m_doYIdx = 0;
     /// snapshot of the mean velocity (phys) at t^n. Needed to advance modes
     /// with consistent mean-mode coupling
@@ -136,6 +188,9 @@ protected:
     std::vector<NekDouble> m_Cij;
     /// third moment
     std::vector<NekDouble> m_Mkli;
+    /// particle outer products Z[p*S*S + i*S + j] = Y_{p,i} Y_{p,j}; built
+    /// by ComputeYMoments (BLAS third moment) and reused by AssembleYRhs
+    Array<OneD, NekDouble> m_Zbuf;
 
     // ========== Gradient caches (filled by PrecomputeGradients) ==========
     // m_modeGrad1[(i*nVel+c)*nVel+d : *nPhys] = \partial_d u_i[c]
@@ -156,8 +211,11 @@ protected:
     /// Per-mode scratch for ComputeNModeBody: (4*nVel+2)*nPhys doubles.
     /// Eliminates all MemPool allocations inside the OMP parallel region.
     Array<OneD, NekDouble> m_NBodyBuf;
-    /// Scratch for PrecomputeGradients: 2*nPhys doubles (tmp copy + d2u).
+    /// Scratch for PrecomputeGradients (serial; PhysDeriv allocates via
+    /// the MemPool): 2*nPhys doubles (tmp copy + d2u).
     Array<OneD, NekDouble> m_gradScratch;
+    /// Constant-subspace cache; filled once by BuildConstantSubspaceCache.
+    ConstantSubspaceCache m_constSubspace;
 
     /// verbose-only
     int m_doStepCounter = 0;
@@ -184,56 +242,63 @@ protected:
 
     /// precompute mode and mean gradients into m_modeGrad1, m_meanGrad1
     void PrecomputeGradients();
+    /// fill m_constSubspace (collective: AllReduce plus FwdTrans per
+    /// admissible component); called once from v_InitObject on every rank
+    void BuildConstantSubspaceCache();
     /// compute moments C_ij, M_kli from m_Yi
     void ComputeYMoments();
 
     /// compute the DO contribution to the mean explicit term (vector)
     void ComputeDOMeanCoupling(Array<OneD, Array<OneD, NekDouble>> &doCorr);
 
-    /// compute the explicit N (cross + triple-moment + DO projection)
-    /// for one mode (phys-space, vector).
-    void ComputeNMode(int i,
-                      Array<OneD, Array<OneD, NekDouble>> &N);
-    /// Inner body of ComputeNMode: fills N (pre-projection) and localBetas
-    /// (pre-AllReduce inner products).  Thread-safe: uses only pre-allocated
-    /// scratch (bodyBuf) and reads shared arrays; no MemPool allocations.
-    /// domainArea / admissible come from GetConstantSubspaceCache (call once
-    /// before the OMP region).
-    void ComputeNModeBody(int i,
-                          Array<OneD, Array<OneD, NekDouble>> &N,
-                          NekDouble                           *bodyBuf,
-                          NekDouble                            domainArea,
-                          const std::vector<bool>             &admissible,
-                          std::vector<NekDouble>              &localBetas);
-    
-    /// compute the explicit RHS for the Y coefficients per particle (vector)
-    void ComputeYRhs(Array<OneD, NekDouble> &rhs);
+    /// Explicit nonlinear RHS body for mode i: fills N (pre-projection),
+    /// betasOut[0..nDOModes) with the local (pre-AllReduce) inner products
+    /// <N + nu*lap, u_p>, and constIntOut[0..nVel) with the local integrals
+    /// of N + nu*lap used by the strip-constants gauge (zero when the gauge
+    /// is inactive). Thread-safe: writes only the per-mode bodyBuf slab and
+    /// the per-mode output slots, with no MemPool allocations, so
+    /// DOExplicitRhs may run it inside an OpenMP parallel region.
+    void ComputeNModeBody(int i, Array<OneD, Array<OneD, NekDouble>> &N,
+                          NekDouble *bodyBuf, NekDouble *betasOut,
+                          NekDouble *constIntOut);
 
-    /// Poisson explicit solve for one mode
+    /// local (pre-AllReduce) Y-RHS tensors ipKi[k*S+i] = <F_k - grad(p_k),
+    /// u_i> and ipKli[(k*S+l)*S+i] = <F_kl, u_i>; DOExplicitRhs reduces them
+    /// in the same AllReduce as the mode-projection terms
+    void BuildYRhsTensors(NekDouble *ipKi, NekDouble *ipKli);
+    /// per-particle Y-RHS assembly from the reduced tensors (BLAS)
+    void AssembleYRhs(const NekDouble *ipKi, const NekDouble *ipKli,
+                      Array<OneD, NekDouble> &rhs);
+
+    /// Poisson explicit solve for one mode; pGuess warm-starts iterative
+    /// solvers (ignored by direct ones)
     void ModePressureSolve(
         const Array<OneD, Array<OneD, NekDouble>> &uhatPhys,
         NekDouble aii_Dt,
+        const Array<OneD, const NekDouble> &pGuess,
         Array<OneD, NekDouble> &pCoeffsOut);
-    /// Helmholtz implicit solve for one mode
+    /// Helmholtz implicit solve for one mode; uGuessCoeffs (nVel*nCoeffs
+    /// slab) warm-starts iterative solvers (ignored by direct ones)
     void ModeViscousSolve(
         const Array<OneD, Array<OneD, NekDouble>> &uhatPhys,
         const Array<OneD, NekDouble> &pCoeffsIn,
         NekDouble aii_Dt,
+        const Array<OneD, const NekDouble> &uGuessCoeffs,
         Array<OneD, Array<OneD, NekDouble>> &uNewPhys,
         Array<OneD, Array<OneD, NekDouble>> &uNewCoeffs);
 
     /// DO subsystem explicit-RHS registered with m_doScheme.
-    /// `in` holds the packed state at time t (modes^t + Y^t); `out` receives
+    /// in holds the packed state at time t (modes^t + Y^t); out receives
     /// the explicit RHS for each variable. Reads m_meanAtTn.
-    /// After spatial discretisation, the mode PDEs and the coeffs ODEs become a
-    /// system of ODEs, one per FE coefficient. 
+    /// After spatial discretisation, the mode PDEs and the coeffs ODEs
+    /// become a system of ODEs, one per FE coefficient.
     void DOExplicitRhs(
         const Array<OneD, const Array<OneD, NekDouble>> &in,
         Array<OneD, Array<OneD, NekDouble>>             &out,
         const NekDouble                                  time);
 
     /// DO subsystem implicit-solve callback registered with m_doScheme. For
-    /// each mode variable, runs the Poisson + Helmholtz pipeline 
+    /// each mode variable, runs the Poisson + Helmholtz pipeline
     /// (ModePressureSolve + ModeViscousSolve). The Y variable has no implicit
     /// term (identity copy).
     void DOImplicitSolve(
@@ -242,8 +307,14 @@ protected:
         const NekDouble                                  time,
         const NekDouble                                  lambda);
 
-    void DiagonaliseCov();
-    void ReOrthonormalise();
+    /// Rotates the basis to diagonalise C. When deferredV is non-null and
+    /// the integrator history exists, the history rotation is NOT applied;
+    /// the rotation matrix is stored there instead so ReOrthonormalise can
+    /// compose it with its own basis change into a single history pass.
+    void DiagonaliseCov(std::vector<NekDouble> *deferredV = nullptr);
+    /// pendingV: deferred history rotation from DiagonaliseCov, composed
+    /// with this basis change and applied to the history in one pass
+    void ReOrthonormalise(const std::vector<NekDouble> *pendingV = nullptr);
 
 private:
     void InitialiseModesFromEllipticEigenbasis();
@@ -259,4 +330,4 @@ typedef std::shared_ptr<DOVelocityCorrectionScheme>
 
 } // namespace Nektar
 
-#endif // DO_MINE_H
+#endif // NEKTAR_SOLVERS_DOVELOCITYCORRECTIONSCHEME_H

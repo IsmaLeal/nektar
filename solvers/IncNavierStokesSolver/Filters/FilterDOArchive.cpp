@@ -2,6 +2,32 @@
 //
 // File: FilterDOArchive.cpp
 //
+// For more information, please see: http://www.nektar.info
+//
+// The MIT License
+//
+// Copyright (c) 2006 Division of Applied Mathematics, Brown University (USA),
+// Department of Aeronautics, Imperial College London (UK), and Scientific
+// Computing and Imaging Institute, University of Utah (USA).
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+//
 // Description: SolverUtils Filter that writes DO_ARCHIVE_V2 snapshots
 //              consumed by py_utils/load_chk.py. The cadence and output
 //              filename come from the filter's own XML parameters
@@ -195,7 +221,10 @@ void FilterDOArchive::WriteSnapshot(
     const int   nDOParticles = dom->GetNumDOParticles();
     const auto &doModePhys   = dom->GetDOModePhys();
     const auto &doModeCoeffs = dom->GetDOModeCoeffs();
-    const auto &Yi           = dom->GetYi();
+    // Yi is sharded across ranks; gather the global population so the
+    // archive stays rank-count independent (collective)
+    Array<OneD, NekDouble> Yi(nDOParticles * nDOModes);
+    dom->GatherYi(Yi);
     const auto &varNames     = m_session->GetVariables();
     const int   nCo          = pFields[velocity[0]]->GetNcoeffs();
 
@@ -244,6 +273,41 @@ void FilterDOArchive::WriteSnapshot(
             }
         }
 
+        // Pressure mode fields mode_<i>_p, partition-aware. (The legacy
+        // PCoeffs_hex metadata below stores rank-LOCAL coefficients and is
+        // only decodable by a single-rank restore.)
+        {
+            int pIdx = -1;
+            for (size_t j = 0; j < varNames.size(); ++j)
+            {
+                if (varNames[j] == "p")
+                {
+                    pIdx = (int)j;
+                }
+            }
+            const auto &pCoeffsAll = dom->GetDOModePCoeffs();
+            if (pIdx >= 0 && nDOModes > 0 &&
+                (int)pCoeffsAll.size() == nDOModes*pFields[pIdx]->GetNcoeffs())
+            {
+                const int nPC = pFields[pIdx]->GetNcoeffs();
+                for (int m = 0; m < nDOModes; ++m)
+                {
+                    const std::string fieldName =
+                        "mode_" + std::to_string(m) + "_p";
+                    Array<OneD, NekDouble> slice(
+                        nPC,
+                        const_cast<NekDouble *>(pCoeffsAll.data() + m*nPC),
+                        eArrayWrapper);
+                    for (size_t i = 0; i < FieldDef.size(); ++i)
+                    {
+                        FieldDef[i]->m_fields.push_back(fieldName);
+                        pFields[pIdx]->AppendFieldData(FieldDef[i],
+                                                       FieldData[i], slice);
+                    }
+                }
+            }
+        }
+
         // Per-snapshot file name.
         std::ostringstream fn;
         fn << m_outBase << ".do_" << std::setw(6) << std::setfill('0')
@@ -251,8 +315,13 @@ void FilterDOArchive::WriteSnapshot(
 
         // Metadata: scalars + Yi as hex of doubles (~12 KB for typical sizes).
         LibUtilities::FieldMetaDataMap meta;
-        meta["DOVelocityCorrectionScheme_step"]        = std::to_string(step);
-        meta["DOVelocityCorrectionScheme_time"]        = std::to_string(time);
+        meta["DOVelocityCorrectionScheme_step"] = std::to_string(step);
+        {
+            // std::to_string keeps only 6 decimals; write time losslessly
+            std::ostringstream ts;
+            ts << std::setprecision(17) << time;
+            meta["DOVelocityCorrectionScheme_time"] = ts.str();
+        }
         meta["DOVelocityCorrectionScheme_n_modes"] =
             std::to_string(nDOModes);
         meta["DOVelocityCorrectionScheme_n_particles"] =
@@ -261,7 +330,7 @@ void FilterDOArchive::WriteSnapshot(
             std::to_string(nVel);
         meta["DOVelocityCorrectionScheme_dt"] =
             std::to_string(dom->GetTimeStep());
-        // Yi as hex (rank 0 has the same Yi as everyone -- replicated).
+        // Yi as hex (gathered above; identical on every rank).
         {
             const int nFlat = nDOParticles * nDOModes;
             std::ostringstream hex;

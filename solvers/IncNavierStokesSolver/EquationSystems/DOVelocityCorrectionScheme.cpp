@@ -1,3 +1,38 @@
+///////////////////////////////////////////////////////////////////////////////
+//
+// File: DOVelocityCorrectionScheme.cpp
+//
+// For more information, please see: http://www.nektar.info
+//
+// The MIT License
+//
+// Copyright (c) 2006 Division of Applied Mathematics, Brown University (USA),
+// Department of Aeronautics, Imperial College London (UK), and Scientific
+// Computing and Imaging Institute, University of Utah (USA).
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+//
+// Description: DO (dynamically orthogonal) extension of the velocity-
+// correction incompressible solver implementation.
+//
+///////////////////////////////////////////////////////////////////////////////
+
 #include <IncNavierStokesSolver/EquationSystems/DOVelocityCorrectionScheme.h>
 #include <IncNavierStokesSolver/EquationSystems/DOPODInitialiser.h>
 #include <IncNavierStokesSolver/EquationSystems/DOReducedCGEigenBasis.h>
@@ -34,16 +69,16 @@ namespace
 // ===========================================================================
 // These helpers are used to enforce the homogeneous BCs for the modes.
 // This is because some Nektar's built-in methods (FwdTrans, HelmSolve, etc)
-// enforce the BCs on the fields stored in `m_fields` (the mean fields, with
+// enforce the BCs on the fields stored in m_fields (the mean fields, with
 // the inhomogeneous BCs). These helpers allow us to apply those methods to the
 // modes, enforcing their homogeneous BCs, without permanently altering the BCs
 // of the mean fields.
 
 /**
  * Stores one BC state for one velocity component and one boundary region.
- * - `fieldId`: which component;
- * - `region`: which boundary region;
- * - `phys` and `coeffs`: the BC arrays for that region, which get overwritten
+ * - fieldId: which component;
+ * - region: which boundary region;
+ * - phys and coeffs: the BC arrays for that region, which get overwritten
  *      during mode projection and need to be restored afterward.
  */
 struct BcArrayState
@@ -65,8 +100,8 @@ struct VelocityBCState
 
 /**
  * Saves the current boundary data for all velocity components and BC regions.
- * - `fields`: all fields (velocity + pressure);
- * - `velocity`: indices picking velocity components in `fields`.
+ * - fields: all fields (velocity + pressure);
+ * - velocity: indices picking velocity components in fields.
  */
 VelocityBCState CaptureVelocityBCState(
     const Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
@@ -162,7 +197,7 @@ void RestoreVelocityBCState(
 
 /**
  * Stores one DO mode component-by-component.
- * `coeffs[c]` and `phys[c]` are the representations of component `c`.
+ * coeffs[c] and phys[c] are the representations of component c.
  */
 struct ModeData
 {
@@ -176,77 +211,16 @@ struct ModeData
  */
 
 // ===========================================================================
-// Constant subspace storage + projection helpers
+// Constant subspace projection helper
 // ===========================================================================
-// If no Dirichlet BCs, a constant velocity component leaks into some modes and
-// they drift to uniform vector fields. To prevent this, we treat the constant
+// If no Dirichlet BCs, a constant velocity component leaks into some modes
+// and they drift to uniform vector fields. To prevent this, the constant
 // velocity subspace v_c(x) = (1/sqrt(|Omega|)) e_c   (c = 0,...,nVel-1)
-// as a fixed sub-basis and project the DO modes (and their explicit RHS)
-// orthogonal to it under the velocity mass inner product.
-
-/**
- * Stored state for the constant-subspace projection.
- * - `domainArea`: |Omega| = int_Omega 1 dOmega;
- * - `onesCoeffs`: coefficient vector of the constant function 1;
- * - `admissible[c]`: whether constants are admissible for component c (true
- *      iff the component has no Dirichlet BC).
- *      When false: nothing happens;
- * - `inited`: boolean flag (false on first call, true after).
- */
-struct ConstantSubspaceCache
-{
-    NekDouble                                 domainArea = 0.0;
-    std::vector<Array<OneD, NekDouble>>       onesCoeffs;       // size nVel
-    std::vector<bool>                         admissible;       // size nVel
-    bool                                      inited     = false;
-};
-
-/**
- * Computes on first call and returns the constant-subspace cache.
- * - `domainArea`: `field0->Integral(ones)`;
- * - `onesCoeffs[c]`: `field[c]->FwdTrans(ones, ...)`;
- * - `admissible[c]`: true iff component `c` has no Dirichlet bnd-coeffs.
- */
-ConstantSubspaceCache &GetConstantSubspaceCache(
-    const Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
-    const Array<OneD, int> &velocity)
-{
-    static ConstantSubspaceCache s_cache;
-    if (s_cache.inited) return s_cache;         // only in first call
-
-    const int nVel = velocity.size();
-    s_cache.onesCoeffs.resize(nVel);
-    s_cache.admissible.assign(nVel, false);
-
-    // domain area: |Omega| = \int_\Omega d\Omega
-    auto field0     = fields[velocity[0]];
-    const int nPhys = field0->GetTotPoints();
-    Array<OneD, NekDouble> ones(nPhys, 1.0);    // array of ones
-    s_cache.domainArea = field0->Integral(ones);
-
-    // admissibility flag + onesCoeffs (FwdTrans of constant 1)
-    for (int c = 0; c < nVel; ++c)              // loop over components
-    {
-        // `cf`: ContField for this component
-        auto cf = std::dynamic_pointer_cast<MultiRegions::ContField>(
-            fields[velocity[c]]);
-        // AllReduce: interior ranks see 0 Dirichlet DOFs; must agree globally
-        int numDirBnd =
-            (int)cf->GetLocalToGlobalMap()->GetNumGlobalDirBndCoeffs();
-        fields[velocity[0]]->GetComm()->GetRowComm()->AllReduce(
-            numDirBnd, LibUtilities::ReduceMax);
-        s_cache.admissible[c] = (numDirBnd == 0);
-        if (!s_cache.admissible[c]) continue;
-
-        // phys and coeff arrays of ones (used in ProjectOutConstantsFromMode)
-        const int nc = cf->GetNcoeffs();
-        s_cache.onesCoeffs[c] = Array<OneD, NekDouble>(nc, 0.0);
-        Array<OneD, NekDouble> physOnes(cf->GetTotPoints(), 1.0);
-        cf->FwdTrans(physOnes, s_cache.onesCoeffs[c]);
-    }
-    s_cache.inited = true;
-    return s_cache;
-}
+// is treated as a fixed sub-basis and the DO modes (and their explicit RHS)
+// are projected orthogonal to it under the velocity mass inner product.
+// The required geometric data (domain area, onesCoeffs, admissibility) is
+// held in DOVelocityCorrectionScheme::m_constSubspace, filled once per
+// session by BuildConstantSubspaceCache.
 
 /**
  * Projects a mode orthogonal to the constant subspace component-wise, in both
@@ -261,9 +235,9 @@ ConstantSubspaceCache &GetConstantSubspaceCache(
 void ProjectOutConstantsFromMode(
     const Array<OneD, MultiRegions::ExpListSharedPtr> &fields,
     const Array<OneD, int>                            &velocity,
+    const DOVelocityCorrectionScheme::ConstantSubspaceCache &cache,
     ModeData                                          &mode)
 {
-    const auto &cache = GetConstantSubspaceCache(fields, velocity);
     if (cache.domainArea <= 0.0) return;
 
     const int nVel = velocity.size();
@@ -275,8 +249,10 @@ void ProjectOutConstantsFromMode(
         const int nPhys = f->GetTotPoints();
         const int nCo   = f->GetNcoeffs();
 
-        // \int mode.phys[c] d\Omega via a borrowed (non-owning) view
-        Array<OneD, NekDouble> physView(nPhys, mode.phys[c].data());
+        // \int mode.phys[c] d\Omega via a non-owning view (eArrayWrapper;
+        // the default constructor mode would copy)
+        Array<OneD, NekDouble> physView(nPhys, mode.phys[c].data(),
+                                        eArrayWrapper);
         const NekDouble integ = f->Integral(physView);
         const NekDouble mean  = integ / cache.domainArea;
 
@@ -325,6 +301,28 @@ void SymmetricEig(int n,
             V[i*n + k] = z[k*n + i];
 }
 
+/**
+ * Decodes a hex string (two characters per byte, as written by
+ * FilterDOArchive) into nDoubles doubles at dst. Returns false without
+ * writing anything when the string length does not match.
+ */
+bool DecodeHexDoubles(const std::string &hex, NekDouble *dst, int nDoubles)
+{
+    const int nBytes = nDoubles * (int)sizeof(NekDouble);
+    if ((int)hex.size() != 2 * nBytes)
+    {
+        return false;
+    }
+    unsigned char *bytes = reinterpret_cast<unsigned char *>(dst);
+    for (int b = 0; b < nBytes; ++b)
+    {
+        unsigned val = 0;
+        std::sscanf(hex.c_str() + 2*b, "%02x", &val);
+        bytes[b] = static_cast<unsigned char>(val);
+    }
+    return true;
+}
+
 } // namespace
 
 // ===========================================================================
@@ -356,7 +354,7 @@ DOVelocityCorrectionScheme::DOVelocityCorrectionScheme(
  * - runs base VCS initialisation;
  * - reads DO & forcing parameters;
  * - allocates memory for modes (vel. and pressure) & Yi;
- * - initialises the time integrator `m_doScheme`.
+ * - initialises the time integrator m_doScheme.
  */
 void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
 {
@@ -377,38 +375,28 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     const int nCoeffs = m_fields[0]->GetNcoeffs();
     const int nPC     = m_pressure->GetNcoeffs();
     const int nDim    = m_velocity.size();
-    m_nDOModes     = m_session->GetParameter("DOModes");
-    m_nDOParticles = m_session->GetParameter("DOParticles");
+    m_session->LoadParameter("DOModes", m_nDOModes);
+    m_session->LoadParameter("DOParticles", m_nDOParticles);
 
     // initial mode basis: "Laplacian" (eigenmodes) or "POD" from samples
     m_session->LoadSolverInfo("DOInitModeBasis", m_doInitBasis, "Laplacian");
     ASSERTL0(m_doInitBasis == "Laplacian" || m_doInitBasis == "POD",
              "DOInitModeBasis must be 'Laplacian' or 'POD'.");
 
-    {
-        std::string allowConst;
-        m_session->LoadSolverInfo("DOAllowConstantModes", allowConst, "False");
-        m_doAllowConstantModes =
-            (allowConst == "True" || allowConst == "true");
-    }
-    if (m_session->DefinesParameter("DOYiSeed"))
-        m_doYiSeed = (int)m_session->GetParameter("DOYiSeed");
-    if (m_session->DefinesParameter("DOYiSigma"))
-        m_doYiSigma = m_session->GetParameter("DOYiSigma");
+    m_session->MatchSolverInfo("DOAllowConstantModes", "True",
+                               m_doAllowConstantModes, false);
+    m_session->LoadParameter("DOYiSeed", m_doYiSeed, m_doYiSeed);
+    m_session->LoadParameter("DOYiSigma", m_doYiSigma, m_doYiSigma);
 
     // Tikhonov regularisation strength
     m_session->LoadParameter("DOInvCovRegEps", m_invCovRegEps, m_invCovRegEps);
 
     // additive stochastic forcing
-    if (m_session->DefinesParameter("DOForcingNumChannels"))
-        m_nForcingChannels =
-            (int)m_session->GetParameter("DOForcingNumChannels");
-    if (m_session->DefinesParameter("DOForcingSigma"))
-        m_forcingSigma = m_session->GetParameter("DOForcingSigma");
-    if (m_session->DefinesParameter("DOForcingTau"))
-        m_forcingTau = m_session->GetParameter("DOForcingTau");
-    if (m_session->DefinesParameter("DOForcingSeed"))
-        m_forcingSeed = (int)m_session->GetParameter("DOForcingSeed");
+    m_session->LoadParameter("DOForcingNumChannels", m_nForcingChannels,
+                             m_nForcingChannels);
+    m_session->LoadParameter("DOForcingSigma", m_forcingSigma, m_forcingSigma);
+    m_session->LoadParameter("DOForcingTau", m_forcingTau, m_forcingTau);
+    m_session->LoadParameter("DOForcingSeed", m_forcingSeed, m_forcingSeed);
     if (m_nForcingChannels > 0)
     {
         const int K = m_nForcingChannels;
@@ -421,24 +409,47 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
             static_cast<std::mt19937::result_type>(m_forcingSeed));
     }
 
-    // allocate arrays (history owned my `m_doScheme` (time integrator))
+    // Particle shard: contiguous block of the global population. Draws are
+    // replicated (every rank runs the same RNG stream), so the population
+    // is identical for any rank count; only storage and per-particle work
+    // are distributed. Eta (small) stays fully replicated.
+    {
+        LibUtilities::CommSharedPtr rc = m_fields[0]->GetComm()->GetRowComm();
+        const int nR  = rc->GetSize();
+        const int rk  = rc->GetRank();
+        ASSERTL0(m_nDOParticles >= nR,
+                 "DOVelocityCorrectionScheme: DOParticles must be >= the "
+                 "number of MPI ranks (every rank needs a non-empty "
+                 "particle shard).");
+        const int rem = m_nDOParticles % nR;
+        m_npLocal  = m_nDOParticles / nR + (rk < rem ? 1 : 0);
+        m_npOffset = rk * (m_nDOParticles / nR) + std::min(rk, rem);
+    }
+
+    // allocate arrays (history owned by m_doScheme, the time integrator)
     m_DOModePhys = Array<OneD, NekDouble>(nDim*nPhys*m_nDOModes, 0.0);
     m_DOModeCoeffs = Array<OneD, NekDouble>(nDim*nCoeffs*m_nDOModes, 0.0);
     m_DOModePCoeffs = Array<OneD, NekDouble>(nPC * m_nDOModes, 0.0);
-    m_Yi = Array<OneD, NekDouble>(m_nDOParticles*m_nDOModes, 0.0);
+    m_Yi = Array<OneD, NekDouble>(
+        std::max(1, m_npLocal * m_nDOModes), 0.0);
     m_Cij.assign(m_nDOModes*m_nDOModes, 0.0);
     m_Mkli.assign(m_nDOModes*m_nDOModes*m_nDOModes, 0.0);
+    m_Zbuf      = Array<OneD, NekDouble>(
+        std::max(1, m_npLocal * m_nDOModes * m_nDOModes), 0.0);
     m_NAllBuf   = Array<OneD, NekDouble>(m_nDOModes * nDim * nPhys, 0.0);
     m_modeLap   = Array<OneD, NekDouble>(m_nDOModes * nDim * nPhys, 0.0);
+    // One ComputeNModeBody scratch slab per worker: the mode loop indexes
+    // slabs by thread when built with OpenMP, and uses a single slab in
+    // serial builds (per-mode slabs would waste S*(4*nVel+2)*nPhys doubles).
+    int nSlabs = 1;
+#ifdef _OPENMP
+    nSlabs = std::min(m_nDOModes, omp_get_max_threads());
+#endif
     m_NBodyBuf  = Array<OneD, NekDouble>(
-        m_nDOModes * (4*nDim + 2) * nPhys, 0.0);
-    {
-        int nT = 1;
-        #ifdef _OPENMP
-        nT = omp_get_max_threads();
-        #endif
-        m_gradScratch = Array<OneD, NekDouble>(nT * 2 * nPhys, 0.0);
-    }
+        nSlabs * (4*nDim + 2) * nPhys, 0.0);
+    // PrecomputeGradients is serial (PhysDeriv allocates via the MemPool,
+    // which is not thread-safe), so a single tmp + d2u pair suffices.
+    m_gradScratch = Array<OneD, NekDouble>(2 * nPhys, 0.0);
 
     // physWeights[k] = w_k * J_k at each quadrature point k.
     // Supports tensor-product elements: 2D quads, 3D hexahedra.
@@ -453,6 +464,10 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     for (int e = 0; e < m_fields[0]->GetExpSize(); ++e)
     {
         auto exp_e = m_fields[0]->GetExp(e);
+        ASSERTL0(exp_e->DetShapeType() == LibUtilities::eQuadrilateral ||
+                     exp_e->DetShapeType() == LibUtilities::eHexahedron,
+                 "DOVelocityCorrectionScheme: physWeights supports "
+                 "tensor-product elements (quads, hexes) only.");
         const int nq0  = exp_e->GetBasis(0)->GetNumPoints();
         const int nq1  = exp_e->GetBasis(1)->GetNumPoints();
         const auto &w0 = exp_e->GetBasis(0)->GetW();
@@ -494,7 +509,7 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     // Time integrator state-vector layout:
     // - variables 0, ..., m_nDOModes*nVel-1 : mode phys components
     //   (one variable per (mode i, comp c), each of size nPhys);
-    // - variable S*nVel : Y (size m_nDOParticles*m_nDOModes).
+    // - variable S*nVel : local Y shard (size m_npLocal*m_nDOModes).
     m_doNumModeVars = m_nDOModes * nDim;
     m_doYIdx        = m_doNumModeVars;
     auto timeInt = m_session->GetTimeIntScheme();
@@ -504,6 +519,76 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     m_doOps.DefineOdeRhs(&DOVelocityCorrectionScheme::DOExplicitRhs, this);
     m_doOps.DefineImplicitSolve(
         &DOVelocityCorrectionScheme::DOImplicitSolve, this);
+
+    // constant-subspace data for the strip-constants gauge (collective)
+    BuildConstantSubspaceCache();
+}
+
+/**
+ * Fills m_constSubspace: domainArea = |Omega|, onesCoeffs[c] = FwdTrans of
+ * the constant function 1, admissible[c] = true iff component c has no
+ * Dirichlet boundary DOFs anywhere (AllReduce: interior ranks see none and
+ * must agree globally). Collective; called once from v_InitObject on every
+ * rank so the AllReduce and FwdTrans stay aligned.
+ */
+void DOVelocityCorrectionScheme::BuildConstantSubspaceCache()
+{
+    const int nVel = m_velocity.size();
+    m_constSubspace.onesCoeffs.resize(nVel);
+    m_constSubspace.admissible.assign(nVel, false);
+
+    // domain area: |Omega| = \int_\Omega d\Omega (Integral AllReduces)
+    auto field0 = m_fields[m_velocity[0]];
+    Array<OneD, NekDouble> ones(field0->GetTotPoints(), 1.0);
+    m_constSubspace.domainArea = field0->Integral(ones);
+
+    for (int c = 0; c < nVel; ++c)              // loop over components
+    {
+        auto cf = std::dynamic_pointer_cast<MultiRegions::ContField>(
+            m_fields[m_velocity[c]]);
+        int numDirBnd =
+            (int)cf->GetLocalToGlobalMap()->GetNumGlobalDirBndCoeffs();
+        field0->GetComm()->GetRowComm()->AllReduce(numDirBnd,
+                                                   LibUtilities::ReduceMax);
+        m_constSubspace.admissible[c] = (numDirBnd == 0);
+        if (!m_constSubspace.admissible[c])
+        {
+            continue;
+        }
+
+        // coeff representation of 1 (used in ProjectOutConstantsFromMode)
+        const int nc = cf->GetNcoeffs();
+        m_constSubspace.onesCoeffs[c] = Array<OneD, NekDouble>(nc, 0.0);
+        Array<OneD, NekDouble> physOnes(cf->GetTotPoints(), 1.0);
+        cf->FwdTrans(physOnes, m_constSubspace.onesCoeffs[c]);
+    }
+}
+
+/**
+ * Gathers the sharded Yi into out (global m_nDOParticles * m_nDOModes, on
+ * every rank). Block shards are contiguous in the global particle index,
+ * so an AllGatherv with per-rank counts reproduces the global ordering.
+ */
+void DOVelocityCorrectionScheme::GatherYi(Array<OneD, NekDouble> &out) const
+{
+    const int S = m_nDOModes;
+    LibUtilities::CommSharedPtr rc = m_fields[0]->GetComm()->GetRowComm();
+    const int nR = rc->GetSize();
+    if (nR == 1)
+    {
+        Vmath::Vcopy(m_npLocal * S, m_Yi.data(), 1, out.data(), 1);
+        return;
+    }
+    Array<OneD, int> counts(nR), offsets(nR);
+    const int rem = m_nDOParticles % nR;
+    for (int r = 0; r < nR; ++r)
+    {
+        counts[r]  = (m_nDOParticles / nR + (r < rem ? 1 : 0)) * S;
+        offsets[r] = (r * (m_nDOParticles / nR) + std::min(r, rem)) * S;
+    }
+    Array<OneD, NekDouble> send(std::max(1, m_npLocal * S));
+    Vmath::Vcopy(m_npLocal * S, m_Yi.data(), 1, send.data(), 1);
+    rc->AllGatherv(send, out, counts, offsets);
 }
 
 /**
@@ -534,8 +619,14 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
         }
         else
         {
-            if (m_doInitBasis == "POD"){ InitialiseModesFromPOD(); }
-            else { InitialiseModesFromEllipticEigenbasis(); }
+            if (m_doInitBasis == "POD")
+            {
+                InitialiseModesFromPOD();
+            }
+            else
+            {
+                InitialiseModesFromEllipticEigenbasis();
+            }
             InitialiseYi();         // Y: i.i.d. Gaussian, sample mean removed
             DiagonaliseCov();
             ReOrthonormalise();
@@ -543,21 +634,23 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
             if (m_doInitBasis == "POD" && m_podInitialiser)
             {
                 m_podInitialiser->RecomputeYiByProjection(
-                    m_DOModePhys, m_DOModeCoeffs, m_Yi, m_nDOParticles);
+                    m_DOModePhys, m_DOModeCoeffs, m_Yi, m_nDOParticles,
+                    m_npLocal, m_npOffset);
                 m_podInitialiser.reset();  // POD state freed
 
-                // de-mean Yi across particles per mode
+                // de-mean Yi across the GLOBAL particle population: local
+                // shard sums, one AllReduce, subtract from the local rows
                 const NekDouble invNp =
                     1.0 / static_cast<NekDouble>(m_nDOParticles);
-                for (int i = 0; i < m_nDOModes; ++i)
-                {
-                    NekDouble mu = 0.0;
-                    for (int p = 0; p < m_nDOParticles; ++p)
-                        mu += m_Yi[p * m_nDOModes + i];
-                    mu *= invNp;
-                    for (int p = 0; p < m_nDOParticles; ++p)
-                        m_Yi[p * m_nDOModes + i] -= mu;
-                }
+                std::vector<NekDouble> mu(m_nDOModes, 0.0);
+                for (int p = 0; p < m_npLocal; ++p)
+                    for (int i = 0; i < m_nDOModes; ++i)
+                        mu[i] += m_Yi[p * m_nDOModes + i];
+                m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
+                    mu, LibUtilities::ReduceSum);
+                for (int p = 0; p < m_npLocal; ++p)
+                    for (int i = 0; i < m_nDOModes; ++i)
+                        m_Yi[p * m_nDOModes + i] -= invNp * mu[i];
                 DiagonaliseCov();
             }
         }
@@ -581,7 +674,7 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
                              m_doState[v].data(), 1);
             }
         // copy Yi into state vector
-        const int nY = m_nDOParticles * m_nDOModes;
+        const int nY = m_npLocal * m_nDOModes;
         m_doState[m_doYIdx] = Array<OneD, NekDouble>(nY);
         Vmath::Vcopy(nY, m_Yi.data(), 1, m_doState[m_doYIdx].data(), 1);
 
@@ -592,13 +685,13 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
 }
 
 /**
- * Initialises `m_Yi[p*S + i]` = Y_{i,p} (mode i for particle p) by drawing
+ * Initialises m_Yi[p*S + i] = Y_{i,p} (mode i for particle p) by drawing
  * i.i.d. Gaussian samples Y_{i,p} ~ N(0, m_doYiSigma^2)
  *
  * Decorrelation: the resulting sample covariance C[i,j] can have non-zero
- * diagonals (of order m_doYiSigma^2/sqrt(Np)). Since `ComputeNMode` uses the
- * simplification mu_i = C[i,i], the caller (`v_DoInitialise`) must invoke
- * `DiagonaliseCov` once after this routine to diagonalise the initial C
+ * diagonals (of order m_doYiSigma^2/sqrt(Np)). Since ComputeNModeBody uses
+ * the simplification mu_i = C[i,i], the caller (v_DoInitialise) must invoke
+ * DiagonaliseCov once after this routine to diagonalise the initial C
  * and rotate the modes/Y consistently before the first integration step.
  */
 void DOVelocityCorrectionScheme::InitialiseYi()
@@ -616,8 +709,11 @@ void DOVelocityCorrectionScheme::InitialiseYi()
                  "POD spectrum present but inconsistent "
                  "with m_nDOModes (internal logic error).");
     }
-    // pseudo random number generator
+    // Replicated RNG: every rank runs the identical stream and builds the
+    // FULL population in yAll, then keeps its shard. This makes the global
+    // particle set independent of the rank count.
     std::mt19937 rng(static_cast<std::mt19937::result_type>(m_doYiSeed));
+    std::vector<NekDouble> yAll((size_t)m_nDOParticles * m_nDOModes, 0.0);
 
     // initial Y values
     if (!podPath)
@@ -625,7 +721,7 @@ void DOVelocityCorrectionScheme::InitialiseYi()
         std::normal_distribution<NekDouble> dist(0.0, m_doYiSigma);
         for (int p = 0; p < m_nDOParticles; ++p)        // loop over particles
             for (int i = 0; i < m_nDOModes; ++i)        // loop over modes
-                m_Yi[p * m_nDOModes + i] = dist(rng);   // sample Y_{i,p}
+                yAll[p * m_nDOModes + i] = dist(rng);   // sample Y_{i,p}
     }
     else
     {
@@ -646,26 +742,30 @@ void DOVelocityCorrectionScheme::InitialiseYi()
             std::normal_distribution<NekDouble> dist(0.0, sigma_i_iid);
             for (int p = 0; p < Kproj; ++p)             // first K particles
             {
-                m_Yi[p * m_nDOModes + i] = sigma_i * m_podEigVecs[i][p];
+                yAll[p * m_nDOModes + i] = sigma_i * m_podEigVecs[i][p];
             }
             for (int p = Kproj; p < m_nDOParticles; ++p)// remaining particles
             {
-                m_Yi[p * m_nDOModes + i] = dist(rng);
+                yAll[p * m_nDOModes + i] = dist(rng);
             }
         }
     }
 
-    // de-mean each column
+    // de-mean each column over the full population (no comm needed: yAll is
+    // replicated), then keep this rank's shard
     const NekDouble invNp = 1.0 / static_cast<NekDouble>(m_nDOParticles);
     for (int i = 0; i < m_nDOModes; ++i)
     {
         NekDouble mu = 0.0;
         for (int p = 0; p < m_nDOParticles; ++p)
-            mu += m_Yi[p * m_nDOModes + i];
+            mu += yAll[p * m_nDOModes + i];
         mu *= invNp;
         for (int p = 0; p < m_nDOParticles; ++p)
-            m_Yi[p * m_nDOModes + i] -= mu;
+            yAll[p * m_nDOModes + i] -= mu;
     }
+    Vmath::Vcopy(m_npLocal * m_nDOModes,
+                 yAll.data() + (size_t)m_npOffset * m_nDOModes, 1,
+                 m_Yi.data(), 1);
 }
 
 
@@ -723,12 +823,12 @@ void DOVelocityCorrectionScheme::InitialiseForcingBasis()
         NekDouble nrm2 = 0.0;
         for (int c = 0; c < nVel; ++c)  // loop over components
         {
-            const NekDouble *g_kc_phys = m_forcingBasisPhys.data()
-                                         + (k*nVel + c)*nPhys;
+            NekDouble *g_kc_phys = m_forcingBasisPhys.data()
+                                   + (k*nVel + c)*nPhys;
             const NekDouble *g_kc_coeffs = m_forcingBasisCoeffs.data()
                                            + (k*nVel + c)*nCoeffs;
-            Array<OneD, NekDouble> physView(
-                nPhys, const_cast<NekDouble*>(g_kc_phys));
+            // non-owning view (eArrayWrapper; the default would copy)
+            Array<OneD, NekDouble> physView(nPhys, g_kc_phys, eArrayWrapper);
             // ip = M g_kc_coeffs (in coeff space)
             // nrm2 = g_kc_coeffs^T M g_kc_coeffs, summed over components
             m_fields[m_velocity[c]]->IProductWRTBase(physView, ip);
@@ -819,10 +919,10 @@ void DOVelocityCorrectionScheme::AdvanceForcingState()
     for (int k = 0; k < K; ++k)         // loop over channels
         for (int c = 0; c < nVel; ++c)  // loop over components
         {
-            const NekDouble *g_kc_phys =
+            NekDouble *g_kc_phys =
                 m_forcingBasisPhys.data() + (k*nVel + c)*nPhys;
-            Array<OneD, NekDouble>
-                physView(nPhys, const_cast<NekDouble*>(g_kc_phys));
+            // non-owning view (eArrayWrapper; the default would copy)
+            Array<OneD, NekDouble> physView(nPhys, g_kc_phys, eArrayWrapper);
             // ip = M g_kc_coeffs
             m_fields[m_velocity[c]]->IProductWRTBase(physView, ip);
             for (int i = 0; i < S; ++i) // loop over modes
@@ -833,59 +933,78 @@ void DOVelocityCorrectionScheme::AdvanceForcingState()
                                                   ip.data(), 1);
             }
         }
-    // MPI: m_forcingG entries are partial sums
-    if (!m_forcingG.empty())
-    {
-        m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
-            m_forcingG, LibUtilities::ReduceSum);
-    }
 
-    // m_forcingA[i, k] = (1/Np) sum_p Y_{p,i} eta_{p,k}
+    // m_forcingA[i, k] = (1/Np) sum_p Y_{p,i} eta_{p,k}: local particle
+    // shard against the replicated eta rows at the global particle index
     std::fill(m_forcingA.begin(), m_forcingA.end(), 0.0);
-    for (int p = 0; p < Np; ++p)
+    for (int p = 0; p < m_npLocal; ++p)
     {
-        const NekDouble *Yp = m_Yi.data()         + p*S;
-        const NekDouble *Ep = m_forcingEta.data() + p*K;
+        const NekDouble *Yp = m_Yi.data() + p*S;
+        const NekDouble *Ep = m_forcingEta.data() + (m_npOffset + p)*K;
         for (int i = 0; i < S; ++i)
             for (int k = 0; k < K; ++k)
                 m_forcingA[i*K + k] += Yp[i] * Ep[k];
     }
+
+    // MPI: G holds quadrature partial sums, A holds particle-shard partial
+    // sums; one fused AllReduce covers both
+    std::vector<NekDouble> red(2*S*K);
+    std::copy(m_forcingG.begin(), m_forcingG.end(), red.begin());
+    std::copy(m_forcingA.begin(), m_forcingA.end(), red.begin() + S*K);
+    m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
+        red, LibUtilities::ReduceSum);
+    std::copy(red.begin(), red.begin() + S*K, m_forcingG.begin());
+    std::copy(red.begin() + S*K, red.end(), m_forcingA.begin());
     Vmath::Smul((int)m_forcingA.size(), invNp, m_forcingA.data(), 1,
                 m_forcingA.data(), 1);
 }
 
 /**
- * Recomputes the sample moments:
+ * Recomputes the sample moments via BLAS:
  * - C[i,j] = E[Y_i Y_j] in m_Cij[i*m_nDOModes + j],
  * - M[i,j,k] = E[Y_i Y_j Y_k] in m_Mkli[(i*m_nDOModes+j)*m_nDOModes+k].
+ * The particle outer products Z[p*S*S + i*S + j] = Y_{p,i} Y_{p,j} are
+ * stored in m_Zbuf and reused by AssembleYRhs (same Yi state within one
+ * RHS evaluation).
+ *
+ * BLAS layout: m_Yi[p*S+i] read column-major with lda=S is the S x Np
+ * matrix A(i,p) = Y_{p,i}. C = invN * A A^T is symmetric, so the
+ * column-major result equals the row-major m_Cij layout. m_Zbuf read
+ * column-major with ld=S*S is Zf((ij),p); M = invN * A Zf^T lands
+ * Mf(k,(ij)) at m_Mkli[(i*S+j)*S+k], matching the row-major layout.
  */
 void DOVelocityCorrectionScheme::ComputeYMoments()
 {
     if (m_nDOModes == 0 || m_nDOParticles == 0) return;
-    const NekDouble invN = 1.0 / static_cast<NekDouble>(m_nDOParticles);
+    const int S           = m_nDOModes;
+    const NekDouble invN  = 1.0 / static_cast<NekDouble>(m_nDOParticles);
 
-    Vmath::Zero(m_nDOModes*m_nDOModes,              m_Cij.data(),  1);
-    Vmath::Zero(m_nDOModes*m_nDOModes*m_nDOModes,   m_Mkli.data(), 1);
-
-    for (int p = 0; p < m_nDOParticles; ++p)
+    for (int p = 0; p < m_npLocal; ++p)
     {
-        const NekDouble *y = m_Yi.data() + p*m_nDOModes;
-        for (int i = 0; i < m_nDOModes; ++i)
-            for (int j = 0; j < m_nDOModes; ++j)
-            {
-                m_Cij[i*m_nDOModes + j] += y[i] * y[j];
-                for (int k = 0; k < m_nDOModes; ++k)
-                    m_Mkli[(i*m_nDOModes + j)*m_nDOModes + k] +=
-                        y[i] * y[j] * y[k];
-            }
+        const NekDouble *y = m_Yi.data() + p*S;
+        NekDouble       *z = m_Zbuf.data() + p*S*S;
+        for (int i = 0; i < S; ++i)
+            for (int j = 0; j < S; ++j)
+                z[i*S + j] = y[i] * y[j];
     }
-    Vmath::Smul(m_nDOModes*m_nDOModes, invN, m_Cij.data(), 1,
-                m_Cij.data(), 1);
-    Vmath::Smul(m_nDOModes*m_nDOModes*m_nDOModes, invN, m_Mkli.data(), 1,
-                m_Mkli.data(), 1);
+    // shard partials; the global 1/Np weight is applied before the reduce
+    Blas::Dgemm('N', 'T', S, S, m_npLocal, invN, m_Yi.data(), S,
+                m_Yi.data(), S, 0.0, m_Cij.data(), S);
+    Blas::Dgemm('N', 'T', S, S*S, m_npLocal, invN, m_Yi.data(), S,
+                m_Zbuf.data(), S*S, 0.0, m_Mkli.data(), S);
+    // one fused AllReduce for C and M
+    std::vector<NekDouble> red(S*S + S*S*S);
+    std::copy(m_Cij.begin(), m_Cij.end(), red.begin());
+    std::copy(m_Mkli.begin(), m_Mkli.end(), red.begin() + S*S);
+    m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
+        red, LibUtilities::ReduceSum);
+    std::copy(red.begin(), red.begin() + S*S, m_Cij.begin());
+    std::copy(red.begin() + S*S, red.end(), m_Mkli.begin());
 
-    // diagonality and symmetry diagnostics for C
-    if (m_verbose && m_nDOModes > 1)
+    // diagonality and symmetry diagnostics for C (root rank prints; the
+    // moments are replicated so every rank would print the same numbers)
+    if (m_verbose && m_nDOModes > 1 &&
+        m_session->GetComm()->GetSpaceComm()->GetRank() == 0)
     {
         NekDouble maxOff = 0.0, maxDiag = 0.0;
         NekDouble fOff2 = 0.0, fAll2 = 0.0;
@@ -956,6 +1075,9 @@ void DOVelocityCorrectionScheme::PrecomputeGradients()
     // Mode gradients and Laplacians: sequential -- PhysDeriv internally
     // constructs Array<OneD,NekDouble> via MemPool, which is not thread-safe.
     // m_gradScratch[0..2*nPhys) provides reusable tmp and d2u buffers.
+    // First derivatives use the all-directions PhysDeriv: the per-direction
+    // overload computes every parametric derivative anyway and discards all
+    // but one, so one batched call replaces nVel redundant tensor sweeps.
     NekDouble *tmp_ptr = m_gradScratch.data();
     NekDouble *d2u_ptr = tmp_ptr + nPhys;
     for (int i = 0; i < m_nDOModes; ++i)
@@ -964,11 +1086,19 @@ void DOVelocityCorrectionScheme::PrecomputeGradients()
             const NekDouble *u_ic = m_DOModePhys.data() + (i*nVel+c)*nPhys;
             Vmath::Vcopy(nPhys, u_ic, 1, tmp_ptr, 1);
             Array<OneD, NekDouble> tmp_a(nPhys, tmp_ptr, eArrayWrapper);
-            for (int d = 0; d < nVel; ++d)
+            Array<OneD, NekDouble> g0 =
+                m_modeGrad1 + ((i*nVel+c)*nVel + 0)*nPhys;
+            Array<OneD, NekDouble> g1 =
+                m_modeGrad1 + ((i*nVel+c)*nVel + 1)*nPhys;
+            if (nVel == 2)
             {
-                Array<OneD, NekDouble> g1 =
-                    m_modeGrad1 + ((i*nVel+c)*nVel+d)*nPhys;
-                m_fields[m_velocity[c]]->PhysDeriv(d, tmp_a, g1);
+                m_fields[m_velocity[c]]->PhysDeriv(tmp_a, g0, g1);
+            }
+            else
+            {
+                Array<OneD, NekDouble> g2 =
+                    m_modeGrad1 + ((i*nVel+c)*nVel + 2)*nPhys;
+                m_fields[m_velocity[c]]->PhysDeriv(tmp_a, g0, g1, g2);
             }
             NekDouble *lap_ic = m_modeLap.data() + (i*nVel+c)*nPhys;
             Vmath::Zero(nPhys, lap_ic, 1);
@@ -983,7 +1113,7 @@ void DOVelocityCorrectionScheme::PrecomputeGradients()
             }
         }
 
-    // Mean field gradients: sequential, nVel^2 PhysDeriv calls.
+    // Mean field gradients: one all-directions PhysDeriv per component.
     {
         Array<OneD, NekDouble> tmp(nPhys);
         for (int c = 0; c < nVel; ++c)
@@ -991,10 +1121,17 @@ void DOVelocityCorrectionScheme::PrecomputeGradients()
             Vmath::Vcopy(nPhys,
                          m_fields[m_velocity[c]]->GetPhys().data(), 1,
                          tmp.data(), 1);
-            for (int d = 0; d < nVel; ++d)
+            Array<OneD, NekDouble> mg0 = m_meanGrad1 + (c*nVel + 0)*nPhys;
+            Array<OneD, NekDouble> mg1 = m_meanGrad1 + (c*nVel + 1)*nPhys;
+            if (nVel == 2)
             {
-                Array<OneD, NekDouble> mg = m_meanGrad1 + (c*nVel+d)*nPhys;
-                m_fields[m_velocity[c]]->PhysDeriv(d, tmp, mg);
+                m_fields[m_velocity[c]]->PhysDeriv(tmp, mg0, mg1);
+            }
+            else
+            {
+                Array<OneD, NekDouble> mg2 =
+                    m_meanGrad1 + (c*nVel + 2)*nPhys;
+                m_fields[m_velocity[c]]->PhysDeriv(tmp, mg0, mg1, mg2);
             }
         }
     }
@@ -1042,67 +1179,33 @@ void DOVelocityCorrectionScheme::ComputeDOMeanCoupling(
 }
 
 /**
- * Computes the nonlinear term of mode i's PDE:
- *      - computes the regularisation parameter `invMuReg` for C inverse;
- *      - computes the triple moment contribution `triple`;
- *      - computes the stochastic forcing contribution `addStochN`;
+ * Computes the nonlinear term of mode i's PDE (pre-projection):
+ *      - computes the regularisation parameter invMuReg for C inverse;
+ *      - computes the triple moment contribution triple;
+ *      - computes the stochastic forcing contribution addStochN;
  *      - assembles:
  *          N = cross + invMuReg * (triple + addStochN)
- *          innerArg = N  + nu*lap
- *      - enforces DO constraint: N -= \sum_p <innerArg, u_p> u_p
+ *          innerArg = N + nu*lap
+ *      - betasOut[p]    = local part of <innerArg, u_p> (DO constraint);
+ *      - constIntOut[c] = local part of \int innerArg[c] d\Omega (strip-
+ *        constants gauge; zero when the gauge is inactive).
+ * The caller AllReduces betasOut / constIntOut across ranks, then subtracts
+ * the global innerArg mean and the beta projections from N.
  * Cross and Laplacian are read from m_modeGrad1 and m_modeLap respectively,
  * cached by PrecomputeGradients; no PhysDeriv calls here.
- */
-void DOVelocityCorrectionScheme::ComputeNMode(int i,
-                          Array<OneD, Array<OneD, NekDouble>> &N)
-{
-    const int nVel  = m_velocity.size();
-    const int nPhys = m_fields[0]->GetTotPoints();
-    for (int c = 0; c < nVel; ++c)
-        Vmath::Zero(nPhys, N[c].data(), 1);
-    const auto &csCache = GetConstantSubspaceCache(m_fields, m_velocity);
-    const int SLOTS = 4*nVel + 2;
-    NekDouble *bodyBuf = m_NBodyBuf.data() + i * SLOTS * nPhys;
-    std::vector<NekDouble> localBetas(m_nDOModes, 0.0);
-    ComputeNModeBody(i, N, bodyBuf, csCache.domainArea,
-                     csCache.admissible, localBetas);
-    m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
-        localBetas, LibUtilities::ReduceSum);
-    for (int p = 0; p < m_nDOModes; ++p)
-    {
-        const NekDouble beta_p = localBetas[p];
-        for (int c = 0; c < nVel; ++c)
-        {
-            const NekDouble *u_pc = m_DOModePhys.data() + (p*nVel+c)*nPhys;
-            Vmath::Svtvp(nPhys, -beta_p, u_pc, 1, N[c].data(), 1,
-                         N[c].data(), 1);
-        }
-    }
-}
-
-/**
- * Inner body of ComputeNMode.  Thread-safe: uses only pre-allocated scratch
- * (bodyBuf, one slab per mode) and reads from shared read-only arrays.
- * No Nektar MemPool allocations happen here, so it is safe inside an OMP
- * parallel region.  Scratch layout per mode (SLOTS = 4*nVel+2 slabs of nPhys):
- *   [0..nVel)       cross[c],    [nVel..2*nVel)  triple[c],
+ *
+ * Thread-safe: uses only pre-allocated scratch (bodyBuf, one slab per mode)
+ * and per-mode output slots, and reads shared read-only arrays. No Nektar
+ * MemPool allocations happen here, so DOExplicitRhs may call it inside an
+ * OpenMP parallel region. Scratch layout per mode (SLOTS = 4*nVel+2 slabs
+ * of nPhys):
+ *   [0..nVel)        cross[c],    [nVel..2*nVel)   triple[c],
  *   [2*nVel..3*nVel) innerArg[c], [3*nVel..4*nVel) addStochN[c],
- *   [4*nVel]        prod,         [4*nVel+1]      wArg.
- *
- * Opt #1: Laplacians read from m_modeLap (filled by PrecomputeGradients),
- * so no PhysDeriv call is needed here.
- * Opt #4: OMP outer loop lives in DOExplicitRhs; no inner parallelism.
- *
- * domainArea / admissible come from GetConstantSubspaceCache, evaluated
- * once before the OMP region and passed in to avoid any allocation there.
+ *   [4*nVel]         prod,        [4*nVel+1]       wArg.
  */
 void DOVelocityCorrectionScheme::ComputeNModeBody(
-    int i,
-    Array<OneD, Array<OneD, NekDouble>> &N,
-    NekDouble                           *bodyBuf,
-    NekDouble                            domainArea,
-    const std::vector<bool>             &admissible,
-    std::vector<NekDouble>              &localBetas)
+    int i, Array<OneD, Array<OneD, NekDouble>> &N, NekDouble *bodyBuf,
+    NekDouble *betasOut, NekDouble *constIntOut)
 {
     const int nVel  = m_velocity.size();
     const int nPhys = m_fields[0]->GetTotPoints();
@@ -1195,7 +1298,7 @@ void DOVelocityCorrectionScheme::ComputeNModeBody(
         }
     }
 
-    // cache F_i = cross + nu*lap for ComputeYRhs
+    // cache F_i = cross + nu*lap for BuildYRhsTensors
     for (int c = 0; c < nVel; ++c)
     {
         const NekDouble *lap_ic = m_modeLap.data() + (i*nVel + c)*nPhys;
@@ -1206,7 +1309,6 @@ void DOVelocityCorrectionScheme::ComputeNModeBody(
     }
 
     // assemble N = cross + invMuReg*(triple+stoch); innerArg = N + nu*lap
-    NekDouble maxTriple = 0.0, maxCross = 0.0, maxStoch = 0.0;
     for (int c = 0; c < nVel; ++c)
     {
         const NekDouble *lap_ic    = m_modeLap.data() + (i*nVel + c)*nPhys;
@@ -1219,64 +1321,38 @@ void DOVelocityCorrectionScheme::ComputeNModeBody(
             const NekDouble triple_scaled = invMuReg * triple_c[k];
             const NekDouble stoch_scaled  = invMuReg * stoch_c[k];
             const NekDouble rough = cross_c[k] + triple_scaled + stoch_scaled;
-            N[c][k]   = rough;
+            N[c][k]    = rough;
             inner_c[k] = rough + nu * lap_ic[k];
-            maxTriple = std::max(maxTriple, std::abs(triple_scaled));
-            maxCross  = std::max(maxCross , std::abs(cross_c[k]));
-            maxStoch  = std::max(maxStoch , std::abs(stoch_scaled));
         }
     }
 
-    if (!m_doAllowConstantModes && domainArea > 0.0)
+    // local (pre-AllReduce) integrals of innerArg for the strip-constants
+    // gauge; the caller reduces them and subtracts the global mean from N
+    for (int c = 0; c < nVel; ++c)
+    {
+        constIntOut[c] = 0.0;
+    }
+    if (!m_doAllowConstantModes && m_constSubspace.domainArea > 0.0)
     {
         for (int c = 0; c < nVel; ++c)
         {
-            if (c >= (int)admissible.size() || !admissible[c]) continue;
+            if (!m_constSubspace.admissible[c]) continue;
             const NekDouble *inner_c = innerArg_raw + c*nPhys;
-            const NekDouble integ = Vmath::Dot(
-                nPhys, inner_c, 1, m_physWeights.data(), 1);
-            const NekDouble mean = integ / domainArea;
-            Vmath::Sadd(nPhys, -mean, N[c].data(), 1, N[c].data(), 1);
+            constIntOut[c] = Vmath::Dot(nPhys, inner_c, 1,
+                                        m_physWeights.data(), 1);
         }
     }
 
-    // compute local (pre-AllReduce) inner products <innerArg, u_p>
-    std::fill(localBetas.begin(), localBetas.end(), 0.0);
+    // local (pre-AllReduce) inner products <innerArg, u_p>: one Dgemv per
+    // component against the mode matrix, whose column p for component c
+    // starts at m_DOModePhys + (p*nVel + c)*nPhys (leading dim nVel*nPhys)
     for (int c = 0; c < nVel; ++c)
     {
         const NekDouble *inner_c = innerArg_raw + c*nPhys;
         Vmath::Vmul(nPhys, m_physWeights.data(), 1, inner_c, 1, wArg_raw, 1);
-        for (int p = 0; p < m_nDOModes; ++p)
-        {
-            const NekDouble *u_pc = m_DOModePhys.data() + (p*nVel + c)*nPhys;
-            localBetas[p] += Vmath::Dot(nPhys, wArg_raw, 1, u_pc, 1);
-        }
-    }
-
-    if (m_verbose)
-    {
-        NekDouble maxTripleRaw = 0.0, maxStochRaw = 0.0, maxNpre = 0.0;
-        for (int c = 0; c < nVel; ++c)
-            for (int k = 0; k < nPhys; ++k)
-            {
-                maxTripleRaw = std::max(maxTripleRaw,
-                                        std::abs(triple_raw[c*nPhys+k]));
-                maxStochRaw  = std::max(maxStochRaw,
-                                        std::abs(addStochN_raw[c*nPhys+k]));
-                maxNpre      = std::max(maxNpre, std::abs(N[c][k]));
-            }
-        std::cout << "[DBG ComputeNMode step=" << m_doStepCounter
-                  << " mode=" << i
-                  << " mui=" << mui
-                  << " lambdaReg=" << lambdaReg
-                  << " invMuReg=" << invMuReg
-                  << " |cross|max=" << maxCross
-                  << " |triple_raw|max=" << maxTripleRaw
-                  << " |triple_scaled|max=" << maxTriple
-                  << " |stoch_raw|max=" << maxStochRaw
-                  << " |stoch_scaled|max=" << maxStoch
-                  << " |N_preproj|max=" << maxNpre
-                  << "]\n";
+        Blas::Dgemv('T', nPhys, m_nDOModes, 1.0,
+                    m_DOModePhys.data() + c*nPhys, nVel*nPhys,
+                    wArg_raw, 1, (c == 0) ? 0.0 : 1.0, betasOut, 1);
     }
 }
 
@@ -1284,51 +1360,59 @@ void DOVelocityCorrectionScheme::ComputeNModeBody(
  * Explicit RHS for the per-particle coefficients Y_{p,i}:
  *      RHS_{p,i} = \sum_k Y_{p,k} <F_k - grad(p_k), u_i>
  *                + \sum_{k,l} (Y_{p,k}Y_{p,l} - C_{kl}) <F_{kl}, u_i>
- *                + \sum_k \eta_{p,k} m_forcingG_{k,i}.
- * First, inner-product tensors are built
- *      - ipKi[k,i] = <F_k - grad(p_k), u_i>;
- *      - ipKli[k,l,i] = <F_{kl}, u_i>;
- * and summed across MPI ranks before the per-particle assembly.
+ *                + \sum_k \eta_{p,k} m_forcingG_{k,i},
+ * split into two phases around the caller's single AllReduce:
+ * BuildYRhsTensors fills the local (pre-reduce) inner-product tensors
+ *      - ipKi[k*S+i]        = <F_k - grad(p_k), u_i>;
+ *      - ipKli[(k*S+l)*S+i] = <F_{kl}, u_i>;
+ * and AssembleYRhs contracts the reduced tensors against the particles.
+ *
+ * grad(p_k) uses one all-directions PhysDeriv (the per-direction overload
+ * recomputes every parametric derivative anyway). The inner products
+ * against the modes are Dgemv calls: the component-c mode matrix has
+ * column i at (i*nVel + c)*nPhys with leading dimension nVel*nPhys.
  */
-void DOVelocityCorrectionScheme::ComputeYRhs(Array<OneD, NekDouble> &rhs)
+void DOVelocityCorrectionScheme::BuildYRhsTensors(NekDouble *ipKi,
+                                                  NekDouble *ipKli)
 {
+    const int S       = m_nDOModes;
     const int nVel    = m_velocity.size();
     const int nPhys   = m_fields[0]->GetTotPoints();
     const int nPC     = m_pressure->GetNcoeffs();
     const int nPP     = m_pressure->GetTotPoints();
 
-    std::vector<NekDouble> ipKi (m_nDOModes*m_nDOModes, 0.0);
-    std::vector<NekDouble> ipKli(m_nDOModes*m_nDOModes*m_nDOModes, 0.0);
-
     Array<OneD, NekDouble> wFk(nPhys);
-    Array<OneD, Array<OneD, NekDouble>> Fk(nVel);
-    Array<OneD, NekDouble> pkPhys(nPP), dpk(nPhys);
+    Array<OneD, Array<OneD, NekDouble>> Fk(nVel), dpk(nVel);
+    Array<OneD, NekDouble> pkPhys(nPP);
     for (int c = 0; c < nVel; ++c)
-        Fk[c] = Array<OneD, NekDouble>(nPhys);
-    for (int k = 0; k < m_nDOModes; ++k)
+    {
+        Fk[c]  = Array<OneD, NekDouble>(nPhys);
+        dpk[c] = Array<OneD, NekDouble>(nPhys);
+    }
+    for (int k = 0; k < S; ++k)
     {
         for (int c = 0; c < nVel; ++c)
             Vmath::Vcopy(nPhys, m_modeLinRhs.data() + (k*nVel+c)*nPhys, 1,
                          Fk[c].data(), 1);
         Array<OneD, NekDouble> pkCoeffs = m_DOModePCoeffs + k*nPC;
         m_pressure->BwdTrans(pkCoeffs, pkPhys);
-        for (int c = 0; c < nVel; ++c)
+        if (nVel == 2)
         {
-            m_pressure->PhysDeriv(c, pkPhys, dpk);
-            Vmath::Vsub(nPhys, Fk[c].data(), 1, dpk.data(), 1,
-                        Fk[c].data(), 1);
+            m_pressure->PhysDeriv(pkPhys, dpk[0], dpk[1]);
+        }
+        else
+        {
+            m_pressure->PhysDeriv(pkPhys, dpk[0], dpk[1], dpk[2]);
         }
         for (int c = 0; c < nVel; ++c)
         {
+            Vmath::Vsub(nPhys, Fk[c].data(), 1, dpk[c].data(), 1,
+                        Fk[c].data(), 1);
             Vmath::Vmul(nPhys, m_physWeights.data(), 1, Fk[c].data(), 1,
                         wFk.data(), 1);
-            for (int i = 0; i < m_nDOModes; ++i)
-            {
-                const NekDouble *u_ic =
-                    m_DOModePhys.data() + (i*nVel + c)*nPhys;
-                ipKi[k*m_nDOModes + i] +=
-                    Vmath::Dot(nPhys, wFk.data(), 1, u_ic, 1);
-            }
+            Blas::Dgemv('T', nPhys, S, 1.0,
+                        m_DOModePhys.data() + c*nPhys, nVel*nPhys,
+                        wFk.data(), 1, (c == 0) ? 0.0 : 1.0, ipKi + k*S, 1);
         }
     }
 
@@ -1336,9 +1420,9 @@ void DOVelocityCorrectionScheme::ComputeYRhs(Array<OneD, NekDouble> &rhs)
     Array<OneD, Array<OneD, NekDouble>> Fkl(nVel);
     for (int c = 0; c < nVel; ++c)
         Fkl[c] = Array<OneD, NekDouble>(nPhys);
-    for (int k = 0; k < m_nDOModes; ++k)
+    for (int k = 0; k < S; ++k)
     {
-        for (int l = 0; l < m_nDOModes; ++l)
+        for (int l = 0; l < S; ++l)
         {
             for (int c = 0; c < nVel; ++c)
                 Vmath::Zero(nPhys, Fkl[c].data(), 1);
@@ -1357,50 +1441,74 @@ void DOVelocityCorrectionScheme::ComputeYRhs(Array<OneD, NekDouble> &rhs)
             {
                 Vmath::Vmul(nPhys, m_physWeights.data(), 1, Fkl[c].data(),
                             1, wFk.data(), 1);
-                for (int i = 0; i < m_nDOModes; ++i)
-                {
-                    const NekDouble *u_ic =
-                        m_DOModePhys.data() + (i*nVel + c)*nPhys;
-                    ipKli[(k*m_nDOModes + l)*m_nDOModes + i] +=
-                        Vmath::Dot(nPhys, wFk.data(), 1, u_ic, 1);
-                }
+                Blas::Dgemv('T', nPhys, S, 1.0,
+                            m_DOModePhys.data() + c*nPhys, nVel*nPhys,
+                            wFk.data(), 1, (c == 0) ? 0.0 : 1.0,
+                            ipKli + (k*S + l)*S, 1);
             }
         }
     }
+}
 
-    auto comm = m_fields[m_velocity[0]]->GetComm()->GetRowComm();
-    if (!ipKi.empty())  comm->AllReduce(ipKi,  LibUtilities::ReduceSum);
-    if (!ipKli.empty()) comm->AllReduce(ipKli, LibUtilities::ReduceSum);
-
+/**
+ * Contracts the globally reduced Y-RHS tensors against the particles:
+ *      rhs[p*S+i] = \sum_k Y_{p,k} ipKi[k*S+i]
+ *                 + \sum_{k,l} (Y_{p,k}Y_{p,l} - C_{kl}) ipKli[(k*S+l)*S+i]
+ *                 + \sum_k \eta_{p,k} m_forcingG[i*K+k].
+ * BLAS layout: with row-major Yi (Np x S) read column-major (lda = S),
+ * Dgemm('N','N', S, Np, S) forms rhs(p,i) = \sum_k ipKi(k,i) Y_{p,k}
+ * directly in the row-major rhs. The quadratic term reuses m_Zbuf (built
+ * by ComputeYMoments from the same Yi) and accumulates with beta = 1; its
+ * C part, t0[i] = \sum_{kl} C_{kl} ipKli[(kl)*S+i], is particle-
+ * independent and subtracted once per particle row.
+ */
+void DOVelocityCorrectionScheme::AssembleYRhs(const NekDouble *ipKi,
+                                              const NekDouble *ipKli,
+                                              Array<OneD, NekDouble> &rhs)
+{
+    const int S  = m_nDOModes;
     const int Kf = m_nForcingChannels;
-    NekDouble *Rout = rhs.data();
-    for (int p = 0; p < m_nDOParticles; ++p)
+
+    // linear term over the local particle shard: rhs = Y ipKi
+    Blas::Dgemm('N', 'N', S, m_npLocal, S, 1.0, ipKi, S,
+                m_Yi.data(), S, 0.0, rhs.data(), S);
+    // quadratic term: rhs += Z ipKli ...
+    Blas::Dgemm('N', 'N', S, m_npLocal, S*S, 1.0, ipKli, S,
+                m_Zbuf.data(), S*S, 1.0, rhs.data(), S);
+    // ... minus its C contraction, identical for every particle
+    std::vector<NekDouble> t0(S, 0.0);
+    for (int kl = 0; kl < S*S; ++kl)
     {
-        const NekDouble *Yp = m_Yi.data() + p*m_nDOModes;
-        const NekDouble *Ep =
-            (Kf > 0) ? (m_forcingEta.data() + p*Kf) : nullptr;
-        NekDouble       *Rp = Rout + p*m_nDOModes;
-        for (int i = 0; i < m_nDOModes; ++i)
+        const NekDouble Ckl = m_Cij[kl];
+        for (int i = 0; i < S; ++i)
+            t0[i] += Ckl * ipKli[kl*S + i];
+    }
+    for (int p = 0; p < m_npLocal; ++p)
+    {
+        NekDouble *Rp = rhs.data() + p*S;
+        for (int i = 0; i < S; ++i)
+            Rp[i] -= t0[i];
+        if (Kf > 0)
         {
-            NekDouble lin = 0.0, tri = 0.0, frc = 0.0;
-            for (int k = 0; k < m_nDOModes; ++k)
-                lin += Yp[k] * ipKi[k*m_nDOModes + i];
-            for (int k = 0; k < m_nDOModes; ++k)
-                for (int l = 0; l < m_nDOModes; ++l)
-                    tri += (Yp[k]*Yp[l] - m_Cij[k*m_nDOModes + l])
-                         * ipKli[(k*m_nDOModes + l)*m_nDOModes + i];
-            for (int k = 0; k < Kf; ++k)
-                frc += Ep[k] * m_forcingG[i*Kf + k];
-            Rp[i] = lin + tri + frc;
+            // replicated eta row of this local particle's global index
+            const NekDouble *Ep =
+                m_forcingEta.data() + (m_npOffset + p)*Kf;
+            for (int i = 0; i < S; ++i)
+            {
+                NekDouble frc = 0.0;
+                for (int k = 0; k < Kf; ++k)
+                    frc += Ep[k] * m_forcingG[i*Kf + k];
+                Rp[i] += frc;
+            }
         }
     }
 }
 
 /**
  * VCS override:
- *      - adds correction `doCorr` to mean's explicit RHS `outarray` on top of
+ *      - adds correction doCorr to mean's explicit RHS outarray on top of
  *        advection;
- *      - also captures the current mean field into `m_meanAtTn` for use in
+ *      - also captures the current mean field into m_meanAtTn for use in
  *        DOExplicitRhs (needed by DO subsystem).
  */
 void DOVelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(
@@ -1422,7 +1530,7 @@ void DOVelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(
         for (int c = 0; c < nVel; ++c)
             m_meanAtTn[c] = Array<OneD, NekDouble>(nPhys, 0.0);
     }
-    for (int c = 0; c < nVel; ++c)  // capture current `inarray` in m_meanAtTn
+    for (int c = 0; c < nVel; ++c)  // capture current inarray in m_meanAtTn
         Vmath::Vcopy(nPhys, inarray[c].data(), 1, m_meanAtTn[c].data(), 1);
     m_meanSnapshotValid = true;
 
@@ -1430,7 +1538,7 @@ void DOVelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(
 
     // Precompute mode and mean gradients at u^n for ComputeDOMeanCoupling.
     // DOExplicitRhs will re-run PrecomputeGradients at modes^{n+1} (the
-    // post-implicit state it receives as `in` from the GLM stage loop).
+    // post-implicit state it receives as in from the GLM stage loop).
     PrecomputeGradients();
 
     // initialise doCorr & its components, fill it
@@ -1450,7 +1558,8 @@ void DOVelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(
  */
 void DOVelocityCorrectionScheme::ModePressureSolve(
     const Array<OneD, Array<OneD, NekDouble>> &uhatPhys,
-    NekDouble aii_Dt, Array<OneD, NekDouble> &pCoeffsOut)
+    NekDouble aii_Dt, const Array<OneD, const NekDouble> &pGuess,
+    Array<OneD, NekDouble> &pCoeffsOut)
 {
     const int nVel  = m_velocity.size();
     const int nPhys = m_fields[0]->GetTotPoints();
@@ -1480,8 +1589,11 @@ void DOVelocityCorrectionScheme::ModePressureSolve(
 
     StdRegions::ConstFactorMap factors;
     factors[StdRegions::eFactorLambda] = 0.0;
-    // zero m_pressure coeffs to fix the Poisson null-space constant
-    Vmath::Zero(npC, m_pressure->UpdateCoeffs().data(), 1);
+    // Warm start from this mode's previous pressure solution: iterative
+    // solvers converge in fewer iterations, direct solvers ignore it, and
+    // the answer is guess-independent (a pinned Dirichlet vertex removes
+    // the pure-Neumann null space at the assembly-map level).
+    Vmath::Vcopy(npC, pGuess.data(), 1, m_pressure->UpdateCoeffs().data(), 1);
     m_pressure->HelmSolve(poisson_RHS, m_pressure->UpdateCoeffs(), factors);
     Vmath::Vcopy(npC, m_pressure->GetCoeffs().data(), 1, pCoeffsOut.data(), 1);
 
@@ -1497,7 +1609,7 @@ void DOVelocityCorrectionScheme::ModePressureSolve(
  * HelmSolve for each velocity component (zeroing its coeffs first).
  * Leaves m_fields and m_pressure in the mode state; DOImplicitSolve
  * restores the mean-field state after the full mode loop.
- * 
+ *
  * The equation solved is valid for any IMEX order:
  *  (lap - 1/(\nu aii_Dt))u_k^{n+1} = -uhat_k/(\nu aii_Dt)
  *                                    + \partial_k p^{n+1} / \nu.
@@ -1505,6 +1617,7 @@ void DOVelocityCorrectionScheme::ModePressureSolve(
 void DOVelocityCorrectionScheme::ModeViscousSolve(
     const Array<OneD, Array<OneD, NekDouble>> &uhatPhys,
     const Array<OneD, NekDouble> &pCoeffsIn, NekDouble aii_Dt,
+    const Array<OneD, const NekDouble> &uGuessCoeffs,
     Array<OneD, Array<OneD, NekDouble>> &uNewPhys,
     Array<OneD, Array<OneD, NekDouble>> &uNewCoeffs)
 {
@@ -1543,9 +1656,20 @@ void DOVelocityCorrectionScheme::ModeViscousSolve(
     {
         // eFactorLambda = 1/(aii_Dt*nu), where aii_Dt is the implicit weight
         factors[StdRegions::eFactorLambda] = 1.0/aii_Dt/m_diffCoeff[k];
-        // zero the mean field coeffs to give HelmSolve's initial guess
-        Vmath::Zero(m_fields[m_velocity[k]]->GetNcoeffs(),
-                    m_fields[m_velocity[k]]->UpdateCoeffs().data(), 1);
+        // warm start from this mode's previous velocity solution (used by
+        // iterative solvers as the initial guess, ignored by direct ones)
+        if (k < nVel)
+        {
+            Vmath::Vcopy(m_fields[m_velocity[k]]->GetNcoeffs(),
+                         uGuessCoeffs.data() +
+                             k*m_fields[m_velocity[k]]->GetNcoeffs(), 1,
+                         m_fields[m_velocity[k]]->UpdateCoeffs().data(), 1);
+        }
+        else
+        {
+            Vmath::Zero(m_fields[m_velocity[k]]->GetNcoeffs(),
+                        m_fields[m_velocity[k]]->UpdateCoeffs().data(), 1);
+        }
         m_fields[m_velocity[k]]->HelmSolve(helmholtz_RHS[k],
             m_fields[m_velocity[k]]->UpdateCoeffs(), factors);
         m_fields[m_velocity[k]]->BwdTrans(
@@ -1557,38 +1681,33 @@ void DOVelocityCorrectionScheme::ModeViscousSolve(
 }
 
 /**
- * RHS for explicit (Poisson) step, called by the time integrator `m_doScheme`.
- *      - `in[0,...,m_nDOModes*nVel-1]`: mode phys at time t (one per (i,c));
- *      - `in[m_doYIdx]`: Y at time t (size m_nDOParticles*m_nDOModes).
- *      - `out`: unscaled explicit RHS (dt weight applied by the integrator).
+ * RHS for explicit (Poisson) step, called by the time integrator m_doScheme.
+ *      - in[0,...,m_nDOModes*nVel-1]: mode phys at time t (one per (i,c));
+ *      - in[m_doYIdx]: local Y shard at time t (m_npLocal*m_nDOModes).
+ *      - out: unscaled explicit RHS (dt weight applied by the integrator).
  *
  * m_fields phys swapped to m_meanAtTn for the duration of the callback.
- * m_DOModePhys/m_DOModeCoeffs/m_Yi are synced from `in` so ComputeYMoments,
+ * m_DOModePhys/m_DOModeCoeffs/m_Yi are synced from in so ComputeYMoments,
  * ComputeNMode operates on the correct state.
  */
 void DOVelocityCorrectionScheme::DOExplicitRhs(
     const Array<OneD, const Array<OneD, NekDouble>> &in,
     Array<OneD, Array<OneD, NekDouble>>             &out,
-    const NekDouble                                  time)
+    [[maybe_unused]] const NekDouble                 time)
 {
-    boost::ignore_unused(time);     // no explicit t-dependence
     if (m_nDOModes == 0) return;
 
     const int nVel    = m_velocity.size();
     const int nPhys   = m_fields[0]->GetTotPoints();
 
-    // bracket BCs to avoid mean-field-BC contamination
-    auto bcState = CaptureVelocityBCState(m_fields, m_velocity);
-    HomogenizeVelocityBCsForModes(m_fields, m_velocity);
     // copy modes from in to m_DOModePhys
     for (int i = 0; i < m_nDOModes; ++i)
         for (int c = 0; c < nVel; ++c)
             Vmath::Vcopy(nPhys, in[i*nVel + c].data(), 1,
                          m_DOModePhys.data()
                          + (i*nVel + c)*nPhys, 1);
-    RestoreVelocityBCState(m_fields, bcState);
-    // copy Y from `in` to m_Yi
-    Vmath::Vcopy(m_nDOParticles*m_nDOModes,
+    // copy the local Y shard from in to m_Yi
+    Vmath::Vcopy(m_npLocal*m_nDOModes,
                  in[m_doYIdx].data(), 1, m_Yi.data(), 1);
 
     // swap m_fields phys to m_meanAtTn, save mean^{n+1} to meanSaved
@@ -1608,7 +1727,7 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
     ComputeYMoments();
 
     // For IMEX BDF2, A_implicit[0][0] = 2/3 > 0: the GLM stage loop calls
-    // DoImplicitSolve before DoOdeRhs, so `in` = modes^{n+1} (post-implicit).
+    // DoImplicitSolve before DoOdeRhs, so in = modes^{n+1} (post-implicit).
     // v_EvaluateAdvection_SetPressureBCs cached gradients at modes^n; those
     // are stale here.  Recompute from the freshly synced m_DOModePhys.
     PrecomputeGradients();
@@ -1618,31 +1737,115 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
     // (Default eArrayCopy would allocate a separate buffer, leaving m_NAllBuf
     // unfilled; beta projection and copy-to-out both become wrong.)
     const int SLOTS = 4*nVel + 2;
-    const auto &csCache = GetConstantSubspaceCache(m_fields, m_velocity);
-    std::vector<Array<OneD, Array<OneD, NekDouble>>> NiAll(m_nDOModes);
-    for (int i = 0; i < m_nDOModes; ++i)
+    const int S     = m_nDOModes;
+    std::vector<Array<OneD, Array<OneD, NekDouble>>> NiAll(S);
+    for (int i = 0; i < S; ++i)
     {
         NiAll[i] = Array<OneD, Array<OneD, NekDouble>>(nVel);
         for (int c = 0; c < nVel; ++c)
             NiAll[i][c] = Array<OneD, NekDouble>(
                 nPhys, m_NAllBuf.data() + (i*nVel+c)*nPhys, eArrayWrapper);
     }
-    std::vector<NekDouble> allBetas(m_nDOModes * m_nDOModes, 0.0);
-    for (int i = 0; i < m_nDOModes; ++i)
+
+    // Each mode writes only its per-worker slab and per-mode reduction
+    // slots, so the loop parallelises when built with OpenMP. One AllReduce
+    // covers the S*S beta projections, the S*nVel strip-constants integrals
+    // and the S*S + S*S*S Y-RHS tensors.
+    const bool dbgDiag =
+        m_verbose && m_session->GetComm()->GetSpaceComm()->GetRank() == 0;
+    std::vector<NekDouble> dbgMax;
+    if (dbgDiag)
     {
-        NekDouble *bodyBuf = m_NBodyBuf.data() + i * SLOTS * nPhys;
-        std::vector<NekDouble> localBetas_i(m_nDOModes, 0.0);
-        ComputeNModeBody(i, NiAll[i], bodyBuf, csCache.domainArea,
-                         csCache.admissible, localBetas_i);
-        std::copy(localBetas_i.begin(), localBetas_i.end(),
-                  allBetas.data() + i*m_nDOModes);
+        dbgMax.assign(4*S, 0.0);
     }
-    m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
-        allBetas, LibUtilities::ReduceSum);
-    for (int i = 0; i < m_nDOModes; ++i)
-        for (int p = 0; p < m_nDOModes; ++p)
+    std::vector<NekDouble> allRed(S*S + S*nVel + S*S + S*S*S, 0.0);
+    NekDouble *betasAll = allRed.data();
+    NekDouble *intsAll  = betasAll + S*S;
+    NekDouble *ipKiAll  = intsAll + S*nVel;
+    NekDouble *ipKliAll = ipKiAll + S*S;
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (int i = 0; i < S; ++i)
+    {
+        int slab = 0;
+#ifdef _OPENMP
+        slab = omp_get_thread_num();
+#endif
+        NekDouble *bodyBuf = m_NBodyBuf.data() + slab*SLOTS*nPhys;
+        ComputeNModeBody(i, NiAll[i], bodyBuf, betasAll + i*S,
+                         intsAll + i*nVel);
+        if (dbgDiag)
         {
-            const NekDouble beta_ip = allBetas[i*m_nDOModes + p];
+            // per-mode maxima, taken before the slab is reused
+            NekDouble mc = 0.0, mt = 0.0, ms = 0.0, mn = 0.0;
+            for (int c = 0; c < nVel; ++c)
+                for (int k = 0; k < nPhys; ++k)
+                {
+                    mc = std::max(mc, std::abs(bodyBuf[c*nPhys + k]));
+                    mt = std::max(mt,
+                                  std::abs(bodyBuf[(nVel + c)*nPhys + k]));
+                    ms = std::max(
+                        ms, std::abs(bodyBuf[(3*nVel + c)*nPhys + k]));
+                    mn = std::max(
+                        mn, std::abs(m_NAllBuf[(i*nVel + c)*nPhys + k]));
+                }
+            dbgMax[4*i + 0] = mc;
+            dbgMax[4*i + 1] = mt;
+            dbgMax[4*i + 2] = ms;
+            dbgMax[4*i + 3] = mn;
+        }
+    }
+    // Y-RHS tensors (serial: BwdTrans/PhysDeriv allocate via the MemPool)
+    BuildYRhsTensors(ipKiAll, ipKliAll);
+
+    if (dbgDiag)
+    {
+        NekDouble muMax = 0.0;
+        for (int q = 0; q < S; ++q)
+            muMax = std::max(muMax, std::abs(m_Cij[q*S + q]));
+        const NekDouble lambdaReg = m_invCovRegEps * muMax;
+        for (int i = 0; i < S; ++i)
+        {
+            const NekDouble mui      = m_Cij[i*S + i];
+            const NekDouble invMuReg = mui / (mui*mui + lambdaReg*lambdaReg);
+            std::cout << "[DBG ComputeNMode step=" << m_doStepCounter
+                      << " mode=" << i
+                      << " mui=" << mui
+                      << " lambdaReg=" << lambdaReg
+                      << " invMuReg=" << invMuReg
+                      << " |cross|max=" << dbgMax[4*i + 0]
+                      << " |triple_raw|max=" << dbgMax[4*i + 1]
+                      << " |triple_scaled|max=" << invMuReg * dbgMax[4*i + 1]
+                      << " |stoch_raw|max=" << dbgMax[4*i + 2]
+                      << " |stoch_scaled|max=" << invMuReg * dbgMax[4*i + 2]
+                      << " |N_preproj|max=" << dbgMax[4*i + 3]
+                      << "]\n";
+        }
+    }
+
+    m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
+        allRed, LibUtilities::ReduceSum);
+
+    // strip-constants gauge: subtract the global innerArg mean from N,
+    // before the beta projection to match the serial operation order
+    if (!m_doAllowConstantModes && m_constSubspace.domainArea > 0.0)
+    {
+        for (int i = 0; i < S; ++i)
+            for (int c = 0; c < nVel; ++c)
+            {
+                if (!m_constSubspace.admissible[c]) continue;
+                const NekDouble mean =
+                    intsAll[i*nVel + c] / m_constSubspace.domainArea;
+                NekDouble *Nic = m_NAllBuf.data() + (i*nVel + c)*nPhys;
+                Vmath::Sadd(nPhys, -mean, Nic, 1, Nic, 1);
+            }
+    }
+
+    for (int i = 0; i < S; ++i)
+        for (int p = 0; p < S; ++p)
+        {
+            const NekDouble beta_ip = betasAll[i*S + p];
             if (beta_ip == 0.0) continue;
             for (int c = 0; c < nVel; ++c)
             {
@@ -1652,13 +1855,13 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
                 Vmath::Svtvp(nPhys, -beta_ip, u_pc, 1, Nic, 1, Nic, 1);
             }
         }
-    for (int i = 0; i < m_nDOModes; ++i)
+    for (int i = 0; i < S; ++i)
         for (int c = 0; c < nVel; ++c)
             Vmath::Vcopy(nPhys, m_NAllBuf.data() + (i*nVel + c)*nPhys, 1,
                          out[i*nVel + c].data(), 1);
 
-    // explicit RHS for Y (reads m_modeLinRhs and m_modeGrad1)
-    ComputeYRhs(out[m_doYIdx]);
+    // explicit RHS for Y from the reduced tensors
+    AssembleYRhs(ipKiAll, ipKliAll, out[m_doYIdx]);
 
     // restore m_fields phys (mean^{n+1} for the rest of the step)
     if (m_meanSnapshotValid)
@@ -1672,7 +1875,7 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
 /**
  * Implicit solve for one IMEX step, called by time integrator m_doScheme.
  *      - in[0,...,m_nDOModes*nVel-1] : mode predictor for each (i,c);
- *      - in[m_doYIdx] : Y predictor (size m_nDOParticles*m_nDOModes);
+ *      - in[m_doYIdx] : local Y shard predictor (m_npLocal*m_nDOModes);
  *      - out: post-implicit state: modes u_i^{n+1}, Y identity-copied;
  *      - lambda: IMEX implicit weight ((2/3)dt in BDF2, dt in BDF1 startup).
  * For each mode, runs ModePressureSolve, then ModeViscousSolve. Both helpers
@@ -1684,10 +1887,9 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
 void DOVelocityCorrectionScheme::DOImplicitSolve(
     const Array<OneD, const Array<OneD, NekDouble>> &in,
     Array<OneD, Array<OneD, NekDouble>>             &out,
-    const NekDouble                                  time,
+    [[maybe_unused]] const NekDouble                 time,
     const NekDouble                                  lambda)
 {
-    boost::ignore_unused(time); // no explicit t-dependence
     if (m_nDOModes == 0) return;
 
     const int nVel     = m_velocity.size();
@@ -1728,16 +1930,30 @@ void DOVelocityCorrectionScheme::DOImplicitSolve(
         uNewCoeffs[c] = Array<OneD, NekDouble>(nCoeffs, 0.0);
     }
 
-    // Per-mode pressure Poisson + viscous Helmholtz.
+    // Mode solves grouped by operator: all pressure Poissons first, then
+    // all viscous Helmholtz solves. Consecutive solves of the same matrix
+    // keep any SuccessiveRHS projection basis coherent and reuse the warm
+    // preconditioner; each solve's inputs are unchanged, so direct-solver
+    // results are identical to the interleaved ordering. The previous
+    // solutions (m_DOModePCoeffs / m_DOModeCoeffs, still holding the last
+    // stage's values) warm-start the iterative solvers.
     for (int i = 0; i < m_nDOModes; ++i)
     {
         for (int c = 0; c < nVel; ++c)
             Vmath::Vcopy(nPhys, in[i*nVel + c].data(), 1,
                         uhat[c].data(), 1);
-        ModePressureSolve(uhat, lambda, pMode);
+        ModePressureSolve(uhat, lambda, m_DOModePCoeffs + i*nPC, pMode);
         Vmath::Vcopy(nPC, pMode.data(), 1,      // cache p_i for next Y-RHS
                      m_DOModePCoeffs.data() + i*nPC, 1);
-        ModeViscousSolve(uhat, pMode, lambda, uNewPhys, uNewCoeffs);
+    }
+    for (int i = 0; i < m_nDOModes; ++i)
+    {
+        for (int c = 0; c < nVel; ++c)
+            Vmath::Vcopy(nPhys, in[i*nVel + c].data(), 1,
+                        uhat[c].data(), 1);
+        ModeViscousSolve(uhat, m_DOModePCoeffs + i*nPC, lambda,
+                         m_DOModeCoeffs + i*nVel*nCoeffs,
+                         uNewPhys, uNewCoeffs);
         for (int c = 0; c < nVel; ++c)
         {
             Vmath::Vcopy(nPhys, uNewPhys[c].data(), 1,
@@ -1749,7 +1965,7 @@ void DOVelocityCorrectionScheme::DOImplicitSolve(
     }
 
     // Y: identity implicit operator (the Y system has no implicit term)
-    Vmath::Vcopy(m_nDOParticles*m_nDOModes, in[m_doYIdx].data(), 1,
+    Vmath::Vcopy(m_npLocal*m_nDOModes, in[m_doYIdx].data(), 1,
                  out[m_doYIdx].data(), 1);
 
     // Restore mean-field state.
@@ -1773,8 +1989,13 @@ void DOVelocityCorrectionScheme::DOImplicitSolve(
  *   - per-particle Y:   m_Yi (Y_new = V^T Y_old);
  *   - history values in the integrator.
  */
-void DOVelocityCorrectionScheme::DiagonaliseCov()
+void DOVelocityCorrectionScheme::DiagonaliseCov(
+    std::vector<NekDouble> *deferredV)
 {
+    if (deferredV)
+    {
+        deferredV->clear();
+    }
     if (m_nDOModes <= 1) return;
     ComputeYMoments();
 
@@ -1910,7 +2131,7 @@ void DOVelocityCorrectionScheme::DiagonaliseCov()
     auto rotateYi = [&](Array<OneD, NekDouble> &Yarr) {
         if (Yarr.size() == 0) return;
         std::vector<NekDouble> tmp(m_nDOModes, 0.0);
-        for (int p = 0; p < m_nDOParticles; ++p)     // loop over particles
+        for (int p = 0; p < m_npLocal; ++p)          // local particle shard
         {
             for (int i = 0; i < m_nDOModes; ++i)     // new mode i
             {
@@ -1936,47 +2157,49 @@ void DOVelocityCorrectionScheme::DiagonaliseCov()
     rotateModeBlocks(m_DOModePCoeffs, nPC);
     rotateYi(m_Yi);
 
-    // apply V^T to all the time integrator's history, too
+    // apply V^T to all the time integrator's history, too -- unless the
+    // caller asked to defer it (v_PostIntegrate: ReOrthonormalise composes
+    // V with its own basis change into a single history pass)
     if (m_doSchemeInited)
     {
-        auto &solVec = m_doScheme->UpdateSolutionVector();
-        const int nSteps = static_cast<int>(solVec.size());
-        Array<OneD, NekDouble> buf(m_nDOModes * nPhys);
-        for (int step = 0; step < nSteps; ++step)
+        if (deferredV)
         {
-            for (int c = 0; c < nVel; ++c)
+            *deferredV = V;
+        }
+        else
+        {
+            auto &solVec = m_doScheme->UpdateSolutionVector();
+            const int nSteps = static_cast<int>(solVec.size());
+            Array<OneD, NekDouble> buf(m_nDOModes * nPhys);
+            for (int step = 0; step < nSteps; ++step)
             {
-                for (int i = 0; i < m_nDOModes; ++i)
+                for (int c = 0; c < nVel; ++c)
                 {
-                    Vmath::Vcopy(nPhys, solVec[step][i*nVel + c].data(), 1,
-                                 buf.data() + i*nPhys, 1);
+                    for (int i = 0; i < m_nDOModes; ++i)
+                    {
+                        Vmath::Vcopy(nPhys,
+                                     solVec[step][i*nVel + c].data(), 1,
+                                     buf.data() + i*nPhys, 1);
+                    }
+                    rotateModeBlocks(buf, nPhys);
+                    for (int i = 0; i < m_nDOModes; ++i)
+                    {
+                        Vmath::Vcopy(nPhys, buf.data() + i*nPhys, 1,
+                                     solVec[step][i*nVel + c].data(), 1);
+                    }
                 }
-                rotateModeBlocks(buf, nPhys);
-                for (int i = 0; i < m_nDOModes; ++i)
-                {
-                    Vmath::Vcopy(nPhys, buf.data() + i*nPhys, 1,
-                                 solVec[step][i*nVel + c].data(), 1);
-                }
+                rotateYi(solVec[step][m_doYIdx]);
             }
-            rotateYi(solVec[step][m_doYIdx]);
         }
     }
     ComputeYMoments();
-
-    // clamp tiny-negative diagonal noise to 0 (preserves nonneg eigenvalues).
-    for (int i = 0; i < m_nDOModes; ++i)
-    {
-        const NekDouble diag = m_Cij[i*m_nDOModes + i];
-        if (diag < 0.0 && std::abs(diag) < 1e-14)
-            m_Cij[i*m_nDOModes + i] = 0.0;
-    }
 }
 
 /**
  * After the base VCS step has advanced the mean field, this method:
  *      - advances (modes, Y) atomically via m_doScheme -- all RHS terms
  *        evaluated at the same t^n state thanks to the integrator passing
- *        a single `in` snapshot to DOExplicitRhs / DOImplicitSolve. Mean^n is
+ *        a single in snapshot to DOExplicitRhs / DOImplicitSolve. Mean^n is
  *        read from m_meanAtTn (snapshotted by the EXT operator at t^n).
  *      - unpacks the post-step (modes, Y) back into m_DOModePhys / m_Yi
  *        (the ground-truth members consumed by DiagonaliseCov,
@@ -1992,8 +2215,9 @@ bool DOVelocityCorrectionScheme::v_PreIntegrate(int step)
 
 bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
 {
-    // base VCS (m_fields <- mean^{n+1})
-    VelocityCorrectionScheme::v_PostIntegrate(step);
+    // base VCS (m_fields <- mean^{n+1}); a true return value requests
+    // termination of the time loop (e.g. steady-state) and must propagate
+    bool terminate = VelocityCorrectionScheme::v_PostIntegrate(step);
     ++m_doStepCounter;  // per-step verbose-only counter
 
     if (m_nDOModes > 0 && m_doSchemeInited)
@@ -2016,17 +2240,24 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
                              m_DOModePhys.data() + (i*nVel + c)*nPhys, 1);
                 Vmath::Vcopy(nPhys, advanced[i*nVel + c].data(), 1,
                              tmpPhys.data(), 1);
-                Vmath::Zero(nCoeffs, tmpCoef.data(), 1);
+                // warm-start the mass solve from last step's coefficients
+                Vmath::Vcopy(nCoeffs,
+                             m_DOModeCoeffs.data() + (i*nVel + c)*nCoeffs, 1,
+                             tmpCoef.data(), 1);
                 m_fields[m_velocity[c]]->FwdTrans(tmpPhys, tmpCoef);
                 Vmath::Vcopy(nCoeffs, tmpCoef.data(), 1,
                              m_DOModeCoeffs.data() + (i*nVel + c)*nCoeffs, 1);
             }
         RestoreVelocityBCState(m_fields, piBcState);
-        Vmath::Vcopy(m_nDOParticles*m_nDOModes, advanced[m_doYIdx].data(), 1,
+        Vmath::Vcopy(m_npLocal*m_nDOModes, advanced[m_doYIdx].data(), 1,
                      m_Yi.data(), 1);
 
-        DiagonaliseCov();
-        ReOrthonormalise();
+        // DiagonaliseCov defers its history rotation (deferredV);
+        // ReOrthonormalise composes it with its own basis change and
+        // applies a single transform pass to the integrator history.
+        std::vector<NekDouble> deferredV;
+        DiagonaliseCov(&deferredV);
+        ReOrthonormalise(&deferredV);
 
         // calling ReOrthonormalise modifies m_DOModePhys and m_Yi after
         // DiagonaliseCov, which rotates solVec[*]. Thus, we need to
@@ -2040,7 +2271,7 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
                                  m_DOModePhys.data() + (i*nVel + c)*nPhys, 1,
                                  solVec[0][i*nVel + c].data(), 1);
                 }
-            Vmath::Vcopy(m_nDOParticles*m_nDOModes, m_Yi.data(), 1,
+            Vmath::Vcopy(m_npLocal*m_nDOModes, m_Yi.data(), 1,
                          solVec[0][m_doYIdx].data(), 1);
         }
 
@@ -2067,7 +2298,7 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
                   << ss.str() << std::endl;
         m_stepAccumTime = 0.0;
     }
-    return false;
+    return terminate;
 }
 
 void DOVelocityCorrectionScheme::v_PrintStatusInformation(
@@ -2084,7 +2315,8 @@ void DOVelocityCorrectionScheme::v_PrintStatusInformation(
  *           lap(phi) = div(u),    (HelmSolve with lambda = 0)
  *           u <- u - grad(phi);
  *   - optional constants strip (if DOAllowConstantModes = false);
- *   - modified Gram-Schmidt (4 passes) against the accepted basis;
+ *   - classical Gram-Schmidt with reorthogonalisation against the accepted
+ *     basis (two passes; four during initialisation);
  *   - divergence-L2 sanity check; re-project once if dirty;
  *   - normalise; abort if collapsed.
  *
@@ -2097,7 +2329,8 @@ void DOVelocityCorrectionScheme::v_PrintStatusInformation(
  * Velocity- and pressure-BC brackets at the top zero homogeneous BC DOFs;
  * both are restored on exit.
  */
-void DOVelocityCorrectionScheme::ReOrthonormalise()
+void DOVelocityCorrectionScheme::ReOrthonormalise(
+    const std::vector<NekDouble> *pendingV)
 {
     if (m_nDOModes == 0) return;
 
@@ -2172,7 +2405,12 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
         auto comm = m_fields[m_velocity[0]]->GetComm()->GetRowComm();
         std::vector<NekDouble> alphas(k);
         Array<OneD, NekDouble> wCand(nPhys);
-        for (int pass = 0; pass < 4; ++pass)
+        // Two classical-GS passes suffice ("twice is enough") during time
+        // stepping, where candidates enter near-orthonormal (O(dt) drift).
+        // Initialisation keeps four passes: POD candidates can be strongly
+        // rank-deficient there.
+        const int nPasses = (m_doStepCounter <= 1) ? 4 : 2;
+        for (int pass = 0; pass < nPasses; ++pass)
         {
             std::fill(alphas.begin(), alphas.end(), 0.0);
             for (int c = 0; c < nVel; ++c)
@@ -2262,9 +2500,12 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
             cand.phys[c].assign(m_DOModePhys.data() + pOff,
                                 m_DOModePhys.data() + pOff + nPhys);
         }
-        // norm pre-MGS
-        const NekDouble preMgsNrm = std::sqrt(std::max(
-            physWeightsNorm2(cand), 0.0));
+        // norm pre-MGS: diagnostic only and costs an AllReduce, so skip it
+        // unless verbose (m_verbose is uniform across ranks, keeping the
+        // collective aligned)
+        const NekDouble preMgsNrm =
+            m_verbose ? std::sqrt(std::max(physWeightsNorm2(cand), 0.0))
+                      : 0.0;
 
         // HHD: DOImplicitSolve has already run a Poisson pressure-correction
         // step for every mode before this function is called, so weak
@@ -2277,7 +2518,8 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
             projectAndSync(cand);
         }
         if (!m_doAllowConstantModes)
-            ProjectOutConstantsFromMode(m_fields, m_velocity, cand);
+            ProjectOutConstantsFromMode(m_fields, m_velocity,
+                                        m_constSubspace, cand);
         runMgs(cand);
 
         // norm post-MGS
@@ -2331,14 +2573,15 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
         m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
             G, LibUtilities::ReduceSum);
 
-        // Y rotation
-        std::vector<NekDouble> Ytmp(m_nDOModes*m_nDOParticles);
-        Blas::Dgemm('T', 'N', m_nDOModes, m_nDOParticles, m_nDOModes, 1.0,
+        // Y rotation (local particle shard; the current arrays were already
+        // rotated by DiagonaliseCov, so plain G applies here)
+        std::vector<NekDouble> Ytmp(m_nDOModes*m_npLocal);
+        Blas::Dgemm('T', 'N', m_nDOModes, m_npLocal, m_nDOModes, 1.0,
                     G.data(), m_nDOModes, m_Yi.data(), m_nDOModes,
                     0.0, Ytmp.data(), m_nDOModes);
-        Vmath::Vcopy(m_nDOModes*m_nDOParticles, Ytmp.data(), 1,
+        Vmath::Vcopy(m_nDOModes*m_npLocal, Ytmp.data(), 1,
                      m_Yi.data(), 1);
-        
+
         // rotate pressure modes
         if (m_DOModePCoeffs.size() > 0)
         {
@@ -2379,6 +2622,37 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
                 Ginv[i*m_nDOModes + k] = s / G[i*m_nDOModes + i];
             }
 
+        // Compose with DiagonaliseCov's deferred rotation V when present,
+        // so the history is transformed in a single pass:
+        //   mode fields transform by right-multiplication, sequentially
+        //   old*V then *Ginv  =>  Rm = V*Ginv, Rm[j*S+i] = sum_k V[j*S+k]
+        //   Ginv[k*S+i];
+        //   Y transforms by left-multiplication, G*(V^T y)  =>  Ry = G*V^T,
+        //   Ry[i*S+k] = sum_m G[i*S+m] V[k*S+m].
+        const int  S     = m_nDOModes;
+        const bool haveV = (pendingV && !pendingV->empty());
+        std::vector<NekDouble> Rm(Ginv), Ry(G);
+        if (haveV)
+        {
+            const std::vector<NekDouble> &V = *pendingV;
+            for (int j = 0; j < S; ++j)
+                for (int i = 0; i < S; ++i)
+                {
+                    NekDouble s = 0.0;
+                    for (int k = 0; k < S; ++k)
+                        s += V[j*S + k] * Ginv[k*S + i];
+                    Rm[j*S + i] = s;
+                }
+            for (int i = 0; i < S; ++i)
+                for (int k = 0; k < S; ++k)
+                {
+                    NekDouble s = 0.0;
+                    for (int m = 0; m < S; ++m)
+                        s += G[i*S + m] * V[k*S + m];
+                    Ry[i*S + k] = s;
+                }
+        }
+
         auto &solVec = m_doScheme->UpdateSolutionVector();
         std::vector<NekDouble> tmpModes(m_nDOModes * nPhys, 0.0);
         std::vector<NekDouble> gatherBuf(m_nDOModes*nPhys);
@@ -2386,10 +2660,10 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
         {
             if (slot[m_doYIdx].size() != 0)
             {
-                Blas::Dgemm('T', 'N', m_nDOModes, m_nDOParticles, m_nDOModes,
-                            1.0, G.data(), m_nDOModes, slot[m_doYIdx].data(),
+                Blas::Dgemm('T', 'N', m_nDOModes, m_npLocal, m_nDOModes,
+                            1.0, Ry.data(), m_nDOModes, slot[m_doYIdx].data(),
                             m_nDOModes, 0.0, Ytmp.data(), m_nDOModes);
-                Vmath::Vcopy(m_nDOModes*m_nDOParticles, Ytmp.data(), 1,
+                Vmath::Vcopy(m_nDOModes*m_npLocal, Ytmp.data(), 1,
                              slot[m_doYIdx].data(), 1);
             }
             for (int c = 0; c < nVel; ++c)
@@ -2400,7 +2674,7 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
                                  gatherBuf.data() + i*nPhys, 1);
                 }
                 Blas::Dgemm('N', 'T', nPhys, m_nDOModes, m_nDOModes, 1.0,
-                            gatherBuf.data(), nPhys, Ginv.data(), m_nDOModes,
+                            gatherBuf.data(), nPhys, Rm.data(), m_nDOModes,
                             0.0, tmpModes.data(), nPhys);
                 for (int j = 0; j < m_nDOModes; ++j)
                 {
@@ -2438,7 +2712,7 @@ void DOVelocityCorrectionScheme::ReOrthonormalise()
 }
 
 /**
- * Initialises the modes from the `m_nDOModes` smallest-eigenvalue eigenvectors
+ * Initialises the modes from the m_nDOModes smallest-eigenvalue eigenvectors
  * of the homogeneous CG Laplacian (built by DOReducedCGEigenBasis). Each
  * eigenpair generates up to nVel modes by placing the eigenvector into each
  * spatial component slot in turn (and setting the others to 0).
@@ -2649,6 +2923,7 @@ void DOVelocityCorrectionScheme::RestoreFromDOArchive(
                 m_session->GetVariable(m_velocity[c]);
             Array<OneD, NekDouble> coeffArr(nCoeffs, 0.0);
             std::string mutableName = fieldName;
+            bool found = false;
             for (size_t i = 0; i < FieldDef.size(); ++i)
             {
                 const auto &flds = FieldDef[i]->m_fields;
@@ -2656,48 +2931,91 @@ void DOVelocityCorrectionScheme::RestoreFromDOArchive(
                     flds.end()) continue;
                 m_fields[m_velocity[c]]->ExtractDataToCoeffs(
                     FieldDef[i], FieldData[i], mutableName, coeffArr);
+                found = true;
             }
-            std::memcpy(m_DOModeCoeffs.data() + (m*nVel + c)*nCoeffs,
-                        coeffArr.data(), sizeof(NekDouble)*nCoeffs);
+            ASSERTL0(found, "DORestartFile: field " + fieldName +
+                            " not found in archive " + fldPath +
+                            " (was the archive written with fewer modes?).");
+            Vmath::Vcopy(nCoeffs, coeffArr.data(), 1,
+                         m_DOModeCoeffs.data() + (m*nVel + c)*nCoeffs, 1);
             Array<OneD, NekDouble> physArr(
                 nPhys, m_DOModePhys.data() + (m*nVel + c)*nPhys, eArrayWrapper);
             m_fields[m_velocity[c]]->BwdTrans(coeffArr, physArr);
         }
     }
 
+    const bool root = (m_session->GetComm()->GetRank() == 0);
+
     auto it = meta.find("DOVelocityCorrectionScheme_Yi_hex");
     ASSERTL0(it != meta.end(), "DORestartFile: Yi_hex not found in metadata");
-    const std::string &hex = it->second;
-    const int nFlat = m_nDOParticles * m_nDOModes;
-    ASSERTL0((int)hex.size() == nFlat * (int)sizeof(NekDouble) * 2,
-             "DORestartFile: Yi_hex size mismatch");
-    unsigned char *bytes = reinterpret_cast<unsigned char *>(m_Yi.data());
-    for (int b = 0; b < nFlat * (int)sizeof(NekDouble); ++b)
     {
-        unsigned val;
-        std::sscanf(hex.c_str() + 2*b, "%02x", &val);
-        bytes[b] = static_cast<unsigned char>(val);
+        // archives store the GLOBAL population; decode fully, keep shard
+        std::vector<NekDouble> yAll((size_t)m_nDOParticles * m_nDOModes);
+        ASSERTL0(DecodeHexDoubles(it->second, yAll.data(),
+                                  m_nDOParticles * m_nDOModes),
+                 "DORestartFile: Yi_hex size mismatch");
+        Vmath::Vcopy(m_npLocal * m_nDOModes,
+                     yAll.data() + (size_t)m_npOffset * m_nDOModes, 1,
+                     m_Yi.data(), 1);
     }
 
-    // Restore pressure modes (optional: present only in archives written with
-    // the fixed FilterDOArchive that encodes PCoeffs_hex in metadata).
-    auto itP = meta.find("DOVelocityCorrectionScheme_PCoeffs_hex");
-    if (itP != meta.end())
+    // Pressure modes: prefer the partition-aware mode_<i>_p fields; fall
+    // back to the legacy rank-local PCoeffs_hex (valid single-rank only).
+    // Missing pressure modes are benign either way: DOImplicitSolve rewrites
+    // them before the first Y-RHS reads grad(p_k).
+    const int nPC = m_pressure->GetNcoeffs();
+    bool pFromFields = (m_nDOModes > 0);
+    for (int m = 0; m < m_nDOModes && pFromFields; ++m)
     {
-        const std::string &hexP = itP->second;
-        const int nFlatP = m_DOModePCoeffs.size();
-        if ((int)hexP.size() == nFlatP * (int)sizeof(NekDouble) * 2)
+        const std::string fieldName = "mode_" + std::to_string(m) + "_p";
+        Array<OneD, NekDouble> coeffArr(nPC, 0.0);
+        std::string mutableName = fieldName;
+        bool found = false;
+        for (size_t i = 0; i < FieldDef.size(); ++i)
         {
-            unsigned char *bytesP =
-                reinterpret_cast<unsigned char *>(m_DOModePCoeffs.data());
-            for (int b = 0; b < nFlatP * (int)sizeof(NekDouble); ++b)
+            const auto &flds = FieldDef[i]->m_fields;
+            if (std::find(flds.begin(), flds.end(), fieldName) ==
+                flds.end()) continue;
+            m_pressure->ExtractDataToCoeffs(
+                FieldDef[i], FieldData[i], mutableName, coeffArr);
+            found = true;
+        }
+        if (!found)
+        {
+            pFromFields = false;
+            break;
+        }
+        Vmath::Vcopy(nPC, coeffArr.data(), 1,
+                     m_DOModePCoeffs.data() + m*nPC, 1);
+    }
+    if (pFromFields)
+    {
+        if (root)
+        {
+            std::cout << "[DORestartFile] restored pressure modes"
+                         " from fields\n";
+        }
+    }
+    else
+    {
+        auto itP = meta.find("DOVelocityCorrectionScheme_PCoeffs_hex");
+        if (itP != meta.end())
+        {
+            if (DecodeHexDoubles(itP->second, m_DOModePCoeffs.data(),
+                                 (int)m_DOModePCoeffs.size()))
             {
-                unsigned val;
-                std::sscanf(hexP.c_str() + 2*b, "%02x", &val);
-                bytesP[b] = static_cast<unsigned char>(val);
+                if (root)
+                {
+                    std::cout << "[DORestartFile] restored pressure modes"
+                                 " from legacy PCoeffs_hex\n";
+                }
             }
-            std::cerr << "[DORestartFile] restored pressure modes"
-                         " from archive\n";
+            else if (root)
+            {
+                std::cout << "[DORestartFile] WARNING: PCoeffs_hex size "
+                             "mismatch (rank-local legacy encoding) -- "
+                             "pressure modes not restored.\n";
+            }
         }
     }
 
@@ -2708,32 +3026,28 @@ void DOVelocityCorrectionScheme::RestoreFromDOArchive(
         auto itRng = meta.find("DOVelocityCorrectionScheme_ForcingRng");
         if (itEta != meta.end() && itRng != meta.end())
         {
-            const std::string &hexEta = itEta->second;
-            const int nFlatEta = m_nDOParticles * m_nForcingChannels;
-            if ((int)hexEta.size() == nFlatEta * (int)sizeof(NekDouble) * 2)
-            {
-                unsigned char *bytesEta =
-                    reinterpret_cast<unsigned char *>(m_forcingEta.data());
-                for (int b = 0; b < nFlatEta * (int)sizeof(NekDouble); ++b)
-                {
-                    unsigned val;
-                    std::sscanf(hexEta.c_str() + 2*b, "%02x", &val);
-                    bytesEta[b] = static_cast<unsigned char>(val);
-                }
-            }
+            DecodeHexDoubles(itEta->second, m_forcingEta.data(),
+                             m_nDOParticles * m_nForcingChannels);
             std::istringstream rngSs(itRng->second);
             rngSs >> m_forcingRng;
-            std::cerr << "[DORestartFile] restored stochastic forcing state\n";
+            if (root)
+            {
+                std::cout
+                    << "[DORestartFile] restored stochastic forcing state\n";
+            }
         }
-        else
+        else if (root)
         {
-            std::cerr << "[DORestartFile] WARNING: forcing state not found in "
+            std::cout << "[DORestartFile] WARNING: forcing state not found in "
                          "archive -- OU process restarts from seed.\n";
         }
     }
 
     PrecomputeGradients();
-    std::cerr << "[DORestartFile] restored from " << fldPath << "\n";
+    if (root)
+    {
+        std::cout << "[DORestartFile] restored from " << fldPath << "\n";
+    }
 }
 
 } // namespace Nektar

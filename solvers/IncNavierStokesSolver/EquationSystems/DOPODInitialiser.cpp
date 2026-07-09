@@ -50,7 +50,7 @@
 namespace Nektar
 {
 // ============================================================================
-// Glob expansion: support a single '*' in the basename portion of `pattern`.
+// Glob expansion: support a single '*' in the basename portion of pattern.
 // ============================================================================
 std::vector<std::string> DOPODInitialiser::ExpandGlob(const std::string &pattern)
 {
@@ -144,6 +144,8 @@ public:
         m_nVel    = (int)m_velocity.size();
         m_nCoeffs = m_fields[m_velocity[0]]->GetNcoeffs();
         m_nPhys   = m_fields[m_velocity[0]]->GetTotPoints();
+        m_isRoot  = (m_fields[m_velocity[0]]->GetComm()->GetRowComm()
+                         ->GetRank() == 0);
 
         for (int c = 1; c < m_nVel; ++c)
         {
@@ -159,9 +161,10 @@ public:
         const int K = (int)m_cfg.snapshotFiles.size();
         const int S = m_cfg.numModes;
 
-        if (m_cfg.verbose)
+        if (m_cfg.verbose && m_isRoot)
         {
-            std::cout << "[DOVelocityCorrectionScheme][POD] " << K << " snapshots, S=" << S
+            std::cout << "[DOVelocityCorrectionScheme][POD] " << K
+                      << " snapshots, S=" << S
                       << ", nVel=" << m_nVel << ", nCoeffs=" << m_nCoeffs
                       << ", nPhys=" << m_nPhys << "\n";
         }
@@ -171,7 +174,7 @@ public:
         for (int k = 0; k < K; ++k)
         {
             LoadSnapshot(m_cfg.snapshotFiles[k], m_snapCoeffs[k]);
-            if (m_cfg.verbose)
+            if (m_cfg.verbose && m_isRoot)
             {
                 std::cout << "[DOVelocityCorrectionScheme][POD] loaded "
                           << m_cfg.snapshotFiles[k] << "\n";
@@ -249,7 +252,7 @@ public:
                             1.0, C.data() + j, K);
             }
         }
-        // MPI: C entries are partial sums; one bulk AllReduce on K² values.
+        // MPI: C entries are partial sums; one bulk AllReduce on K*K values.
         m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
             C, LibUtilities::ReduceSum);
         // Symmetrize (lower from upper).
@@ -323,7 +326,7 @@ public:
                     const NekDouble *src = m_snapCoeffs[i][c].data();
                     for (int q = 0; q < m_nCoeffs; ++q) dst[q] += a * src[q];
                 }
-                // BwdTrans into phys; eArrayWrapper is REQUIRED — without it
+                // BwdTrans into phys; eArrayWrapper is REQUIRED -- without it
                 // Nektar's Array<OneD,T>(n, ptr, ...) defaults to eArrayCopy
                 // and BwdTrans writes into a temporary that never reaches our
                 // std::vector storage. Do not change without re-reading
@@ -372,18 +375,19 @@ public:
                 maxOrthoErr = std::max(maxOrthoErr,
                                        std::abs(innerVec[idx] - target));
             }
-        if (maxOrthoErr > 1.0e-6)
+        if (maxOrthoErr > 1.0e-6 && m_isRoot)
         {
             std::cout << "[DOVelocityCorrectionScheme][POD] WARNING mass-ortho "
                       << "self-check max-err = " << maxOrthoErr
-                      << " > 1e-6. Downstream ReOrthonormalise will MGS-correct "
-                      << "this; expected for rank-deficient ensembles (e.g. ICs "
-                      << "with only a few random scalars and many requested DOModes).\n";
+                      << " > 1e-6. Downstream ReOrthonormalise will "
+                      << "MGS-correct this; expected for rank-deficient "
+                      << "ensembles (e.g. ICs with only a few random scalars "
+                      << "and many requested DOModes).\n";
         }
-        else if (m_cfg.verbose)
+        else if (m_cfg.verbose && m_isRoot)
         {
-            std::cout << "[DOVelocityCorrectionScheme][POD] mass-ortho self-check max-err = "
-                      << maxOrthoErr << "\n";
+            std::cout << "[DOVelocityCorrectionScheme][POD] mass-ortho "
+                      << "self-check max-err = " << maxOrthoErr << "\n";
         }
         ASSERTL0(maxOrthoErr < 1.0e-3,
                  "DOPODInitialiser: synthesised modes failed mass-orthonormality "
@@ -392,7 +396,7 @@ public:
                  "polynomial-order mismatch with the current expansion, or a "
                  "build-environment problem with Lapack::Dspev.");
 
-        if (m_cfg.verbose)
+        if (m_cfg.verbose && m_isRoot)
         {
             std::cout << "[DOVelocityCorrectionScheme][POD] sigma=";
             for (auto s : m_sigmas) std::cout << " " << s;
@@ -459,7 +463,9 @@ public:
         const Array<OneD, NekDouble> &modePhys,
         const Array<OneD, NekDouble> &modeCoeffs,
         Array<OneD, NekDouble>       &Yi,
-        int                           nParticles)
+        int                           nParticles,
+        int                           npLocal,
+        int                           npOffset)
     {
         const int S = m_cfg.numModes;
         const int K = (int)m_cfg.snapshotFiles.size();
@@ -469,7 +475,7 @@ public:
         const int Kproj = std::min(K, nParticles);
 
         // Precompute ip[k][c] = IProductWRTBase(mode_k_c_phys) once per (k,c).
-        // Use an owned scratch buffer — modePhys is aliased into live solver
+        // Use an owned scratch buffer -- modePhys is aliased into live solver
         // state and must not be wrapped with eArrayWrapper here.
         Array<OneD, NekDouble> physScratch(m_nPhys);
         std::vector<std::vector<Array<OneD, NekDouble>>> ipKC(
@@ -498,9 +504,18 @@ public:
             }
         m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
             Ylocal, LibUtilities::ReduceSum);
-        for (int p = 0; p < Kproj; ++p)
+        // write the rows of this rank's particle shard (global indices
+        // [npOffset, npOffset + npLocal) intersected with [0, Kproj))
+        for (int pl = 0; pl < npLocal; ++pl)
+        {
+            const int pg = npOffset + pl;
+            if (pg >= Kproj)
+            {
+                break;
+            }
             for (int k = 0; k < S; ++k)
-                Yi[p * S + k] = Ylocal[p * S + k];
+                Yi[pl * S + k] = Ylocal[pg * S + k];
+        }
     }
 
 private:
@@ -531,10 +546,14 @@ private:
                 m_fields[m_velocity[0]]->GetExp(0)->GetBasisNumModes(0);
             if (snapOrder != curOrder)
             {
-                std::cout << "[DOVelocityCorrectionScheme][POD] WARNING: snapshot " << filename
-                          << " uses polynomial order " << snapOrder
-                          << " but current expansion is " << curOrder
-                          << "; ExtractDataToCoeffs will interpolate.\n";
+                if (m_isRoot)
+                {
+                    std::cout << "[DOVelocityCorrectionScheme][POD] WARNING: "
+                              << "snapshot " << filename
+                              << " uses polynomial order " << snapOrder
+                              << " but current expansion is " << curOrder
+                              << "; ExtractDataToCoeffs will interpolate.\n";
+                }
                 m_orderWarningEmitted = true;  // emit once, not per-snapshot
             }
         }
@@ -573,6 +592,7 @@ private:
     int  m_nVel                 = 0;
     int  m_nCoeffs              = 0;
     int  m_nPhys                = 0;
+    bool m_isRoot               = true;
     bool m_orderWarningEmitted  = false;
 
     /// Per-snapshot coefficient buffers: [snapshot][component][coeff].
@@ -647,9 +667,12 @@ void DOPODInitialiser::RecomputeYiByProjection(
     const Array<OneD, NekDouble> &modePhys,
     const Array<OneD, NekDouble> &modeCoeffs,
     Array<OneD, NekDouble>       &Yi,
-    int                           nParticles)
+    int                           nParticles,
+    int                           npLocal,
+    int                           npOffset)
 {
-    m_impl->RecomputeYiByProjection(modePhys, modeCoeffs, Yi, nParticles);
+    m_impl->RecomputeYiByProjection(modePhys, modeCoeffs, Yi, nParticles,
+                                    npLocal, npOffset);
 }
 
 } // namespace Nektar
