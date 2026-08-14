@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ducimetiere replication at phi = 22.0 EXACTLY (own-eps convention):
+     forcing f = qdag as in the seed42/43 reference pair; tau = 1/omega_co
+     = 25. sigma = phi*eps*sqrt(omega_co/2) with eps = 1/81.4 - 1/100 =
+     2.28501e-3 (measured Re_c = 81.4, three-instrument collapse) gives
+     sigma = 0.00710929. On their own axis (eps = 1/79.3 - 1/100) this
+     run sits at phi = 19.3. IC: last checkpoint of 2026_07_16_fp_relax
+     (unforced asymmetric fixed point at Re = 100, M = -0.1696), matching
+     the paper's start-at-the-attractor escape protocol. -->
+<NEKTAR>
+  <EXPANSIONS>
+    <E COMPOSITE="C[12]" NUMMODES="7" FIELDS="u,v,p" TYPE="MODIFIED" />
+  </EXPANSIONS>
+  <CONDITIONS>
+    <PARAMETERS>
+      <P> TimeStep      = 0.01 </P>
+      <P> FinTime       = 10000.0 </P>
+      <P> NumSteps      = FinTime / TimeStep </P>
+      <P> IO_InfoSteps  = 1000 </P>
+      <P> IO_CFLSteps   = 1000 </P>
+      <P> Re            = 100 </P>
+      <P> Kinvis        = 1.0 / Re </P>
+      <P> DOModes     = 0 </P>
+      <P> DOParticles = 1 </P>
+      <P> DOYiSeed    = 1234 </P>
+      <P> DOYiSigma   = 0.01 </P>
+      <P> DOForcingNumChannels = 1 </P>
+      <P> DOForcingTau         = 25.0 </P>
+      <P> DOForcingSigma       = 0.00710929 </P>
+      <P> DOForcingSeed        = 46 </P>
+    </PARAMETERS>
+    <SOLVERINFO>
+      <I PROPERTY="SolverType" VALUE="DOVelocityCorrectionScheme"/>
+      <I PROPERTY="EQTYPE" VALUE="UnsteadyNavierStokes"/>
+      <I PROPERTY="Projection" VALUE="Continuous"/>
+      <I PROPERTY="SPECTRALHPDEALIASING" VALUE="True"/>
+      <I PROPERTY="DOBatchedSolve" VALUE="True"/>
+    </SOLVERINFO>
+    <TIMEINTEGRATIONSCHEME>
+      <METHOD> IMEX </METHOD>
+      <ORDER> 2 </ORDER>
+    </TIMEINTEGRATIONSCHEME>
+    <VARIABLES>
+      <V ID="0"> u </V>
+      <V ID="1"> v </V>
+      <V ID="2"> p </V>
+    </VARIABLES>
+    <BOUNDARYREGIONS>
+      <B ID="0">C[9]</B>  <!-- Inlet  -->
+      <B ID="1">C[11]</B> <!-- Outlet -->
+      <B ID="2">C[10]</B> <!-- Walls  -->
+    </BOUNDARYREGIONS>
+    <BOUNDARYCONDITIONS>
+      <REGION REF="0">
+        <D VAR="u" VALUE="1-4*y*y"/>
+        <D VAR="v" VALUE="0"/>
+        <N VAR="p" VALUE="0"/>
+      </REGION>
+      <REGION REF="1">
+        <N VAR="u" VALUE="0.0"/>
+        <N VAR="v" VALUE="0.0"/>
+        <D VAR="p" VALUE="0.0"/>
+      </REGION>
+      <REGION REF="2">
+        <D VAR="u" VALUE="0.0"/>
+        <D VAR="v" VALUE="0.0"/>
+        <N VAR="p" VALUE="0.0"/>
+      </REGION>
+    </BOUNDARYCONDITIONS>
+    <!-- IC: unforced asymmetric fixed point at Re=100 (fp_relax chk 150, t=300) -->
+    <FUNCTION NAME="InitialConditions">
+      <F VAR="u,v,p" FILE="ic.chk"/>
+    </FUNCTION>
+    <FUNCTION NAME="ForcingChannels">
+      <F VAR="g1_u,g1_v" FILE="qdag_channel.fld"/>
+    </FUNCTION>
+  </CONDITIONS>
+  <FILTERS>
+    <FILTER TYPE="Checkpoint">
+      <PARAM NAME="OutputFile">output/chks/casefile</PARAM>
+      <PARAM NAME="OutputFrequency">400</PARAM>
+    </FILTER>
+    <FILTER TYPE="HistoryPoints">
+      <PARAM NAME="OutputFile">output/asymmetry/axis_v</PARAM>
+      <PARAM NAME="OutputFrequency">100</PARAM>
+      <PARAM NAME="line">401,0,0,40,0</PARAM>
+    </FILTER>
+    <FILTER TYPE="ModalEnergy">
+      <PARAM NAME="OutputFile">output/energy/energy</PARAM>
+      <PARAM NAME="OutputFrequency">100</PARAM>
+    </FILTER>
+  </FILTERS>
+</NEKTAR>
