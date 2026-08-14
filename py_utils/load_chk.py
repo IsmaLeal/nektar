@@ -991,17 +991,18 @@ def _read_field_format_metadata(fld_path: Path) -> dict:
             "yi":          yi}
 
 
-def _field_format_files(case_dir: Path) -> list[Path]:
+def _field_format_files(out_dir: Path) -> list[Path]:
     """Discover Field-format DO archive snapshots.
 
     A snapshot can be either a single .fld file (HDF5 or serial XML) or a
     directory `*.do_<step>.fld/` containing `Info.xml` + per-rank `P*.fld`
     (Nektar's default IOFormat=Xml output for parallel writes). Both layouts
     are valid inputs to FieldConvert and to _read_field_format_metadata."""
-    out_dir = (case_dir / "output").resolve()
+    out_dir = out_dir.resolve()
     if not out_dir.is_dir():
         return []
-    candidates = [p for p in out_dir.glob("*.do_*.fld")
+    candidates = [p for p in list(out_dir.glob("*.do_*.fld"))
+                               + list(out_dir.glob("*/*.do_*.fld"))
                   if (p.is_file() or p.is_dir())]
     files = sorted(candidates,
                    key=lambda p: int(re.search(r"\.do_(\d+)\.fld$", p.name).group(1)))
@@ -1368,8 +1369,10 @@ def main() -> int:
     # Field-format archives subsume both chk and DOArchive: each .do_<step>.fld
     # contains means + modes + Yi (Yi as MetaData hex). Take this fast path
     # when present — skip the legacy chk-loop entirely.
-    field_files = _field_format_files(case_dir)
+    field_files = _field_format_files(chk_dir)
     if field_files:
+        if chk_step > 1:
+            field_files = field_files[::chk_step]
         return _main_field_format(field_files, fieldconvert, xml_path, args)
 
     chk_files = _sorted_chk_files(chk_dir, args.chk_pattern)

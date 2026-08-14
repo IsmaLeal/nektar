@@ -208,6 +208,8 @@ def _run_case(root: Path, argv: list[str]) -> int:
                 [
                     "--data",
                     str(out_h5),
+                    "--field",
+                    "velocity",
                     "--out",
                     str(results_dir / "do_panels.mp4"),
                     "--fps",

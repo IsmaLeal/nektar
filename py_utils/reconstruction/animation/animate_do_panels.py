@@ -89,8 +89,8 @@ def main() -> int:
     ap.add_argument("--max-frames", type=int, default=None, help="Limit number of frames for quick previews")
     ap.add_argument(
         "--field",
-        choices=["vorticity", "velocity"],
-        default="vorticity",
+        choices=["vorticity", "u", "v", "w", "velocity"],
+        default="u",
         help="Top 6-panel quantity: vorticity (scalar map) or velocity (colored arrows only).",
     )
     ap.add_argument(
@@ -180,13 +180,31 @@ def main() -> int:
     u_real = u_mean + np.einsum("sk,sxyk->xyk", yi[pidx], mode_u)
     v_real = v_mean + np.einsum("sk,sxyk->xyk", yi[pidx], mode_v)
 
-    is_velocity = args.field == "velocity"
+    is_velocity = args.field in ["u", "v", "w", "velocity"]
+    # "velocity" is a magnitude (positive, sequential cmap); u/v/w are signed
+    # components (diverging cmap, symmetric limits about zero).
+    is_speed = args.field == "velocity"
     if is_velocity:
-        s_mean = np.sqrt(u_mean * u_mean + v_mean * v_mean)
-        s_modes = np.empty((nmodes_plot, ny, nx, K), dtype=np.float64)
-        for m in range(nmodes_plot):
-            s_modes[m] = np.sqrt(mode_u[m] * mode_u[m] + mode_v[m] * mode_v[m])
-        s_real = np.sqrt(u_real * u_real + v_real * v_real)
+        if args.field == "u":
+            s_mean = u_mean
+            s_modes = np.empty((nmodes_plot, ny, nx, K), dtype=np.float64)
+            for m in range(nmodes_plot):
+                s_modes[m] = mode_u[m]
+            s_real = u_real
+        elif args.field == "v":
+            s_mean = v_mean
+            s_modes = np.empty((nmodes_plot, ny, nx, K), dtype=np.float64)
+            for m in range(nmodes_plot):
+                s_modes[m] = mode_v[m]
+            s_real = v_real
+        elif args.field == "w":
+            pass
+        elif args.field == "velocity":
+            s_mean = np.sqrt(u_mean * u_mean + v_mean * v_mean)
+            s_modes = np.empty((nmodes_plot, ny, nx, K), dtype=np.float64)
+            for m in range(nmodes_plot):
+                s_modes[m] = np.sqrt(mode_u[m] * mode_u[m] + mode_v[m] * mode_v[m])
+            s_real = np.sqrt(u_real * u_real + v_real * v_real)
     else:
         s_mean = _vorticity(u_mean, v_mean, dx, dy)
         s_modes = np.empty((nmodes_plot, ny, nx, K), dtype=np.float64)
@@ -236,13 +254,17 @@ def main() -> int:
         return out
 
     panel_keys = ["mean", "m1", "m2", "real", "m3", "m4"]
+    if is_velocity:
+        fname = "speed" if is_speed else args.field
+    else:
+        fname = "vorticity"
     panel_titles = [
-        "Mean speed" if is_velocity else "Mean vorticity",
-        "Mode 1 speed" if is_velocity else "Mode 1 vorticity",
-        "Mode 2 speed" if is_velocity else "Mode 2 vorticity",
-        f"Realization speed (particle {pidx})" if is_velocity else f"Realization vorticity (particle {pidx})",
-        "Mode 3 speed" if is_velocity else "Mode 3 vorticity",
-        "Mode 4 speed" if is_velocity else "Mode 4 vorticity",
+        f"Mean {fname}",
+        f"Mode 1 {fname}",
+        f"Mode 2 {fname}",
+        f"Realization {fname} (particle {pidx})",
+        f"Mode 3 {fname}",
+        f"Mode 4 {fname}",
     ]
     panel_scalars = [s_mean, None, None, s_real, None, None]
     if nmodes_plot > 0:
@@ -270,7 +292,7 @@ def main() -> int:
         if fld is None:
             panel_lims.append(None)
         else:
-            symmetric = not is_velocity
+            symmetric = not is_speed
             if args.scale_mode == "chunked":
                 panel_lims.append(chunked_lims(fld, K, adapt_every, symmetric=symmetric))
             else:
@@ -280,9 +302,9 @@ def main() -> int:
     # any per-frame tick-text width changes on the colorbars get amplified into
     # apparent panel "zoom" jitter. Fix the layout once at init via subplots_adjust.
     fig = plt.figure(figsize=(13, 9), constrained_layout=False)
-    gs = GridSpec(3, 3, figure=fig, height_ratios=[1.0, 1.0, 0.85],
-                  hspace=0.42, wspace=0.32,
-                  left=0.05, right=0.97, top=0.94, bottom=0.07)
+    gs = GridSpec(4, 3, figure=fig, height_ratios=[0.42, 0.42, 1.0, 0.62],
+                  hspace=0.5, wspace=0.22,
+                  left=0.055, right=0.985, top=0.94, bottom=0.06)
 
     axs = {
         "mean": fig.add_subplot(gs[0, 0]),
@@ -291,8 +313,10 @@ def main() -> int:
         "real": fig.add_subplot(gs[1, 0]),
         "m3": fig.add_subplot(gs[1, 1]),
         "m4": fig.add_subplot(gs[1, 2]),
-        "scatter": fig.add_subplot(gs[2, 0], projection="3d"),
-        "var": fig.add_subplot(gs[2, 1:]),
+        "sc12": fig.add_subplot(gs[2, 0]),
+        "sc23": fig.add_subplot(gs[2, 1]),
+        "sc34": fig.add_subplot(gs[2, 2]),
+        "var": fig.add_subplot(gs[3, :]),
     }
 
     extent = [float(x.min()), float(x.max()), float(y.min()), float(y.max())]
@@ -324,7 +348,9 @@ def main() -> int:
         def _q_components(idx: int, frame: int):
             uq = panel_u[idx][:, :, frame][::qstep, ::qstep]
             vq = panel_v[idx][:, :, frame][::qstep, ::qstep]
-            mq = panel_scalars[idx][:, :, frame][::qstep, ::qstep]
+            # normalize arrows by the local speed, not the plotted scalar
+            # (the plotted scalar is signed for u/v/w panels)
+            mq = np.sqrt(uq * uq + vq * vq)
             den = np.where(mq > 1e-14, mq, 1.0)
             un = np.where(mq > 1e-14, uq / den, 0.0)
             vn = np.where(mq > 1e-14, vq / den, 0.0)
@@ -340,12 +366,17 @@ def main() -> int:
 
         ax.set_title(panel_titles[idx])
         lim0 = _lim_at(idx, 0)
-        norm0 = make_norm(lim0, symmetric=not is_velocity)
+        norm0 = make_norm(lim0, symmetric=not is_speed)
         if is_velocity:
             un0, vn0, mq0 = _q_components(idx, 0)
-            im_kwargs = dict(origin="lower", extent=extent, cmap="viridis", animated=True)
+            if is_speed:
+                im_kwargs = dict(origin="lower", extent=extent, cmap="viridis", animated=True)
+                vmin0, vmax0 = 0.0, lim0
+            else:
+                im_kwargs = dict(origin="lower", extent=extent, cmap="RdBu_r", animated=True)
+                vmin0, vmax0 = -lim0, lim0
             if norm0 is None:
-                im = ax.imshow(fld[:, :, 0], vmin=0.0, vmax=lim0, **im_kwargs)
+                im = ax.imshow(fld[:, :, 0], vmin=vmin0, vmax=vmax0, **im_kwargs)
             else:
                 im = ax.imshow(fld[:, :, 0], norm=norm0, **im_kwargs)
             q = ax.quiver(
@@ -361,50 +392,48 @@ def main() -> int:
                 width=0.0035,
                 animated=True,
             )
-            cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-            cbar.set_label(r"$|u|$")
             panel_scalar_mappables[idx] = im
             panel_quivers[idx] = q
-            panel_cbars[idx] = cbar
         else:
             im_kwargs = dict(origin="lower", extent=extent, cmap="RdBu_r", animated=True)
             if norm0 is None:
                 im = ax.imshow(fld[:, :, 0], vmin=-lim0, vmax=lim0, **im_kwargs)
             else:
                 im = ax.imshow(fld[:, :, 0], norm=norm0, **im_kwargs)
-            cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-            cbar.set_label(r"$\omega$")
             panel_scalar_mappables[idx] = im
-            panel_cbars[idx] = cbar
 
     for key in ["mean", "m1", "m2", "real", "m3", "m4"]:
         axs[key].set_xlabel("x")
         axs[key].set_ylabel("y")
 
-    # 3D scatter of (Y1,Y2,Y3) across particles. Pads with zeros when S<3 so
-    # the artist always exists (axis labels reflect the actual S).
-    ax_sc = axs["scatter"]
-    sc_x0 = yi[:, 0, 0] if S >= 1 else np.zeros(yi.shape[0])
-    sc_y0 = yi[:, 1, 0] if S >= 2 else np.zeros(yi.shape[0])
-    sc_z0 = yi[:, 2, 0] if S >= 3 else np.zeros(yi.shape[0])
-    sc = ax_sc.scatter(sc_x0, sc_y0, sc_z0, s=8, alpha=0.5)
-    ax_sc.set_title("Joint distribution of $Y_i$")
-    ax_sc.set_xlabel("$Y_1$")
-    ax_sc.set_ylabel("$Y_2$" if S >= 2 else "")
-    ax_sc.set_zlabel("$Y_3$" if S >= 3 else "")
-    # global symmetric robust limits per axis (avoids jitter; clouds are zero-mean by construction)
+    # 2D scatters of consecutive coefficient pairs, with the realization of
+    # the field panel highlighted as a single colored point in each. Panels
+    # with indices beyond S are hidden.
     sc_pct = robust_pct                                                     # reuse the same percentile knob as field panels
     def _sym_lim(arr: np.ndarray) -> float:
         a = float(np.nanpercentile(np.abs(arr), sc_pct))
         return max(a, 1e-12)
-    sc_xlim = _sym_lim(yi[:, 0, :]) if S >= 1 else 1.0
-    sc_ylim = _sym_lim(yi[:, 1, :]) if S >= 2 else 1.0
-    sc_zlim = _sym_lim(yi[:, 2, :]) if S >= 3 else 1.0
-    ax_sc.set_xlim3d(-sc_xlim, sc_xlim)
-    ax_sc.set_ylim3d(-sc_ylim, sc_ylim)
-    ax_sc.set_zlim3d(-sc_zlim, sc_zlim)
-    ax_sc.set_box_aspect((1, 1, 1))         # cubic 3-D box, fixed across frames
-    ax_sc.autoscale(enable=False)           # belt-and-braces against per-frame relim
+
+    def _init_pair(ax, ia: int, ib: int):
+        if S <= max(ia, ib):
+            ax.set_visible(False)
+            return None, None
+        s = ax.scatter(yi[:, ia, 0], yi[:, ib, 0], s=8, alpha=0.5)
+        hi = ax.scatter([yi[pidx, ia, 0]], [yi[pidx, ib, 0]], s=40,
+                        color="#D55E00", zorder=5)
+        ax.set_title(f"$(Y_{ia+1},Y_{ib+1})$")
+        ax.set_xlabel(f"$Y_{ia+1}$")
+        ax.set_ylabel(f"$Y_{ib+1}$")
+        xl = _sym_lim(yi[:, ia, :])
+        yl = _sym_lim(yi[:, ib, :])
+        ax.set_xlim(-xl, xl)
+        ax.set_ylim(-yl, yl)
+        ax.autoscale(enable=False)          # belt-and-braces against per-frame relim
+        return s, hi
+
+    sc12, hi12 = _init_pair(axs["sc12"], 0, 1)
+    sc23, hi23 = _init_pair(axs["sc23"], 1, 2)
+    sc34, hi34 = _init_pair(axs["sc34"], 2, 3)
 
     # Variance panel
     lines = []
@@ -441,9 +470,9 @@ def main() -> int:
                 if panel_lims[idx] is None:
                     continue
                 lim = _lim_at(idx, frame)
-                symmetric = not is_velocity
+                symmetric = not is_speed
                 if args.norm == "linear":
-                    if is_velocity:
+                    if is_speed:
                         panel_scalar_mappables[idx].set_clim(0.0, lim)
                     else:
                         panel_scalar_mappables[idx].set_clim(-lim, lim)
@@ -467,12 +496,13 @@ def main() -> int:
                 panel_scalar_mappables[idx].set_array(panel_scalars[idx][:, :, frame])
                 artists.append(panel_scalar_mappables[idx])
 
-        # Y-scatter: drive matplotlib's private 3D offsets attribute
-        sc_x = yi[:, 0, frame] if S >= 1 else np.zeros(yi.shape[0])
-        sc_y = yi[:, 1, frame] if S >= 2 else np.zeros(yi.shape[0])
-        sc_z = yi[:, 2, frame] if S >= 3 else np.zeros(yi.shape[0])
-        sc._offsets3d = (sc_x, sc_y, sc_z)
-        artists.append(sc)
+        for cloud, hi, ia, ib in ((sc12, hi12, 0, 1), (sc23, hi23, 1, 2),
+                                  (sc34, hi34, 2, 3)):
+            if cloud is None:
+                continue
+            cloud.set_offsets(np.column_stack([yi[:, ia, frame], yi[:, ib, frame]]))
+            hi.set_offsets([[yi[pidx, ia, frame], yi[pidx, ib, frame]]])
+            artists.extend([cloud, hi])
 
         if frame < len(t_do):
             time_marker.set_xdata([t_do[frame], t_do[frame]])
