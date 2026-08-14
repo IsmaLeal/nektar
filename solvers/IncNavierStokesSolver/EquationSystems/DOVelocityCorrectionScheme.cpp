@@ -50,6 +50,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <utility>
 #include <sstream>
 #include <cstdio>
 #include <cstring>
@@ -61,6 +62,11 @@
 
 namespace Nektar
 {
+// seeded-run init flag: when extra (file-provided) modes are appended, the
+// init-time DiagonaliseCov rotations are skipped (sampling-noise-degenerate
+// variance pairs would mix the seeded direction; runtime rotations, driven
+// by physical correlations, stay enabled)
+static int s_nSeededExtras = 0;
 namespace
 {
 
@@ -387,6 +393,15 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
                                m_doAllowConstantModes, false);
     m_session->MatchSolverInfo("DOBatchedSolve", "True",
                                m_doBatchedSolve, false);
+    {
+        // empirical resampling is the default; PODTailFill=Gaussian
+        // restores the legacy zero-centred fill (needed to reproduce runs
+        // initialised before 2026-07-09)
+        bool legacyGaussianTail = false;
+        m_session->MatchSolverInfo("PODTailFill", "Gaussian",
+                                   legacyGaussianTail, false);
+        m_podEmpiricalTail = !legacyGaussianTail;
+    }
     m_session->LoadParameter("DOYiSeed", m_doYiSeed, m_doYiSeed);
     m_session->LoadParameter("DOYiSigma", m_doYiSigma, m_doYiSigma);
 
@@ -403,7 +418,6 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     {
         const int K = m_nForcingChannels;
         m_forcingBasisPhys   = Array<OneD, NekDouble>(K*nDim*nPhys,   0.0);
-        m_forcingBasisCoeffs = Array<OneD, NekDouble>(K*nDim*nCoeffs, 0.0);
         m_forcingEta         = Array<OneD, NekDouble>(m_nDOParticles*K, 0.0);
         m_forcingG.assign(m_nDOModes*K, 0.0);
         m_forcingA.assign(m_nDOModes*K, 0.0);
@@ -414,7 +428,7 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     // Particle shard: contiguous block of the global population. Draws are
     // replicated (every rank runs the same RNG stream), so the population
     // is identical for any rank count; only storage and per-particle work
-    // are distributed. Eta (small) stays fully replicated.
+    // are distributed. Eta stays fully replicated.
     {
         LibUtilities::CommSharedPtr rc = m_fields[0]->GetComm()->GetRowComm();
         const int nR  = rc->GetSize();
@@ -610,7 +624,22 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
 {
     VelocityCorrectionScheme::v_DoInitialise(dumpInitialConditions);
 
-    if (!m_modesInitialised)    // only on first call
+    // DNS forcing mode: DOModes = 0 with forcing channels means a plain
+    // single-realization VCS run driven by the OU channels applied directly
+    // to the mean momentum equation (ground-truth runs for the DO
+    // ensembles). Only the channels are initialised; no DO subsystem.
+    if (!m_modesInitialised && m_nDOModes == 0 && m_nForcingChannels > 0)
+    {
+        ASSERTL0(m_nDOParticles == 1,
+                 "DNS forcing mode (DOModes=0) requires DOParticles=1 "
+                 "(a single noise realization).");
+        InitialiseForcingBasis();
+        AdvanceForcingState();  // draw eta for the first step
+        m_modesInitialised = true;
+        return;
+    }
+
+    if (!m_modesInitialised && m_nDOModes > 0)    // only on first call
     {
         if (m_session->DefinesSolverInfo("DORestartFile"))
         {
@@ -630,7 +659,7 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
                 InitialiseModesFromEllipticEigenbasis();
             }
             InitialiseYi();         // Y: i.i.d. Gaussian, sample mean removed
-            DiagonaliseCov();
+            if (s_nSeededExtras == 0) DiagonaliseCov();
             ReOrthonormalise();
             // re-project snapshots onto the new basis
             if (m_doInitBasis == "POD" && m_podInitialiser)
@@ -639,6 +668,41 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
                     m_DOModePhys, m_DOModeCoeffs, m_Yi, m_nDOParticles,
                     m_npLocal, m_npOffset);
                 m_podInitialiser.reset();  // POD state freed
+
+                const int Kproj =
+                    std::min(m_podNumSnapshots, m_nDOParticles);
+                if (m_podEmpiricalTail && Kproj < m_nDOParticles)
+                {
+                    // Empirical tail-fill: particles beyond the snapshot
+                    // count resample the re-projected snapshot rows with a
+                    // small jitter, landing in the populated regions of the
+                    // ensemble instead of a zero-centred Gaussian (which
+                    // piles them onto the saddle of a bimodal set).
+                    // Replicated draws, shard kept: rank-count invariant.
+                    Array<OneD, NekDouble> yAll(m_nDOParticles * m_nDOModes);
+                    GatherYi(yAll);
+                    std::mt19937 rng(static_cast<std::mt19937::result_type>(
+                        m_doYiSeed + 1));
+                    std::uniform_int_distribution<int> pick(0, Kproj - 1);
+                    std::normal_distribution<NekDouble> unit(0.0, 1.0);
+                    const NekDouble jit =
+                        1.0 /
+                        std::sqrt(static_cast<NekDouble>(m_podNumSnapshots));
+                    for (int g = Kproj; g < m_nDOParticles; ++g)
+                    {
+                        const int q = pick(rng);
+                        for (int i = 0; i < m_nDOModes; ++i)
+                        {
+                            yAll[g*m_nDOModes + i] =
+                                yAll[q*m_nDOModes + i] +
+                                jit * m_podSigmas[i] * unit(rng);
+                        }
+                    }
+                    Vmath::Vcopy(m_npLocal * m_nDOModes,
+                                 yAll.data() +
+                                     (size_t)m_npOffset * m_nDOModes, 1,
+                                 m_Yi.data(), 1);
+                }
 
                 // de-mean Yi across the GLOBAL particle population: local
                 // shard sums, one AllReduce, subtract from the local rows
@@ -653,7 +717,7 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
                 for (int p = 0; p < m_npLocal; ++p)
                     for (int i = 0; i < m_nDOModes; ++i)
                         m_Yi[p * m_nDOModes + i] -= invNp * mu[i];
-                DiagonaliseCov();
+                if (s_nSeededExtras == 0) DiagonaliseCov();
             }
         }
 
@@ -770,7 +834,6 @@ void DOVelocityCorrectionScheme::InitialiseYi()
                  m_Yi.data(), 1);
 }
 
-
 /**
  * Reads the XML "ForcingChannels" function block, evaluates each channel's
  * spatial template at quadrature points, FwdTrans -> BwdTrans (FE projection),
@@ -805,36 +868,50 @@ void DOVelocityCorrectionScheme::InitialiseForcingBasis()
         {
             const std::string vname = "g" + std::to_string(k+1) + "_"
                                       + vars[m_velocity[c]];
-            ASSERTL0(m_session->GetFunctionType("ForcingChannels", vname) ==
-                     LibUtilities::eFunctionTypeExpression,
+            ASSERTL0(m_session->DefinesFunction("ForcingChannels", vname),
                      "DOVelocityCorrectionScheme: ForcingChannels VAR \""
-                     + vname + "\" missing or not an expression.");
-            auto eq = m_session->GetFunction("ForcingChannels", vname);
-            eq->Evaluate(xq, yq, zq, phys); // analytical -> phys
-            m_fields[m_velocity[c]]->FwdTrans(phys, coeffs); // phys -> coeffs
-            m_fields[m_velocity[c]]->BwdTrans(coeffs, phys); // for consistency
+                     + vname + "\" missing.");
+            if (m_session->GetFunctionType("ForcingChannels", vname) ==
+                LibUtilities::eFunctionTypeExpression)
+            {
+                auto eq = m_session->GetFunction("ForcingChannels", vname);
+                eq->Evaluate(xq, yq, zq, phys); // analytical -> phys
+            }
+            else
+            {
+                // file-type channel: a .fld/.chk holding a field named
+                // vname (rename the FIELDS attribute of an eigenmode
+                // file to feed q or qdag as a fixed template)
+                GetFunction("ForcingChannels")->Evaluate(vname, phys);
+            }
+            // Store the template exactly as evaluated at the quadrature
+            // points. Every consumer (mass-normalisation below, the
+            // <g_k,u_i> gains, the DNS-mode momentum injection) works on
+            // physical values with quadrature weights, so no coefficient
+            // representation is needed. The earlier FwdTrans/BwdTrans
+            // round-trip is deliberately absent: ContField::FwdTrans
+            // imposes the mean-flow Dirichlet values (inlet profile
+            // contamination) and its parallel solve altered the template
+            // rank-count-dependently; both defects vanish with the
+            // projection.
             const int pOff = (k*nVel + c)*nPhys;   // physical offset
-            const int cOff = (k*nVel + c)*nCoeffs; // coeff offset
             Vmath::Vcopy(nPhys, phys.data(), 1,    // store
                          m_forcingBasisPhys.data() + pOff, 1);
-            Vmath::Vcopy(nCoeffs, coeffs.data(), 1,
-                         m_forcingBasisCoeffs.data() + cOff, 1);
         }
 
-        // mass-normalise this channel's spatial shape
+        // mass-normalise this channel's spatial shape. Quadrature-space dot
+        // against m_physWeights: physical points are uniquely owned per rank,
+        // so the AllReduce below sums disjoint partial integrals. (A
+        // coefficient-space Dot would double-count partition-interface dofs
+        // of the continuous space under MPI.)
         NekDouble nrm2 = 0.0;
         for (int c = 0; c < nVel; ++c)  // loop over components
         {
-            NekDouble *g_kc_phys = m_forcingBasisPhys.data()
-                                   + (k*nVel + c)*nPhys;
-            const NekDouble *g_kc_coeffs = m_forcingBasisCoeffs.data()
-                                           + (k*nVel + c)*nCoeffs;
-            // non-owning view (eArrayWrapper; the default would copy)
-            Array<OneD, NekDouble> physView(nPhys, g_kc_phys, eArrayWrapper);
-            // ip = M g_kc_coeffs (in coeff space)
-            // nrm2 = g_kc_coeffs^T M g_kc_coeffs, summed over components
-            m_fields[m_velocity[c]]->IProductWRTBase(physView, ip);
-            nrm2 += Vmath::Dot(nCoeffs, g_kc_coeffs, 1, ip.data(), 1);
+            const NekDouble *g_kc_phys = m_forcingBasisPhys.data()
+                                         + (k*nVel + c)*nPhys;
+            Vmath::Vmul(nPhys, m_physWeights.data(), 1, g_kc_phys, 1,
+                        phys.data(), 1);
+            nrm2 += Vmath::Dot(nPhys, g_kc_phys, 1, phys.data(), 1);
         }
         m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
             nrm2, LibUtilities::ReduceSum); // MPI: global ||g_k||^2_M
@@ -843,9 +920,6 @@ void DOVelocityCorrectionScheme::InitialiseForcingBasis()
         const NekDouble inv = 1.0 / std::sqrt(nrm2);    // mass-normalise
         Vmath::Smul(nVel*nPhys, inv, m_forcingBasisPhys.data() + k*nVel*nPhys,
                     1, m_forcingBasisPhys.data() + k*nVel*nPhys, 1);
-        Vmath::Smul(nVel*nCoeffs, inv,
-                    m_forcingBasisCoeffs.data() + k*nVel*nCoeffs,
-                    1, m_forcingBasisCoeffs.data() + k*nVel*nCoeffs, 1);
     }
 }
 
@@ -871,7 +945,6 @@ void DOVelocityCorrectionScheme::AdvanceForcingState()
     const int S       = m_nDOModes;
     const int nVel    = m_velocity.size();
     const int nPhys   = m_fields[0]->GetTotPoints();
-    const int nCoeffs = m_fields[0]->GetNcoeffs();
     const NekDouble sigma = m_forcingSigma;
     const NekDouble tau   = m_forcingTau;
     const NekDouble dt    = m_timestep;
@@ -898,41 +971,53 @@ void DOVelocityCorrectionScheme::AdvanceForcingState()
         }
     }
 
-    // per-channel centering across particles
+    // per-channel centering across particles (skip for a single
+    // realization: DNS forcing mode wants the raw zero-mean process, and
+    // centering a population of one would zero it identically)
     const NekDouble invNp = 1.0 / static_cast<NekDouble>(Np);
-    for (int k = 0; k < K; ++k) // loop over channels
+    if (Np > 1)
     {
-        NekDouble mean = 0.0;
-        for (int p = 0; p < Np; ++p)
+        for (int k = 0; k < K; ++k) // loop over channels
         {
-            mean += m_forcingEta[p*K + k];
-        }
-        mean *= invNp;
-        for (int p = 0; p < Np; ++p)
-        {
-            m_forcingEta[p*K + k] -= mean;
+            NekDouble mean = 0.0;
+            for (int p = 0; p < Np; ++p)
+            {
+                mean += m_forcingEta[p*K + k];
+            }
+            mean *= invNp;
+            for (int p = 0; p < Np; ++p)
+            {
+                m_forcingEta[p*K + k] -= mean;
+            }
         }
     }
 
-    // <g_k,u_p>_M =
-    //     \sum_c g_{k,coeffs}[c] * IProductWRTBase(u_{p,phys})_{coeffs}[c]
-    Array<OneD, NekDouble> ip(nCoeffs);
+    // DNS forcing mode (no DO subsystem): eta is consumed directly by
+    // v_EvaluateAdvection_SetPressureBCs; no projections or moments needed.
+    if (m_nDOModes == 0) return;
+
+    // <g_k,u_p>_M via the quadrature-space dot against m_physWeights, one
+    // Dgemv over the mode matrix per (channel, component) as in
+    // ComputeNModeBody. Physical points are uniquely owned per rank, so the
+    // fused AllReduce below sums disjoint partial integrals. (The previous
+    // coefficient-space Dot double-counted partition-interface dofs of the
+    // continuous space under MPI.)
+    Array<OneD, NekDouble> wg(nPhys);
     std::fill(m_forcingG.begin(), m_forcingG.end(), 0.0);
+    std::vector<NekDouble> gCol(S, 0.0);
     for (int k = 0; k < K; ++k)         // loop over channels
         for (int c = 0; c < nVel; ++c)  // loop over components
         {
-            NekDouble *g_kc_phys =
+            const NekDouble *g_kc_phys =
                 m_forcingBasisPhys.data() + (k*nVel + c)*nPhys;
-            // non-owning view (eArrayWrapper; the default would copy)
-            Array<OneD, NekDouble> physView(nPhys, g_kc_phys, eArrayWrapper);
-            // ip = M g_kc_coeffs
-            m_fields[m_velocity[c]]->IProductWRTBase(physView, ip);
+            Vmath::Vmul(nPhys, m_physWeights.data(), 1, g_kc_phys, 1,
+                        wg.data(), 1);
+            Blas::Dgemv('T', nPhys, S, 1.0,
+                        m_DOModePhys.data() + c*nPhys, nVel*nPhys,
+                        wg.data(), 1, 0.0, gCol.data(), 1);
             for (int i = 0; i < S; ++i) // loop over modes
             {
-                const NekDouble *u_ic_coeffs = m_DOModeCoeffs.data()
-                                               + (i*nVel + c)*nCoeffs;
-                m_forcingG[i*K + k] += Vmath::Dot(nCoeffs, u_ic_coeffs, 1,
-                                                  ip.data(), 1);
+                m_forcingG[i*K + k] += gCol[i];
             }
         }
 
@@ -1521,7 +1606,28 @@ void DOVelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(
     VelocityCorrectionScheme::v_EvaluateAdvection_SetPressureBCs(
         inarray, outarray, time);
 
-    if (m_nDOModes == 0) return;
+    if (m_nDOModes == 0)
+    {
+        // DNS forcing mode: apply the OU channels directly to the momentum
+        // RHS (single realization, eta of particle 0)
+        if (m_nForcingChannels > 0 && m_forcingEta.size() > 0)
+        {
+            const int nV = m_velocity.size();
+            const int nP = m_fields[0]->GetTotPoints();
+            for (int k = 0; k < m_nForcingChannels; ++k)
+            {
+                const NekDouble eta = m_forcingEta[k];
+                for (int c = 0; c < nV; ++c)
+                {
+                    const NekDouble *gk = m_forcingBasisPhys.data()
+                                          + (k*nV + c)*nP;
+                    Vmath::Svtvp(nP, eta, gk, 1, outarray[c].data(), 1,
+                                 outarray[c].data(), 1);
+                }
+            }
+        }
+        return;
+    }
 
     const int nVel  = m_velocity.size();
     const int nPhys = m_fields[0]->GetTotPoints();
@@ -2336,6 +2442,16 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
     bool terminate = VelocityCorrectionScheme::v_PostIntegrate(step);
     ++m_doStepCounter;  // per-step verbose-only counter
 
+    // DNS forcing mode: just refresh eta for the next step (and close the
+    // step timer opened by v_PreIntegrate, as the DO path does below)
+    if (m_nDOModes == 0 && m_nForcingChannels > 0)
+    {
+        AdvanceForcingState();
+        m_stepTimer.Stop();
+        m_stepAccumTime += m_stepTimer.TimePerTest(1);
+        return terminate;
+    }
+
     if (m_nDOModes > 0 && m_doSchemeInited)
     {
         AdvanceForcingState();
@@ -2521,8 +2637,8 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
         auto comm = m_fields[m_velocity[0]]->GetComm()->GetRowComm();
         std::vector<NekDouble> alphas(k);
         Array<OneD, NekDouble> wCand(nPhys);
-        // Two classical-GS passes suffice ("twice is enough") during time
-        // stepping, where candidates enter near-orthonormal (O(dt) drift).
+        // Two classical-GS passes suffice during time stepping, where
+        // candidates enter near-orthonormal (O(dt) drift).
         // Initialisation keeps four passes: POD candidates can be strongly
         // rank-deficient there.
         const int nPasses = (m_doStepCounter <= 1) ? 4 : 2;
@@ -2924,32 +3040,63 @@ void DOVelocityCorrectionScheme::InitialiseModesFromPOD()
     ASSERTL0(m_session->DefinesSolverInfo("PODSnapshotPattern"),
              "DOInitModeBasis=POD requires "
              "<I PROPERTY=\"PODSnapshotPattern\" VALUE=\"...\"/>.");
-    const std::string pattern = m_session->GetSolverInfo("PODSnapshotPattern");
-    cfg.snapshotFiles = DOPODInitialiser::ExpandGlob(pattern);
+    // One or more glob patterns separated by ';' -- e.g. snapshot sets of
+    // two different attractors for a bimodal initialisation. The PODtmin
+    // warm-up trim applies to every set independently, so each source run
+    // drops its own spinup window.
+    const std::string patterns =
+        m_session->GetSolverInfo("PODSnapshotPattern");
 
     NekDouble podTmin = 0.0, podDt = 0.0;
     m_session->LoadParameter("PODtmin", podTmin, podTmin);
     m_session->LoadParameter("PODdt",   podDt,   podDt);
     ASSERTL0(!(podTmin > 0.0 && podDt <= 0.0),
              "PODtmin requires PODdt (sampling interval) to be > 0.");
-    if (podTmin > 0.0)
+
+    cfg.snapshotFiles.clear();
+    size_t start = 0;
+    while (start <= patterns.size())
     {
-        size_t k0 = std::min(cfg.snapshotFiles.size(),
-                             (size_t)std::ceil(podTmin / podDt));
-        cfg.snapshotFiles.erase(cfg.snapshotFiles.begin(),
-                                cfg.snapshotFiles.begin() + k0);
+        const size_t split = patterns.find(';', start);
+        std::string pat =
+            (split == std::string::npos)
+                ? patterns.substr(start)
+                : patterns.substr(start, split - start);
+        const size_t a = pat.find_first_not_of(" \t");
+        const size_t b = pat.find_last_not_of(" \t");
+        pat = (a == std::string::npos) ? "" : pat.substr(a, b - a + 1);
+        if (!pat.empty())
+        {
+            std::vector<std::string> files =
+                DOPODInitialiser::ExpandGlob(pat);
+            ASSERTL0(!files.empty(),
+                     "DOInitModeBasis=POD: PODSnapshotPattern matched zero "
+                     "files: " + pat);
+            if (podTmin > 0.0)
+            {
+                size_t k0 = std::min(files.size(),
+                                     (size_t)std::ceil(podTmin / podDt));
+                files.erase(files.begin(), files.begin() + k0);
+            }
+            cfg.snapshotFiles.insert(cfg.snapshotFiles.end(),
+                                     files.begin(), files.end());
+        }
+        if (split == std::string::npos)
+        {
+            break;
+        }
+        start = split + 1;
     }
 
     ASSERTL0(!cfg.snapshotFiles.empty(),
              "DOInitModeBasis=POD: PODSnapshotPattern matched zero files: "
-             + pattern);
-    ASSERTL0((int)cfg.snapshotFiles.size() >= m_nDOModes,
-             "DOInitModeBasis=POD: number of snapshots (" +
-                 std::to_string(cfg.snapshotFiles.size()) +
-                 ") must be >= DOModes (" + std::to_string(m_nDOModes) +
-                 "). Run a longer sampling case or reduce DOModes.");
-
-    cfg.numModes = m_nDOModes;     // exactly the DO rank, no extra modes
+             + patterns);
+    int nExtra = 0;
+    m_session->LoadParameter("PODExtraModes", nExtra, nExtra);
+    s_nSeededExtras = nExtra;
+    ASSERTL0((int)cfg.snapshotFiles.size() >= m_nDOModes - nExtra,
+             "snapshots must be >= DOModes-PODExtraModes");
+    cfg.numModes = m_nDOModes - nExtra;
 
     std::string meanType;
     m_session->LoadSolverInfo("PODMeanType", meanType, "TimeMean");
@@ -3006,6 +3153,96 @@ void DOVelocityCorrectionScheme::InitialiseModesFromPOD()
     m_podSigmas       = pod.SingularValues();
     m_podEigVecs      = pod.EigenVectors();
     m_podNumSnapshots = pod.NumSnapshots();
+
+    if (nExtra > 0)   // seeded (file-provided) trailing modes
+    {
+        // CRITICAL: FwdTrans on ContFields imposes the stored (mean-flow)
+        // BCs; homogenize while projecting mode-like fields, as every other
+        // mode operation in this class does.
+        auto seedBcState = CaptureVelocityBCState(m_fields, m_velocity);
+        HomogenizeVelocityBCsForModes(m_fields, m_velocity);
+        const int nVel    = (int)m_velocity.size();
+        const int nPhys   = m_fields[0]->GetTotPoints();
+        const int nCoeffs = m_fields[m_velocity[0]]->GetNcoeffs();
+        const auto vars   = m_session->GetVariables();
+        Array<OneD, NekDouble> phys(nPhys), coeffs(nCoeffs), ip(nCoeffs);
+        for (int k = 0; k < nExtra; ++k)
+        {
+            const int slot = cfg.numModes + k;
+            for (int c = 0; c < nVel; ++c)
+            {
+                const std::string vname = "e" + std::to_string(k+1) + "_"
+                                          + vars[m_velocity[c]];
+                GetFunction("ExtraModes")->Evaluate(vname, phys);
+                m_fields[m_velocity[c]]->FwdTrans(phys, coeffs);
+                m_fields[m_velocity[c]]->BwdTrans(coeffs, phys);
+                Vmath::Vcopy(nPhys, phys.data(), 1,
+                    m_DOModePhys.data() + ((size_t)slot*nVel+c)*nPhys, 1);
+                Vmath::Vcopy(nCoeffs, coeffs.data(), 1,
+                    m_DOModeCoeffs.data() + ((size_t)slot*nVel+c)*nCoeffs, 1);
+            }
+            for (int j = 0; j < slot; ++j)
+            {
+                NekDouble dot = 0.0;
+                for (int c = 0; c < nVel; ++c)
+                {
+                    NekDouble *ps = m_DOModePhys.data() +
+                                    ((size_t)slot*nVel + c)*nPhys;
+                    Array<OneD, NekDouble> vs(nPhys, ps, eArrayWrapper);
+                    m_fields[m_velocity[c]]->IProductWRTBase(vs, ip);
+                    dot += Vmath::Dot(nCoeffs,
+                        m_DOModeCoeffs.data() + ((size_t)j*nVel+c)*nCoeffs,
+                        1, ip.data(), 1);
+                }
+                m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
+                    dot, LibUtilities::ReduceSum);
+                for (int c = 0; c < nVel; ++c)
+                {
+                    Vmath::Svtvp(nPhys, -dot,
+                        m_DOModePhys.data() + ((size_t)j*nVel+c)*nPhys, 1,
+                        m_DOModePhys.data() + ((size_t)slot*nVel+c)*nPhys, 1,
+                        m_DOModePhys.data() + ((size_t)slot*nVel+c)*nPhys, 1);
+                    Vmath::Svtvp(nCoeffs, -dot,
+                        m_DOModeCoeffs.data() + ((size_t)j*nVel+c)*nCoeffs, 1,
+                        m_DOModeCoeffs.data() + ((size_t)slot*nVel+c)*nCoeffs,
+                        1,
+                        m_DOModeCoeffs.data() + ((size_t)slot*nVel+c)*nCoeffs,
+                        1);
+                }
+            }
+            NekDouble nrm2 = 0.0;
+            for (int c = 0; c < nVel; ++c)
+            {
+                NekDouble *ps = m_DOModePhys.data() +
+                                ((size_t)slot*nVel + c)*nPhys;
+                Array<OneD, NekDouble> vs(nPhys, ps, eArrayWrapper);
+                m_fields[m_velocity[c]]->IProductWRTBase(vs, ip);
+                nrm2 += Vmath::Dot(nCoeffs,
+                    m_DOModeCoeffs.data() + ((size_t)slot*nVel+c)*nCoeffs,
+                    1, ip.data(), 1);
+            }
+            m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
+                nrm2, LibUtilities::ReduceSum);
+            ASSERTL0(nrm2 > 1e-20, "seed inside POD span");
+            const NekDouble inv = 1.0/std::sqrt(nrm2);
+            Vmath::Smul(nVel*nPhys, inv,
+                m_DOModePhys.data() + (size_t)slot*nVel*nPhys, 1,
+                m_DOModePhys.data() + (size_t)slot*nVel*nPhys, 1);
+            Vmath::Smul(nVel*nCoeffs, inv,
+                m_DOModeCoeffs.data() + (size_t)slot*nVel*nCoeffs, 1,
+                m_DOModeCoeffs.data() + (size_t)slot*nVel*nCoeffs, 1);
+        }
+        const NekDouble sigSeed =
+            std::sqrt(m_podSigmas.front()*m_podSigmas.back());
+        for (int k = 0; k < nExtra; ++k)
+        {
+            m_podSigmas.push_back(sigSeed);
+            m_podEigVecs.push_back(
+                std::vector<NekDouble>((size_t)m_podNumSnapshots, 0.0));
+        }
+        RestoreVelocityBCState(m_fields, seedBcState);
+    }
+
 
     if (m_verbose)
     {

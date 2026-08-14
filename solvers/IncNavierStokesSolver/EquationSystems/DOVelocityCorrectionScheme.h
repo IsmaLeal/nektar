@@ -118,7 +118,7 @@ protected:
     /// pressure modes coefficients, updated by DOImplicitSolve and needed by
     /// Yi RHS for grad(p_k).
     Array<OneD, NekDouble> m_DOModePCoeffs;
-    /// LOCAL Yi shard, particle-major: Y_{i,p_local} =
+    /// local Yi shard, particle-major: Y_{i,p_local} =
     /// m_Yi[p_local*m_nDOModes + i], global index p = m_npOffset + p_local
     Array<OneD, NekDouble> m_Yi;
 
@@ -132,6 +132,13 @@ protected:
     NekDouble m_invCovRegEps = 1e-2;
     /// selected initial-mode basis: "Laplacian" or "POD".
     std::string m_doInitBasis = "Laplacian";
+    /// fill particles beyond the snapshot count by resampling the
+    /// projected snapshot coordinates with a small jitter instead of a
+    /// zero-centred Gaussian, so extra particles land in the populated
+    /// regions (essential for bimodal snapshot sets). Default; SOLVERINFO
+    /// PODTailFill = Gaussian restores the legacy fill for reproducing
+    /// older runs.
+    bool m_podEmpiricalTail = true;
     /// batch the per-mode pressure/viscous solves through
     /// ContField::HelmSolveBatched (one AllReduce per CG iteration for all
     /// modes). Set by SOLVERINFO DOBatchedSolve; only effective with
@@ -180,7 +187,6 @@ protected:
     /// fixed channel templates
     Array<OneD, NekDouble> m_forcingBasisPhys;
     /// FE coefficients of channels
-    Array<OneD, NekDouble> m_forcingBasisCoeffs;
     /// per-particle, per-channel OU amplitudes at current times
     Array<OneD, NekDouble> m_forcingEta;
     /// RNG state
@@ -204,11 +210,11 @@ protected:
     // m_modeGrad2 (\partial_d^2 u_i[c]) is not cached; recomputed on
     // the fly in ComputeNMode to avoid ~nModes*nVel^2*nPhys overhead.
     Array<OneD, NekDouble> m_modeGrad1, m_meanGrad1, m_modeLinRhs;
-    /// Quadrature weights times Jacobian at each physical point:
+    /// quadrature weights times Jacobian at each physical point:
     /// m_physWeights[k] = w_k * J_k.  Pre-computed in v_InitObject.
     Array<OneD, NekDouble> m_physWeights;
-    /// Pre-allocated scratch for parallel ComputeNModeBody in DOExplicitRhs.
-    /// Layout: (i*nVel+c)*nPhys for mode i, component c.
+    /// pre-allocated scratch for parallel ComputeNModeBody in DOExplicitRhs.
+    /// (i*nVel+c)*nPhys for mode i, component c.
     Array<OneD, NekDouble> m_NAllBuf;
     /// Laplacian cache: m_modeLap[(i*nVel+c)*nPhys] = sum_d d^2/dx_d^2 u_i[c].
     /// Filled by PrecomputeGradients so ComputeNModeBody needs no PhysDeriv.
