@@ -931,10 +931,9 @@ void DOVelocityCorrectionScheme::InitialiseForcingBasis()
  *        tau = 0: eta_{n+1} <- sigma sqrt{dt} xi,
  *     where alpha = exp(-dt/tau).
  *   - enforce 0 sample mean across particles.
- *   - computes the mode RHS contribution from the forcing:
- *      <E[f_{stoch}Y_i], u_p> = \sum_k <g_k, u_p> E[eta_k Y_i]
- *                             = \sum_k m_forcingG[i*K + k]
- *                               * m_forcingA[i*K + k].
+ * The projection tensors m_forcingG / m_forcingA are computed in
+ * ComputeForcingProjections, called from DOExplicitRhs after the state
+ * sync so they see the post-implicit basis.
  */
 void DOVelocityCorrectionScheme::AdvanceForcingState()
 {
@@ -942,9 +941,6 @@ void DOVelocityCorrectionScheme::AdvanceForcingState()
 
     const int K       = m_nForcingChannels;
     const int Np      = m_nDOParticles;
-    const int S       = m_nDOModes;
-    const int nVel    = m_velocity.size();
-    const int nPhys   = m_fields[0]->GetTotPoints();
     const NekDouble sigma = m_forcingSigma;
     const NekDouble tau   = m_forcingTau;
     const NekDouble dt    = m_timestep;
@@ -992,16 +988,35 @@ void DOVelocityCorrectionScheme::AdvanceForcingState()
         }
     }
 
-    // DNS forcing mode (no DO subsystem): eta is consumed directly by
-    // v_EvaluateAdvection_SetPressureBCs; no projections or moments needed.
-    if (m_nDOModes == 0) return;
+}
 
-    // <g_k,u_p>_M via the quadrature-space dot against m_physWeights, one
-    // Dgemv over the mode matrix per (channel, component) as in
-    // ComputeNModeBody. Physical points are uniquely owned per rank, so the
-    // fused AllReduce below sums disjoint partial integrals. (The previous
-    // coefficient-space Dot double-counted partition-interface dofs of the
-    // continuous space under MPI.)
+/**
+ * Fills the forcing projection tensors from the current mode/Yi state:
+ *      - m_forcingG[i*K + k] = <g_k, u_i>_M;
+ *      - m_forcingA[i*K + k] = E[eta_k Y_i].
+ * Called from DOExplicitRhs after the state sync, so both tensors are
+ * evaluated on the same (post-implicit) basis and Yi as every other term
+ * of the stored RHS entry; computing them before the step, as
+ * AdvanceForcingState formerly did, lagged them one level behind the
+ * modes they multiply.
+ *
+ * <g_k,u_i>_M via the quadrature-space dot against m_physWeights, one
+ * Dgemv over the mode matrix per (channel, component) as in
+ * ComputeNModeBody. Physical points are uniquely owned per rank, so the
+ * fused AllReduce below sums disjoint partial integrals. (A
+ * coefficient-space Dot would double-count partition-interface dofs of
+ * the continuous space under MPI.)
+ */
+void DOVelocityCorrectionScheme::ComputeForcingProjections()
+{
+    if (m_nForcingChannels == 0 || m_nDOModes == 0) return;
+
+    const int K     = m_nForcingChannels;
+    const int S     = m_nDOModes;
+    const int nVel  = m_velocity.size();
+    const int nPhys = m_fields[0]->GetTotPoints();
+    const NekDouble invNp = 1.0 / static_cast<NekDouble>(m_nDOParticles);
+
     Array<OneD, NekDouble> wg(nPhys);
     std::fill(m_forcingG.begin(), m_forcingG.end(), 0.0);
     std::vector<NekDouble> gCol(S, 0.0);
@@ -1817,6 +1832,11 @@ void DOVelocityCorrectionScheme::DOExplicitRhs(
     // copy the local Y shard from in to m_Yi
     Vmath::Vcopy(m_npLocal*m_nDOModes,
                  in[m_doYIdx].data(), 1, m_Yi.data(), 1);
+
+    // forcing projections on the synced state: m_forcingG and m_forcingA
+    // now see the same post-implicit basis as the rest of this entry
+    // (collective: one fused AllReduce inside)
+    ComputeForcingProjections();
 
     // swap m_fields phys to m_meanAtTn, save mean^{n+1} to meanSaved
     Array<OneD, Array<OneD, NekDouble>> meanSaved(nVel);

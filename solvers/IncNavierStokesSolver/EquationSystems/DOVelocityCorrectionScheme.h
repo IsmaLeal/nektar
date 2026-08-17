@@ -340,6 +340,10 @@ private:
     void InitialiseYi();
     void InitialiseForcingBasis();
     void AdvanceForcingState();
+    /// forcing projections m_forcingG = <g_k,u_i>, m_forcingA = E[eta_k Y_i]
+    /// from the current (synced) mode/Yi state; called by DOExplicitRhs so
+    /// both tensors match the basis of the entry they enter
+    void ComputeForcingProjections();
     void RestoreFromDOArchive(const std::string &fldPath);
 };
 
