@@ -26,10 +26,10 @@ from pathlib import Path
 
 import numpy as np
 
+import se
+import draw_hist
+
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-import se  # noqa: E402
-import draw_hist  # noqa: E402
 
 QS = ("M", "A", "Y1", "dL", "escape_M", "escape_A", "escape_Y1", "escape_dL")
 MANIM_PYTHON = os.environ.get("MANIM_PYTHON", str(Path.home() / "todisimo/despojos/divulg/.venv/bin/python"))
@@ -76,7 +76,7 @@ def main():
             for j, Np in enumerate(args.Np):
                 for k, eps in enumerate(args.eps):
                     do_dens[i, j, k], do_edges[i, j, k] = np.histogram(pooled(do[(S, Np, eps)], q, h), bins=bins, density=True)
-                    print(f"  S {S}, Np {Np}, eps {eps:g}: " + ", ".join(r.name for r in do[(S, Np, eps)]))
+                    print(f"  S {S}, Np {Np}, eps {se.eps_str(eps)}: " + ", ".join(r.name for r in do[(S, Np, eps)]))
         out = args.out or se.FIGS / pair.name / "vary_S_Np_eps" / f"hist_{q}.png"
         with tempfile.TemporaryDirectory() as tmp:
             prefix = f"{tmp}/data"
@@ -87,7 +87,7 @@ def main():
             if r.returncode:
                 sys.exit(f"hist_{q}: the drawing failed\n{r.stdout[-3000:]}{r.stderr[-3000:]}")
         cmd = ["python3", str(Path(__file__).resolve()), "--pair", pair.name, "--q", q, "--S", *map(str, args.S),
-               "--Np", *map(str, args.Np), "--eps", *(f"{e:g}" for e in args.eps)] + (["--out", str(out)] if args.out else [])
+               "--Np", *map(str, args.Np), "--eps", *(se.eps_str(e) for e in args.eps)] + (["--out", str(out)] if args.out else [])
         out.with_suffix(".cmd").write_text(f"cd {os.getcwd()}\n{shlex.join(cmd)}\n")
         print(f"Saved: {out}")
 

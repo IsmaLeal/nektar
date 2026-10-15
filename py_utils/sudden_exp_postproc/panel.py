@@ -25,23 +25,21 @@ the command line next to it (figsave.py).
 Examples:
   python3 panel.py --panel hist q=A 'seed??' S6_Np1000_seed45 S8_Np1000_seed45 S12_Np1000_seed45 \
       --out cases/se/figures/Re100_sig0.0144/vary_S_Np1000_eps1e-2/hist_A.png
-  python3 panel.py --sharex --panel qdag S6_Np1000_seed45_eps0.0001 --panel qdag S16_Np1000_seed45_eps0.0001 \
+  python3 panel.py --sharex --panel qdag S6_Np1000_seed45_eps1e-4 --panel qdag S16_Np1000_seed45_eps1e-4 \
       --out cases/se/figures/Re100_sig0.0144/qdag_proj.pdf
   python3 panel.py --sharex --tags \
-      --panel trace q=A seed45_Np1000_S8p0 S8_Np1000_seed45_eps0.0001@0 S8_Np1000_seed45_eps0.00000001@0 \
+      --panel trace q=A seed45_Np1000_S8p0 S8_Np1000_seed45_eps1e-4@0 S8_Np1000_seed45_eps1e-8@0 \
       --panel trace q=M --panel trace q=dL --panel trace q=Y1 \
       --out cases/se/figures/Re100_sig0.0144/dns_Re100_sig0.0144_seed45_Np1000_S8p0/twin.pdf
 """
-import argparse, importlib, sys
+import argparse, importlib
 from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-import se  # noqa: E402
-from figsave import save  # noqa: E402
+import se
+from figsave import save
 
 KINDS = ('hist', 'cross', 'trace', 'qdag')
 

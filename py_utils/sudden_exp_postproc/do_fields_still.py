@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 from manim import *
 from classic_isma import *
+from channel import colour_bar, field_image, steps, walls
 
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 ap.add_argument("data", help="prefix of the .npz written by do_fields.data()")
@@ -51,7 +52,6 @@ X_LEFT = -4.9         # scene x of x = XMIN
 X0 = X_LEFT - XMIN * S  # scene x of x = 0: the expansion
 ROWS = [4.4, 2.8, 1.0, -0.6]   # scene y of each channel's axis: phi_u, phi_v, then u_K, v_K
 F_MAX = 0.4           # the colour runs from the background to its full colour at +-F_MAX (the four fields' extremes are 0.39)
-POS, NEG = SALVIA, MALVA    # f > 0, f < 0
 # the axes below: log scale from 10^LO to 10^HI, the same 10^-6..1 in every still (every run of 2026-10-13 fits:
 # 4.9e-6..1), widened by whole decades only for a run outside it
 LO = min(-6, int(np.floor(np.log10(min(f.min() for _, f, _ in NORMS)))))
@@ -65,49 +65,9 @@ def field_point(x, y, row):
     return np.array([X0 + x * S, row + y * S, 0.0])
 
 
-_BG, _POS, _NEG = (np.array(color_to_rgb(c)) for c in (BG, POS, NEG))
-
-
-def colours(f):
-    """RGBA bytes of a field: the background at 0, towards POS (f > 0) or NEG (f < 0); row 0 is the top"""
-    a = np.clip(f / F_MAX, 0, 1)[..., None]
-    b = np.clip(-f / F_MAX, 0, 1)[..., None]
-    rgb = _BG + a * (_POS - _BG) + b * (_NEG - _BG)
-    out = np.empty(f.shape + (4,), dtype=np.uint8)
-    out[..., :3] = np.round(255 * rgb)
-    out[..., 3] = 255
-    return out[::-1]
-
-
-def walls(row):
-    """channel's outline: inlet from x = XMIN, step at x = 0, walls at y = +-1.5 up to x = XMAX"""
-    top = [field_point(x, y, row) for x, y in [(XMIN, 0.5), (0, 0.5), (0, 1.5), (XMAX, 1.5)]]
-    bot = [field_point(x, -y, row) for x, y in [(XMIN, 0.5), (0, 0.5), (0, 1.5), (XMAX, 1.5)]]
-    return VGroup(*(curve(VMobject().set_points_as_corners(p), color=INK, width=2, nib=False) for p in (top, bot)))
-
-
-def steps(row):
-    """the solid beside the inlet, above and below it (with stripes)"""
-    return VGroup(*(hatch([field_point(XMIN, s * 0.5, row), field_point(0, s * 0.5, row), field_point(0, s * 1.5, row),
-                           field_point(XMIN, s * 1.5, row)]) for s in (1, -1)))
-
-
-def channel(f, row):
-    """the field f drawn in the channel at scene height row"""
-    m = ImageMobject(colours(f)).stretch_to_fit_width((XMAX - XMIN) * S).stretch_to_fit_height(3 * S)
-    return m.move_to(field_point((XMIN + XMAX) / 2, 0, row))
-
-
-def colour_bar():
-    """the colour key at the channels' right, half way down them: from -F_MAX to F_MAX"""
-    h = 3.4
-    ff = np.linspace(-F_MAX, F_MAX, 256)[:, None] * np.ones((1, 8))
-    bar = ImageMobject(colours(ff)).stretch_to_fit_height(h).stretch_to_fit_width(0.14)
-    bar.move_to([field_point(XMAX, 0, 0)[0] + 0.5, (ROWS[0] + ROWS[-1]) / 2, 0])
-    y_of = lambda f: bar.get_bottom()[1] + h * (f + F_MAX) / (2 * F_MAX)
-    ticks = VGroup(*(formula(s, size=24).next_to([bar.get_right()[0], y_of(v), 0], RIGHT, buff=0.1)
-                     for s, v in ((r"0.4", F_MAX), (r"0", 0.0), (r"-0.4", -F_MAX))))
-    return Group(bar, ticks)
+def point_at(row):
+    """point(x, y) of the channel drawn at scene height row (channel.py)"""
+    return lambda x, y: field_point(x, y, row)
 
 
 def run_label():
@@ -145,9 +105,11 @@ class DoFields(Scene):
     def construct(self):
         self.add(grid())
         for (sym, f), row in zip(FIELDS, ROWS):
-            self.add(channel(f, row), walls(row), steps(row),
-                     formula(sym, size=30).next_to(field_point(XMIN, 0, row), LEFT, buff=0.3))
-        self.add(colour_bar(), run_label().next_to(field_point(XMAX, 1.5, ROWS[0]), UP, buff=0.25, aligned_edge=RIGHT))
+            self.add(field_image(f, point_at(row), XMIN, XMAX, F_MAX, F_MAX), walls(point_at(row), XMIN, XMAX),
+                     steps(point_at(row), XMIN), formula(sym, size=30).next_to(field_point(XMIN, 0, row), LEFT, buff=0.3))
+        key = colour_bar(F_MAX, F_MAX, 3.4, [field_point(XMAX, 0, 0)[0] + 0.5, (ROWS[0] + ROWS[-1]) / 2, 0],
+                         ((r"0.4", F_MAX), (r"0", 0.0), (r"-0.4", -F_MAX)))     # half way down the channels, at their right
+        self.add(key, run_label().next_to(field_point(XMAX, 1.5, ROWS[0]), UP, buff=0.25, aligned_edge=RIGHT))
         self.add(norms())
 
 

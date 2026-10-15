@@ -7,7 +7,7 @@ Layout:
 - (1,0): one random reconstructed realization field
 - bottom row (spans all columns): Yi variances vs time
 
-Requires an NPZ/HDF5 file produced by `py_utils/load_chk.py` with:
+Requires the HDF5 file assemble_do_h5.py writes for a run, with:
 - mean fields `u`, `v`
 - interpolated modes `mode_u`, `mode_v` (run loader with --interp-modes-from-archive)
 - coefficients `yi`
@@ -16,8 +16,8 @@ Requires an NPZ/HDF5 file produced by `py_utils/load_chk.py` with:
 from __future__ import annotations
 
 import argparse
-import importlib.util
 from pathlib import Path
+import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
@@ -25,20 +25,40 @@ from matplotlib import colors
 from matplotlib.gridspec import GridSpec
 
 
-def _load_reconstruct_module():
-    here = Path(__file__).resolve()
-    mod_path = here.parent.parent / "reconstruct_fields.py"
-    spec = importlib.util.spec_from_file_location("reconstruct_fields", mod_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Could not load reconstruct_fields.py from {mod_path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+def _open_data(path: Path):
+    """The container written by assemble_do_h5.py: an HDF5 file or an NPZ."""
+    if path.suffix.lower() in {".h5", ".hdf5"}:
+        return h5py.File(path, "r")
+    return np.load(path, allow_pickle=True)
 
 
-def _aligned_uv_and_yi(data, recon_mod):
-    u_mean, mode_u, yi = recon_mod._aligned_triplet(data, "u", "mode_u")
-    v_mean, mode_v, yi2 = recon_mod._aligned_triplet(data, "v", "mode_v")
+def _arr(data, key: str) -> np.ndarray:
+    return np.asarray(data[key])
+
+
+def _aligned_triplet(data, mean_key: str, mode_key: str):
+    """mean (Ny, Nx, T), modes (S, Ny, Nx, Tdo) and yi (Np, S, Tdo) on the instants both hold."""
+    mean = _arr(data, mean_key)
+    mode = _arr(data, mode_key)
+    yi = _arr(data, "yi")
+    if "common_idx_chk" in data and "common_idx_do" in data:
+        ic = _arr(data, "common_idx_chk")
+        id_ = _arr(data, "common_idx_do")
+        if ic.size > 0 and id_.size > 0:
+            mean = mean[..., ic]
+            mode = mode[..., id_]
+            yi = yi[..., id_]
+    else:
+        k = min(mean.shape[-1], mode.shape[-1], yi.shape[-1])
+        mean = mean[..., :k]
+        mode = mode[..., :k]
+        yi = yi[..., :k]
+    return mean, mode, yi
+
+
+def _aligned_uv_and_yi(data):
+    u_mean, mode_u, yi = _aligned_triplet(data, "u", "mode_u")
+    v_mean, mode_v, yi2 = _aligned_triplet(data, "v", "mode_v")
     if yi.shape != yi2.shape:
         raise ValueError("Aligned yi shapes differ between u and v reconstruction paths")
     return u_mean, v_mean, mode_u, mode_v, yi
@@ -73,7 +93,7 @@ def main() -> int:
         "--data",
         type=Path,
         default=None,
-        help="Input NPZ/HDF5 from py_utils/load_chk.py. Defaults to ./out.h5 when omitted.",
+        help="The HDF5 file assemble_do_h5.py wrote. Defaults to ./out.h5 when omitted.",
     )
     ap.add_argument(
         "--npz",
@@ -165,17 +185,16 @@ def main() -> int:
             f"Input file not found: {in_path}. Pass --data <path> or --npz <path>."
         )
 
-    recon_mod = _load_reconstruct_module()
-    data = recon_mod._open_data(in_path)
+    data = _open_data(in_path)
     required = ["u", "v", "mode_u", "mode_v", "yi", "x", "y"]
     missing = [k for k in required if k not in data]
     if missing:
         raise KeyError(
             "Missing arrays in input container: "
-            f"{missing}. Run load_chk.py with --interp-modes-from-archive."
+            f"{missing} (assemble_do_h5.py writes them)."
         )
 
-    u_mean, v_mean, mode_u, mode_v, yi = _aligned_uv_and_yi(data, recon_mod)
+    u_mean, v_mean, mode_u, mode_v, yi = _aligned_uv_and_yi(data)
     # Shapes: mean (Ny,Nx,K), modes (S,Ny,Nx,K), yi (P,S,K)
     ny, nx, K = u_mean.shape
     S = mode_u.shape[0]
@@ -189,8 +208,8 @@ def main() -> int:
     mode_v = mode_v[..., :K]
     yi = yi[..., :K]
 
-    x = recon_mod._arr(data, "x")
-    y = recon_mod._arr(data, "y")
+    x = _arr(data, "x")
+    y = _arr(data, "y")
     if args.xmax is not None:
         keep = x[0, :] <= args.xmax
         if keep.sum() < 2:
@@ -245,7 +264,7 @@ def main() -> int:
 
     # Yi variances vs time (across particles)
     yi_var = np.var(yi, axis=0)  # (S,K)
-    t_do = recon_mod._arr(data, "t_do") if "t_do" in data else np.arange(K, dtype=float)
+    t_do = _arr(data, "t_do") if "t_do" in data else np.arange(K, dtype=float)
     t_do = np.asarray(t_do)[:K]
 
     # Color scaling and normalization.

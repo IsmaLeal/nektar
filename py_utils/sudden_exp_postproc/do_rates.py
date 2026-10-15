@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import h5py
 import numpy as np
 
 import se
@@ -36,24 +35,22 @@ def main() -> int:
     ap.add_argument("--sweep", type=Path, default=se.SWEEP)
     ap.add_argument("--out", type=Path,
                     default=se.SWEEP / "do_rates")
-    ap.add_argument("--c", type=float, default=0.8)
+    ap.add_argument("--c", type=float, default=se.C)
     ap.add_argument("--tmin", type=float, default=30.0)
-    ap.add_argument("--m", type=float, default=0.1706,
-                    help="well level of Re 100 (sweep_rates.py)")
+    ap.add_argument("--m", type=float, default=se.M_WELL, help="well level of Re 100 (se.M_WELL)")
     args = ap.parse_args()
 
-    dns = rate_of_run(args.sweep / "Re100_sig0.0144/dns_Re100_sig0.0144_seed45/output/extract/grid.h5",
-                      args.c, args.tmin, args.m)
-    with h5py.File(args.sweep / "Re100_sig0.0144/dns_Re100_sig0.0144_seed45/output/extract/grid.h5") as h:
-        td, Md = h["t"][:], h["M_grid"][:]
-    dns["medM"] = float(np.median(np.abs(Md[td >= args.tmin])))
+    ref = args.sweep / "Re100_sig0.0144/dns_Re100_sig0.0144_seed45"
+    dns = rate_of_run(ref, args.c, args.tmin, args.m)
+    d = se.dns(ref)
+    dns["medM"] = float(np.median(np.abs(d["M"][d["t"] >= args.tmin])))
     print(f"DNS Re100 sigma0.0144: N={dns['n']} lambda={dns['lam']:.2e} "
           f"+- {dns['err']:.1e}  tau={1 / dns['lam']:.0f}  med|M|={dns['medM']:.4f}")
 
     rows = []
-    for f in sorted(args.sweep.glob("Re100_sig*/do_Re100_*/output/extract/measures.h5")):
-        prm = se.params(f.parents[2])
-        d = se.do_all(f.parents[2])
+    for run in se.runs("do", sorted(args.sweep.glob("Re100_sig*"))):
+        prm = se.params(run)
+        d = se.do_all(run)
         t, Mp = d["t"], d["M"]
         w = t >= args.tmin
         n = np.array([len(tc) for tc in se.crossings(t[w], Mp[w], args.c * args.m)])
@@ -70,7 +67,7 @@ def main() -> int:
     print(f"{'S':>3} {'Np':>5} {'eps':>7} {'t_end':>6} {'N':>6} {'lambda':>9} "
           f"{'+-':>8} {'DO/DNS':>7} {'f(0 tr)':>8} {'med|M|':>7}")
     for r in rows:
-        print(f"{r['S']:3d} {r['Np']:5d} {r['eps']:7.4f} {r['t_end']:6.0f} "
+        print(f"{r['S']:3d} {r['Np']:5d} {se.eps_str(r['eps']):>7} {r['t_end']:6.0f} "
               f"{r['N']:6d} {r['lam']:9.2e} {r['err']:8.1e} {r['ratio']:7.2f} "
               f"{r['f0']:8.3f} {r['medM']:7.4f}")
 
@@ -78,7 +75,7 @@ def main() -> int:
              r"$S$ & $N_p$ & $\epsilon$ & $t_{\rm end}$ & $N$ & $\lambda_{\rm DO}$ & "
              r"$\lambda_{\rm DO}/\lambda_{\rm DNS}$ & median $|M|$ \\", r"\hline"]
     for r in rows:
-        lines.append(f"{r['S']} & {r['Np']} & {r['eps']:g} & {r['t_end']:.0f} & "
+        lines.append(f"{r['S']} & {r['Np']} & $10^{{{np.log10(r['eps']):.0f}}}$ & {r['t_end']:.0f} & "
                      f"{r['N']} & ${r['lam']:.2e}".replace("e-0", r"\times 10^{-")
                      + r"}$ & " + f"{r['ratio']:.2f} & {r['medM']:.3f}" + r" \\")
     lines += [r"\hline",

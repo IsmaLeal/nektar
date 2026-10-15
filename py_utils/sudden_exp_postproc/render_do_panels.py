@@ -103,7 +103,7 @@ def main() -> int:
                          f"do_panels_{args.field}.mp4"))
     out.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["python3",
-          str(HERE.parent / "reconstruction/animation/animate_do_panels.py"),
+          str(HERE / "animate_do_panels.py"),
           "--data", str(h5), "--field", args.field, "--out", str(out)]
     if args.particle is not None:
         cmd += ["--particle", str(args.particle)]

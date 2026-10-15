@@ -1,12 +1,7 @@
 """The basic tools of the sudden-expansion (se) campaign, in one module.
 
-From a console or any script:
-
-    import sys; sys.path.insert(0, '/home/isma/nektar_src_full/py_utils/sudden_exp_postproc')
-    import se
-
-(in PyCharm: right click on py_utils/sudden_exp_postproc, Mark Directory as,
-Sources Root; then 'import se' works in its console and in every file).
+From a console, a script or PyCharm, in any directory: import se
+(py_utils is installed once with pip, py_utils/README.md).
 
 Sections:
 
@@ -17,17 +12,16 @@ Sections:
                cases/se/templates/extract_lib.py, the module JED runs for the
                extraction; se re-exports them, so each is defined once.
   runs         run directories of the JED sweep: params(run) reads the name,
-               h5(run) is its grid.h5 / measures.h5, find(pair, 'seed45') finds runs.
-  load         load(f): every dataset of a grid.h5 or measures.h5 in a dict.
+               h5(run) is its measures file, find(pair, 'seed45') finds runs.
+  rules        C, M_WELL, DL_FP, a_fp(Re): the thresholds of every transition count.
+  load         load(f): every dataset of a measures file in a dict.
   series       dns(run), do_all(run), do_one(run, p), series(run, q, p):
                A, M, dL, Y1 against time.
   particle     particle_plane(h, p, k): u, v of DO particle p on the plane.
   derivatives  wall_dudn(u), dL_shear(u), vorticity(u, v).
   crossings    crossings(t, X, h): the hysteresis rule of every transition count.
-  raw runs     runs read without the JED extraction (FieldConvert on the
-               archives, HistoryPoints files): FIELDCONVERT, fc_env, interp,
-               casefile_param, load_dat, read_his, axis_M, his_M, yi_from_fld,
-               yi_series, mp_series, mp_series_chain.
+  raw runs     the archives themselves (FieldConvert on them): FIELDCONVERT,
+               fc_env, interp, casefile_param, load_dat, yi_from_fld, yi_series.
 
 Examples:
 
@@ -76,12 +70,15 @@ yi_from_fld = xl.yi_from_info                            # (Np, S) Yi from the m
 
 # ---------------------------------------------------------------- runs of the JED sweep
 # A run is a directory of one (Re, sigma) pair, SWEEP/Re<Re>_sig<sig>/<name>/:
-#   dns_Re<Re>_sig<sig>_seed<seed>                    forced DNS            output/extract/grid.h5
+#   dns_Re<Re>_sig<sig>_seed<seed>                    forced DNS
 #   dns_Re<Re>_sig<sig>_seed<seed>_Np<Np>_S<S>p0      DNS twin of particle 0 of the DO run (S, Np, seed)
-#   do_Re<Re>_sig<sig>_S<S>_Np<Np>_seed<seed>[_eps<eps>][_frc<fseed>]       output/extract/measures.h5
+#   do_Re<Re>_sig<sig>_S<S>_Np<Np>_seed<seed>[_eps<eps>][_frc<fseed>]
 #       no _eps suffix = the default 0.01; _frc<fseed> = forcing seed differs from the POD seed
+# Its measures file (h5): output/extract/grid.h5 (DNS) or measures.h5 (DO), the python extraction JED ran on
+# the archives (cases/se/templates/extract.sbatch), or output/measures/measures.h5, written by the solver's
+# DOMeasures filter (exact quadrature, format DO_MEASURES_V1). The series functions read either.
 # On a command line (panel.py) a run is its directory name or the part after
-# dns_<pair>_ / do_<pair>_ (seed45, S6_Np1000_seed45_eps0.0001). One argument
+# dns_<pair>_ / do_<pair>_ (seed45, S6_Np1000_seed45_eps1e-4). One argument
 # is one curve: a glob ('seed*') or names joined by + pool every match into
 # that curve, and @P after a DO run takes particle P instead of every particle.
 _DNS = re.compile(r'dns_Re(\d+)_sig([0-9.]+)_seed(\d+)(?:_Np(\d+)_S(\d+)p(\d+))?$')
@@ -102,9 +99,35 @@ def params(run):
                 frc=int(m.group(7)) if m.group(7) else None)
 
 
+def eps_str(eps):
+    """eps as it is written everywhere but in the run directories: 1e-4, 1e-8, 1e-2."""
+    return f'{eps:.0e}'.replace('e-0', 'e-')
+
+
+def short_eps(name):
+    """A run name with its eps written as eps_str: ..._eps0.0001 -> ..._eps1e-4."""
+    return re.sub(r'eps([0-9.e-]+)', lambda m: 'eps' + eps_str(float(m.group(1))), name)
+
+
+def disk_eps(name):
+    """A run name with its eps as the run directories spell it: eps1e-4 -> eps0.0001, eps1e-2 -> nothing."""
+    def spell(m):
+        eps = float(m.group(2))
+        return '' if eps == 0.01 else m.group(1) + 'eps' + np.format_float_positional(eps, trim='-')
+    return re.sub(r'(_?)eps([0-9.e-]+)', spell, name)
+
+
 def h5(run):
-    """The extraction file of a run: output/extract/grid.h5 (DNS) or measures.h5 (DO)."""
-    return Path(run) / 'output/extract' / ('grid.h5' if params(run)['kind'] == 'dns' else 'measures.h5')
+    """The measures file of a run: the python extraction, output/extract/grid.h5 (DNS) or measures.h5 (DO), when
+    the run has it, else the DOMeasures filter's output/measures/measures.h5."""
+    run = Path(run)
+    f = run / 'output/extract' / ('grid.h5' if params(run)['kind'] == 'dns' else 'measures.h5')
+    return f if f.exists() else run / 'output/measures/measures.h5'
+
+
+def is_filter(h):
+    """True when the open h5py.File h was written by the DOMeasures filter, False for the python extraction."""
+    return 'header' in h
 
 
 def pair_dir(pair):
@@ -117,6 +140,7 @@ def pair_dir(pair):
 def find(pair, arg):
     """One curve of a panel: (run directories pooled into it, particle or None)."""
     names, _, p = arg.partition('@')
+    names = disk_eps(names)                                       # eps typed as 1e-4 or as the directory spells it
     runs = []
     for name in names.split('+'):
         hits = sorted(d for pat in (name, f'dns_{pair.name}_{name}', f'do_{pair.name}_{name}') for d in pair.glob(pat)
@@ -140,6 +164,12 @@ def fixed_and_varied(curves):
     return {k: v[0] for k, v in vals.items() if len(v) == 1}, [k for k, v in vals.items() if len(v) > 1]
 
 
+# ---------------------------------------------------------------- rules of every transition count
+C = 0.8             # a transition: M (or A, dL, Y1) crosses -C * well from beyond +C * well, or the reverse (crossings)
+M_WELL = 0.1706     # |M| of the Re 100 well: median |M| of the sigma 0.0072 DNS (sweep_rates.py has the other Re)
+DL_FP = 4.95        # dL of the Re 100 fixed point on the plane: grid.h5 dL at t = 0 of every DNS seed (2026-10-15)
+
+
 def a_fp(Re):
     """A of the unforced fixed point of that Re (0.701 at Re 100)."""
     return float(np.load(TPL / f'phi_Re{Re}.npz')['antisym_norm'])
@@ -147,8 +177,8 @@ def a_fp(Re):
 
 # ---------------------------------------------------------------- load
 def load(f, big=1e8):
-    """Every dataset of a grid.h5 (DNS) or measures.h5 (DO) as {name: value},
-    plus mode = 'dns' or 'do'.
+    """Every dataset of a measures file as {name: value}, plus its attributes
+    (mode = 'dns' or 'do' of the python extraction; format, n_modes, n_particles ... of the filter).
 
     f: an open h5py.File, or a path (then opened read-only and left open).
     Datasets under big bytes are read into numpy arrays; the larger ones (u, v
@@ -160,7 +190,9 @@ def load(f, big=1e8):
     """
     if not isinstance(f, h5py.File):
         f = h5py.File(f, 'r')
-    out = {'mode': f.attrs['mode']}
+    out = dict(f.attrs)
+    if is_filter(f):
+        out.update(f['header'].attrs)
 
     def take(name, d):
         if isinstance(d, h5py.Dataset):
@@ -173,15 +205,19 @@ def load(f, big=1e8):
 # ---------------------------------------------------------------- series
 @functools.lru_cache(maxsize=None)
 def dns(run):
-    """t, M, A, dL of a DNS, each (T,), every 4 t.u. (the u, v planes stay on disk)."""
+    """t, M, A, dL of a DNS, each (T,) (the u, v planes stay on disk)."""
     with h5py.File(h5(run), 'r') as h:
+        if is_filter(h):                                                     # one particle
+            return dict(t=h['t'][:], M=h['M_p'][:, 0], A=h['A_p'][:, 0], dL=h['dL_p'][:, 0])
         return dict(t=h['t'][:], M=h['M_grid'][:], A=h['A'][:], dL=h['dL'][:])
 
 
 @functools.lru_cache(maxsize=None)
 def do_all(run):
-    """t (T,) and the per-particle M_p and A_p, (T, Np), rebuilt from the mean, the modes and the Yi."""
+    """t (T,) and the per-particle M_p and A_p, (T, Np): the filter's, or rebuilt from the mean, the modes and the Yi."""
     with h5py.File(h5(run), 'r') as h:
+        if is_filter(h):
+            return dict(t=h['t'][:], M=h['M_p'][:], A=h['A_p'][:])
         t, Y = h['t'][:], h['yi'][:]
         vm, phi = h['v_axis_mean'][:], h['v_axis_modes'][:]
         A0, Ai = h['A0'][:], h['Ai'][:]
@@ -201,17 +237,19 @@ def do_all(run):
 
 @functools.lru_cache(maxsize=None)
 def do_all_Y1(run):
-    """t (T,) and the per-particle Y_1 (T, Np), read off yi."""
+    """t (T,) and the per-particle Y_1 (T, Np)."""
     with h5py.File(h5(run), 'r') as g:
-        return dict(t=g['t'][:], Y1=g['yi'][:, :, 0])
+        return dict(t=g['t'][:], Y1=g['Y1_p'][:] if is_filter(g) else g['yi'][:, :, 0])
 
 
 @functools.lru_cache(maxsize=None)
 def do_all_dL(run, block=50):
     """t (T,) and the per-particle Delta L (T, Np), from the near-wall u of every particle (mean + Y . modes, the
     reattachment rule of extract_lib on every row at once), in blocks of instants: the whole product would be
-    T x Np x 2 x 800 floats. About a minute per run."""
+    T x Np x 2 x 800 floats. About a minute per run. The filter's dL_p is read as is."""
     with h5py.File(h5(run), 'r') as g:
+        if is_filter(g):
+            return dict(t=g['t'][:], dL=g['dL_p'][:])
         t, Y = g['t'][:], g['yi'][:]
         um, modes = g['u_wall_mean'], g['u_wall_modes']                  # (T, 2, 800) and (T, S, 2, 800), on disk
         T, Np, S = Y.shape
@@ -233,6 +271,8 @@ def do_one(run, p):
     """t, A, M, Delta L and Y_1 of particle p along a DO run, each (T,); M and Delta L from extract_lib (m_grid, reattachment)."""
     with h5py.File(h5(run), 'r') as g:
         t = g['t'][:]
+        if is_filter(g):
+            return dict(t=t, A=g['A_p'][:, p], M=g['M_p'][:, p], dL=g['dL_p'][:, p], Y1=g['Y1_p'][:, p])
         Y = g['yi'][:, p, :]                                       # (T, S), never the full yi
         A = g['A0'][:] + np.einsum('tk,tk->t', Y, g['Ai'][:])
         vax = g['v_axis_mean'][:] + np.einsum('tk,tkx->tx', Y, g['v_axis_modes'][:])
@@ -260,9 +300,10 @@ def series(run, q, p=None):
 def particle_plane(h, p, k):
     """u, v (NY, NX) of particle p of a DO run at h['grid/t'][k]: mean + sum_i Y_pi mode_i.
 
-    h: the open measures.h5. Only the instants of grid/t (every 1000 t.u.) keep
-    the mean and the modes on the whole plane; between them measures.h5 holds
+    h: the open measures.h5 of the python extraction (the filter keeps no planes). Only the instants of grid/t
+    (every 1000 time units) keep the mean and the modes on the whole plane; between them measures.h5 holds
     the centreline and the near-wall rows only (do_one)."""
+    assert not is_filter(h), 'particle_plane: the filter file has no planes'
     i = int(np.flatnonzero(h['step'][:] == h['grid/step'][k])[0])
     Yp = h['yi'][i, p]                                                    # (S,)
     u = h['grid/mean_u'][k] + np.einsum('i,iyx->yx', Yp, h['grid/mode_u'][k])
@@ -373,39 +414,6 @@ def load_dat(path, ncol):
     return np.array(rows)
 
 
-def read_his(path):
-    """HistoryPoints file -> t (T,), x (npts,) of the points, f (T, npts, 3) = u, v, p.
-
-    The file holds one block of npts rows 't u v p' per output time, the
-    points listed in the '#' header (output/asymmetry/axis_v.his: x = 0.1 i on y = 0)."""
-    xs = []
-    with open(path) as fh:
-        for line in fh:
-            if not line.startswith('#'):
-                break
-            parts = line[1:].split()
-            if len(parts) == 4 and parts[0].isdigit():
-                xs.append(float(parts[1]))
-    xh = np.array(xs)
-    data = np.loadtxt(path, comments='#')
-    nb = len(data) // len(xh)
-    blocks = data[: nb * len(xh)].reshape(nb, len(xh), data.shape[1])
-    return blocks[:, 0, 0], xh, blocks[:, :, 1:]
-
-
-def axis_M(xa, v, xsensor=2.0):
-    """M = sgn v(xsensor) sqrt(int v^2 dx) (Ducimetiere et al. 2024, Eq. 25) of
-    v (..., npts) sampled at the axis points xa (npts,), trapezoid rule."""
-    j = int(np.argmin(np.abs(xa - xsensor)))
-    return np.sign(v[..., j]) * np.sqrt(TRAP(v ** 2, xa, axis=-1))
-
-
-def his_M(path, xsensor=2.0):
-    """t, M of one realisation from its axis HistoryPoints file (output/asymmetry/axis_v.his)."""
-    t, xh, f = read_his(path)
-    return t, axis_M(xh, f[:, :, 1], xsensor)
-
-
 def yi_series(do_dir, nmodes, pattern='*.do_*.fld', dt=0.01):
     """t (T,) = step * dt and yi (T, Np, S) from every DO archive of a directory."""
     files = sorted(glob.glob(str(Path(do_dir) / pattern)))
@@ -414,58 +422,3 @@ def yi_series(do_dir, nmodes, pattern='*.do_*.fld', dt=0.01):
     steps = np.array([int(re.search(r'do_(\d+)', f).group(1)) for f in files])
     yi = np.stack([yi_from_fld(f, nmodes) for f in files])
     return steps * dt, yi
-
-
-def mp_series(run, xsensor=2.0, fieldconvert=FIELDCONVERT):
-    """Per-particle M of a DO run read from its archives: t (T,), yi (T, Np, S), Mp (T, Np), x (npts,).
-
-    Every archive is line-interpolated onto the symmetry axis by FieldConvert
-    (cached in run/output/py_utils_results/axis_cache, only missing archives
-    are interpolated), and M_p = sgn v_p(xsensor, 0) sqrt(int v_p^2 dx) with
-    v_p = vbar + sum_i Y_pi v_i."""
-    run = Path(run)
-    S = int(casefile_param(run, 'DOModes'))
-    dt = casefile_param(run, 'TimeStep', 0.01)
-    cache = run / 'output/py_utils_results/axis_cache'
-    cache.mkdir(parents=True, exist_ok=True)
-    for fld in sorted(glob.glob(str(run / 'output/do/*.do_*.fld'))):
-        step = re.search(r'do_(\d+)', fld).group(1)
-        interp(run / 'geometry.xml', fld, 'line=401,0,0,40,0', cache / f'ax_{step}.dat', fieldconvert)
-
-    ncol = 5 + 2 * S  # line layout: x y | u v p | (mode_i_u, mode_i_v)*S
-    va, ma, xl_ = {}, {}, None
-    for f in sorted(cache.glob('ax_*.dat')):
-        st = int(re.search(r'ax_(\d+)', f.name).group(1))
-        d = load_dat(f, ncol)
-        if d.size == 0:
-            continue
-        if xl_ is None:
-            xl_ = d[:, 0]
-        va[st] = d[:, 3]
-        ma[st] = np.stack([d[:, 6 + 2 * i] for i in range(S)])
-
-    t_yi, yi = yi_series(str(run / 'output/do'), nmodes=S, dt=dt)
-    steps_yi = (np.round(t_yi / dt)).astype(int)
-    ks = [k for k, st in enumerate(steps_yi) if st in va]
-    Mp = np.array([axis_M(xl_, va[steps_yi[k]][None, :] + yi[k] @ ma[steps_yi[k]], xsensor) for k in ks])
-    return t_yi[ks], yi[ks], Mp, xl_
-
-
-def mp_series_chain(segments, xsensor=2.0, fieldconvert=FIELDCONVERT):
-    """mp_series across a restart chain: segments = [(run_dir, t_offset), ...] in time order,
-    e.g. [(parent, 0.0), (continuation, 250.0)].
-
-    Times are shifted by each offset; at every seam the duplicated sample
-    (the continuation's t = 0 archive equals the parent's last one) is dropped
-    from the later segment. Raw Yi are gauge-rotated across a restart, so only
-    gauge-invariant quantities (Mp, reconstructed fields) are continuous; the
-    returned yi is concatenated per segment and NOT comparable across seams."""
-    ts, yis, mps = [], [], []
-    xa = None
-    for run, off in segments:
-        t, yi, Mp, xa = mp_series(run, xsensor=xsensor, fieldconvert=fieldconvert)
-        t = t + off
-        if ts and len(t) and abs(t[0] - ts[-1][-1]) < 1e-9:
-            t, yi, Mp = t[1:], yi[1:], Mp[1:]
-        ts.append(t); yis.append(yi); mps.append(Mp)
-    return np.concatenate(ts), np.concatenate(yis), np.concatenate(mps), xa

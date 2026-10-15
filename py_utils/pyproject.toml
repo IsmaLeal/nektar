@@ -1,0 +1,15 @@
+# pip install -e py_utils   (once, in each python that runs these: the system python3 and the manim venv)
+# Then 'import se' works from any directory, in a console, a script or PyCharm.
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "se"
+version = "0"
+description = "the sudden-expansion campaign tools (cases/se): se.py and the scripts around it"
+requires-python = ">=3.12"
+
+[tool.setuptools]
+package-dir = {"" = "sudden_exp_postproc"}
+py-modules = ["se", "draw_hist", "draw_cross", "draw_trace", "draw_qdag", "figsave", "channel"]

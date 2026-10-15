@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 from manim import *
 from classic_isma import *
+from channel import colour_bar, colours, field_image, steps, walls
 
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 ap.add_argument("data", help="prefix written by dudy_wall_data.py (--out there)")
@@ -42,7 +43,7 @@ PLOT_Y = 2.45         # scene y of the plots' zero lines, above and below
 G_MAX = 2.3           # the plots' y range: +-G_MAX (the run's extremes are -2.28 and 2.26)
 PLOT_H = 2.0          # scene height of +-G_MAX
 U_POS, U_NEG = 1.0, 0.25    # the colour runs from the background to its full colour at u = 1 and at u = -0.25
-POS, NEG = SALVIA, MALVA    # u > 0, u < 0; the curves keep the house colour (CURVE)
+                            # u > 0 SALVIA, u < 0 MALVA (channel.py); the curves keep the house colour (CURVE)
 CURVE_N = 1600        # pen samples along a gradient curve
 
 
@@ -57,20 +58,6 @@ def at(a, t):
     i = min(int(k), len(T) - 2)
     w = k - i
     return (1 - w) * np.asarray(a[i], dtype=np.float32) + w * np.asarray(a[i + 1], dtype=np.float32)
-
-
-_BG, _POS, _NEG = (np.array(color_to_rgb(c)) for c in (BG, POS, NEG))
-
-
-def colours(u):
-    """RGBA bytes of a u array: the background at u = 0, towards POS (u > 0) or NEG (u < 0); row 0 is the top"""
-    a = np.clip(u / U_POS, 0, 1)[..., None]
-    b = np.clip(-u / U_NEG, 0, 1)[..., None]
-    rgb = _BG + a * (_POS - _BG) + b * (_NEG - _BG)
-    out = np.empty(u.shape + (4,), dtype=np.uint8)
-    out[..., :3] = np.round(255 * rgb)
-    out[..., 3] = 255
-    return out[::-1]
 
 
 def plot_axes(y0):
@@ -93,35 +80,6 @@ def zero_drop(ax, g, wall_y):
     return pencil(Line(ax.c2p(x0, 0), field_point(x0, wall_y)))
 
 
-def walls():
-    """
-    channel's outline: inlet from x = X[0], step at x = 0, walls at y = +-1.5
-    top and bot hold the vertices.
-    """
-    top = [field_point(*p) for p in [(X[0], 0.5), (0, 0.5), (0, 1.5), (X[-1], 1.5)]]
-    bot = [field_point(x, -y) for x, y in [(X[0], 0.5), (0, 0.5), (0, 1.5), (X[-1], 1.5)]]
-    return VGroup(*(curve(VMobject().set_points_as_corners(p), color=INK, width=2, nib=False) for p in (top, bot)))
-
-
-def steps():
-    """the solid beside the inlet, above and below it (with stripes)"""
-    return VGroup(*(hatch([field_point(X[0], s * 0.5), field_point(0, s * 0.5), field_point(0, s * 1.5),
-                           field_point(X[0], s * 1.5)]) for s in (1, -1)))
-
-
-def colour_bar():
-    """the colour key at the field's right: u from -U_NEG to U_POS"""
-    h = 3 * S * STRETCH
-    uu = np.linspace(U_POS, -U_NEG, 256)[::-1][:, None] * np.ones((1, 8))
-    bar = ImageMobject(colours(uu)).stretch_to_fit_height(h).stretch_to_fit_width(0.14)
-    bar.next_to(field_point(X[-1], 0), RIGHT, buff=0.3)
-    y_of = lambda u: bar.get_bottom()[1] + h * (u + U_NEG) / (U_POS + U_NEG)
-    ticks = VGroup(*(formula(s, size=24).next_to([bar.get_right()[0], y_of(v), 0], RIGHT, buff=0.1)
-                     for s, v in ((r"1", 1.0), (r"0", 0.0), (r"-0.25", -0.25))))
-    name = formula("u", size=30).next_to(bar, UP, buff=0.15)
-    return Group(bar, ticks, name)
-
-
 class DudyWall(MovingCameraScene):
     def construct(self):
         # build grid, axes, channel's outline
@@ -132,15 +90,14 @@ class DudyWall(MovingCameraScene):
                        formula(r"\left.\dfrac{\partial u}{\partial y}\right|_{\text{bottom}}", size=19).next_to(bot.y_axis.get_end(), LEFT, buff=0.2),
                        formula("x").next_to(top.x_axis.get_end(), DOWN, buff=0.2),
                        formula("x").next_to(bot.x_axis.get_end(), DOWN, buff=0.2))
-        wall, solid = walls(), steps()
+        wall, solid = walls(field_point, X[0], X[-1]), steps(field_point, X[0])
         self.play(grid_in(g), AxesIn(top), AxesIn(bot), TextIn(names), CurveIn(wall, head=None), Create(solid))
 
         # create time, field
         t = ValueTracker(float(T[0]))
-        field = ImageMobject(colours(at(U, T[0])))
-        field.stretch_to_fit_width((X[-1] - X[0]) * S).stretch_to_fit_height(3 * S * STRETCH)
-        field.move_to(field_point((X[0] + X[-1]) / 2, 0))
-        key = colour_bar()
+        field = field_image(at(U, T[0]), field_point, X[0], X[-1], U_POS, U_NEG)
+        key = colour_bar(U_POS, U_NEG, 3 * S * STRETCH, field_point(X[-1], 0) + [0.3 + 0.07, 0, 0],
+                         ((r"1", 1.0), (r"0", 0.0), (r"-0.25", -0.25)), name="u")      # at the field's right
         clock_name = formula("t =")
         clock = DecimalNumber(T[0], num_decimal_places=0, group_with_commas=False, font_size=clock_name.font_size, color=INK)
         clock_name.to_corner(UR, buff=0.4).shift(LEFT * 1.0)
@@ -158,7 +115,7 @@ class DudyWall(MovingCameraScene):
 
         up = always_redraw(lambda: curve(gradient_points(top, at(G_TOP, t.get_value())), n=CURVE_N))
         low = always_redraw(lambda: curve(gradient_points(bot, at(G_BOT, t.get_value())), n=CURVE_N))
-        field.add_updater(lambda m: setattr(m, "pixel_array", colours(at(U, t.get_value()))))
+        field.add_updater(lambda m: setattr(m, "pixel_array", colours(at(U, t.get_value()), U_POS, U_NEG)))
         clock.add_updater(lambda m: m.set_value(t.get_value()).next_to(clock_name, RIGHT, buff=0.15))
         self.remove(up0, low0)
         self.add(up, low)

@@ -34,7 +34,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import h5py
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -53,10 +52,9 @@ COLORS = {90: "#009E73", 100: "#0072B2", 110: "#D55E00"}
 MARKERS = {90: "^", 100: "o", 110: "s"}
 
 
-def rate_of_run(path: Path, c: float, tmin: float, m: float | None = None):
-    with h5py.File(path, "r") as h:
-        t = h["t"][:]
-        M = h["M_grid"][:]
+def rate_of_run(run: Path, c: float, tmin: float, m: float | None = None):
+    d = se.dns(run)
+    t, M = d["t"], d["M"]
     w = t >= tmin
     if m is None:
         m = float(np.median(np.abs(M[w])))
@@ -74,26 +72,25 @@ def main() -> int:
     ap.add_argument("--sweep", type=Path, default=se.SWEEP)
     ap.add_argument("--out", type=Path,
                     default=se.SWEEP / "sweep_rates")
-    ap.add_argument("--c", type=float, default=0.8)
+    ap.add_argument("--c", type=float, default=se.C)
     ap.add_argument("--tmin", type=float, default=30.0)
     ap.add_argument("--m-per-run", action="store_true",
                     help="well level from each run's own median |M|")
     args = ap.parse_args()
 
     files = {}
-    for f in sorted(args.sweep.glob("Re*_sig*/dns_Re*_seed*/output/extract/grid.h5")):
-        p = se.params(f.parents[2])
+    for run in se.runs("dns", sorted(args.sweep.glob("Re*_sig*"))):
+        p = se.params(run)
         if p["twin"]:
             continue                       # a DNS twin of a DO particle, not a seed of the sweep
-        files[(p["Re"], float(p["sig"]), p["seed"])] = f
+        files[(p["Re"], float(p["sig"]), p["seed"])] = run
     # well level per Re: the unforced fixed point (sigma = 0 run) when present
     m_of_Re = {}
     if not args.m_per_run:
         for Re in {k[0] for k in files}:
             fp = [k for k in files if k[0] == Re and k[1] == 0.0]
             if fp:
-                with h5py.File(files[fp[0]], "r") as h:
-                    m_of_Re[Re] = float(abs(h["M_grid"][-1]))
+                m_of_Re[Re] = float(abs(se.dns(files[fp[0]])["M"][-1]))
             else:
                 k0 = min((k for k in files if k[0] == Re), key=lambda k: k[1])
                 m_of_Re[Re] = rate_of_run(files[k0], args.c, args.tmin)["m"]

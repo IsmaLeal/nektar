@@ -17,7 +17,6 @@ measures.h5 under the sweep root (se.runs): the absTol runs, moved out of it, ar
 import argparse
 import os
 import shlex
-import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -25,20 +24,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-import se  # noqa: E402
-import draw_hist  # noqa: E402
-from figsave import save  # noqa: E402
+import se
+import draw_hist
+from figsave import save
 
 KEYS = ("S", "Np", "eps")
 QS = ("M", "A", "escape_A", "escape_M")
-
-
-def eps_name(eps):
-    """0.0001 -> 1e-4"""
-    m, e = f"{eps:.0e}".split("e")
-    return f"{m}e{int(e)}"
 
 
 def lines(pair):
@@ -60,7 +51,7 @@ def lines(pair):
             if len(cs) < 2:
                 continue
             f = dict(zip(rest, key))
-            name = [f"vary_{v}"] + [f"{k}{eps_name(f[k]) if k == 'eps' else f[k]}" for k in KEYS if k != v]
+            name = [f"vary_{v}"] + [f"{k}{se.eps_str(f[k]) if k == 'eps' else f[k]}" for k in KEYS if k != v]
             name += [f"seed{f['seed']}"] if len(seeds) > 1 else []
             out["_".join(name)] = [curves[c] for c in sorted(cs, key=lambda c: par[c][v])]
     return out
@@ -80,7 +71,7 @@ def main():
         for name, cs in lines(pair).items():
             if args.line and name not in args.line:
                 continue
-            print(f"{pair.name}/{name}: " + ", ".join("+".join(r.name[len(f"do_{pair.name}_"):] for r in rs) for rs in cs))
+            print(f"{pair.name}/{name}: " + ", ".join("+".join(se.short_eps(r.name[len(f"do_{pair.name}_"):]) for r in rs) for rs in cs))
             if args.list:
                 continue
             curves = ([(dns, None)] if dns else []) + [(rs, None) for rs in cs]

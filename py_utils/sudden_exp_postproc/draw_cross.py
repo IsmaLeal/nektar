@@ -14,7 +14,7 @@ the title. The window is tlim=T0:T1.
 
     python3 panel.py --panel cross tlim=0:4000 seed45 --panel cross tlim=4000:8000 \
         --out cases/se/figures/Re100_sig0.0144/dns_Re100_sig0.0144_seed45/cross.png
-    python3 panel.py --panel cross tlim=0:4000 S6_Np1000_seed45_eps0.0001@269 --panel cross tlim=4000:8000 \
+    python3 panel.py --panel cross tlim=0:4000 S6_Np1000_seed45_eps1e-4@269 --panel cross tlim=4000:8000 \
         --out cases/se/figures/Re100_sig0.0144/do_Re100_sig0.0144_S6_Np1000_seed45_eps0.0001/cross_p269.png
 """
 import numpy as np
@@ -44,7 +44,7 @@ def draw(ax, curves, tlim='0:4000'):
         name = f'DNS {run.parent.name} seed {run.name.split("_seed")[1]}'
     else:
         assert p is not None, f'cross: {run.name} needs a particle, RUN@P'
-        cfg = run.name.split(f'_sig{par["sig"]}_', 1)[1].replace('_seed45', '')     # e.g. S6_Np1000_eps0.0001
+        cfg = se.short_eps(run.name.split(f'_sig{par["sig"]}_', 1)[1].replace('_seed45', ''))     # e.g. S6_Np1000_eps1e-4
         name = f'DO {cfg.replace("_", " ")}, particle {p}'
     t, a = se.series(run, 'A', p); a = a[:, 0]
     t0, t1 = (float(s) for s in tlim.split(':'))

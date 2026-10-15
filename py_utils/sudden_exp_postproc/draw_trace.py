@@ -21,7 +21,7 @@ Measures come from cases/se/templates/extract_lib.py (ip, m_grid,
 reattachment) through se.py; nothing is recomputed here.
 
     python3 panel.py --sharex --tags \
-        --panel trace q=A seed45_Np1000_S8p0 S8_Np1000_seed45_eps0.0001@0 S8_Np1000_seed45_eps0.00000001@0 \
+        --panel trace q=A seed45_Np1000_S8p0 S8_Np1000_seed45_eps1e-4@0 S8_Np1000_seed45_eps1e-8@0 \
         --panel trace q=M --panel trace q=dL --panel trace q=Y1 \
         --out cases/se/figures/Re100_sig0.0144/dns_Re100_sig0.0144_seed45_Np1000_S8p0/twin.pdf
 """
@@ -83,7 +83,7 @@ def draw(ax, curves, q='A'):
             print(f'  {run.name}: t in [{td[0]:g}, {td[-1]:g}], {td.size} rows, NaN in {q}: {int(np.isnan(x).sum())}')
     for (run, p), (ls, mk, shape) in zip(do, STYLE):
         t, x = se.series(run, q, p); x = x[:, 0]
-        name = 'DO ' + ', '.join(f'{k} ' + (f'{se.params(run)[k]:.0e}'.replace('e-0', 'e-') if k == 'eps' else f'{se.params(run)[k]:g}')
+        name = 'DO ' + ', '.join(f'{k} ' + (se.eps_str(se.params(run)[k]) if k == 'eps' else f'{se.params(run)[k]:g}')
                                  for k in (vary or fixed)) + (f', particle {p}' if len({pp for _, pp in do}) > 1 else '')
         names.append(f'{shape} {name[3:]}')
         ax.plot(t, x, color=BLUE, lw=0.8, ls=ls)

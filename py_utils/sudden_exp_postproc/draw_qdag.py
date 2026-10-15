@@ -5,7 +5,7 @@ every 1000 t.u.
 
 q^dagger on the plane comes from plane_from_fld.py; qdag=FILE.npz takes another one.
 
-    python3 panel.py --sharex --panel qdag S6_Np1000_seed45_eps0.0001 --panel qdag S16_Np1000_seed45_eps0.0001 \
+    python3 panel.py --sharex --panel qdag S6_Np1000_seed45_eps1e-4 --panel qdag S16_Np1000_seed45_eps1e-4 \
         --out cases/se/figures/Re100_sig0.0144/qdag_proj.pdf
 """
 import re

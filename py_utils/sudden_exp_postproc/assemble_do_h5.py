@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Assemble a load_chk-compatible .h5 for a DO run from a grid cache.
+"""Assemble the .h5 of a DO run that animate_do_panels.py reads, from a grid cache.
 
 Reads per-archive plane interpolations from
 RUN/output/py_utils_results/grid_cache/gd_STEP.dat (produced by FieldConvert
 interppoints, columns x y z | u v p | mode_i_u mode_i_v ...), plus Yi from
-the archive metadata, and writes an HDF5 with the same keys load_chk.py
-produces, so downstream tools (animate_do_panels.py, reconstruct_fields.py)
-work unchanged:
+the archive metadata, and writes an HDF5 with these keys (animate_do_panels.py
+reads them):
     x, y            (Ny, Nx)
     u, v, p         (Ny, Nx, T)     ensemble-mean fields
     mode_u, mode_v  (S, Ny, Nx, T)

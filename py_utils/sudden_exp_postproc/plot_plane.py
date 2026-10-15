@@ -34,10 +34,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-from figsave import save  # noqa: E402
-from se import INSIDE, x, y  # noqa: E402
+from figsave import save
+from se import INSIDE, x, y
 
 plt.rcParams.update({
     "text.usetex": True,

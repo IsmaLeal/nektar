@@ -4,7 +4,7 @@ The still of phi and mode K of a DO run (do_fields_still.py, manim house style) 
 or for the runs named:
 
     python3 do_fields.py                                  every DO run with its measures.h5
-    python3 do_fields.py S16_Np5000_seed45_eps0.0001      one run (names as in panel.py: the part after
+    python3 do_fields.py S16_Np5000_seed45_eps1e-4      one run (names as in panel.py: the part after
                                                           do_<pair>_, or the whole directory name)
     python3 do_fields.py --mode 2 --t 3000 RUN            mode 2 at t = 3000 instead of mode 1 at the last instant
 
