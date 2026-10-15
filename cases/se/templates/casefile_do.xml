@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DO run template. Placeholders @DT@, @T_END@, @RE@, @DO_MODES@,
+     @DO_PARTICLES@, @YI_SEED@, @YI_SIGMA@, @FORCING_TAU@,
+     @FORCING_SIGMA@, @FORCING_SEED@, @SNAPSHOT_PATTERN@, @CHK_STEPS@,
+     @INFO_STEPS@, @COV_EPS@ are substituted by hand or by a run script. The run dir
+     must also hold ic.chk (mean IC), qdag_channel.fld (forcing template)
+     and geometry.xml/.opt; output/chks, output/do, output/asymmetry,
+     output/energy and output/measures must exist before launch
+     (prep_run.sh). -->
+<NEKTAR>
+  <EXPANSIONS>
+    <E COMPOSITE="C[12]" NUMMODES="7" FIELDS="u,v,p" TYPE="MODIFIED" />
+  </EXPANSIONS>
+  <CONDITIONS>
+    <PARAMETERS>
+      <P> TimeStep      = @DT@ </P>
+      <P> FinTime       = @T_END@ </P>
+      <P> NumSteps      = FinTime / TimeStep </P>
+      <P> IO_InfoSteps  = @INFO_STEPS@ </P>
+      <P> IO_CFLSteps   = @INFO_STEPS@ </P>
+      <P> Re            = @RE@ </P>
+      <P> Kinvis        = 1.0 / Re </P>
+      <P> DOModes     = @DO_MODES@ </P>
+      <P> DOParticles = @DO_PARTICLES@ </P>
+      <P> DOYiSeed    = @YI_SEED@ </P>
+      <P> DOYiSigma   = @YI_SIGMA@ </P>
+      <P> DOForcingNumChannels = 1 </P>
+      <P> DOForcingTau         = @FORCING_TAU@ </P>
+      <P> DOForcingSigma       = @FORCING_SIGMA@ </P>
+      <P> DOForcingSeed        = @FORCING_SEED@ </P>
+      <P> DOInvCovRegEps       = @COV_EPS@ </P>
+    </PARAMETERS>
+    <SOLVERINFO>
+      <I PROPERTY="SolverType" VALUE="DOVelocityCorrectionScheme"/>
+      <I PROPERTY="EQTYPE" VALUE="UnsteadyNavierStokes"/>
+      <I PROPERTY="Projection" VALUE="Continuous"/>
+      <I PROPERTY="SPECTRALHPDEALIASING" VALUE="True"/>
+      <I PROPERTY="DOInitModeBasis" VALUE="POD"/>
+      <!-- one or more globs separated by ';' (ExpandGlob supports a
+           single '*' per pattern; each set gets its own PODtmin trim) -->
+      <I PROPERTY="PODSnapshotPattern" VALUE="@SNAPSHOT_PATTERN@"/>
+      <I PROPERTY="PODMeanType" VALUE="TimeMean"/>
+      <I PROPERTY="DOBatchedSolve" VALUE="True"/>
+    </SOLVERINFO>
+    <TIMEINTEGRATIONSCHEME>
+      <METHOD> IMEX </METHOD>
+      <ORDER> 2 </ORDER>
+    </TIMEINTEGRATIONSCHEME>
+    <VARIABLES>
+      <V ID="0"> u </V>
+      <V ID="1"> v </V>
+      <V ID="2"> p </V>
+    </VARIABLES>
+    <BOUNDARYREGIONS>
+      <B ID="0">C[9]</B>  <!-- Inlet  -->
+      <B ID="1">C[11]</B> <!-- Outlet -->
+      <B ID="2">C[10]</B> <!-- Walls  -->
+    </BOUNDARYREGIONS>
+    <BOUNDARYCONDITIONS>
+      <REGION REF="0">
+        <D VAR="u" VALUE="1-4*y*y"/>
+        <D VAR="v" VALUE="0"/>
+        <N VAR="p" VALUE="0"/>
+      </REGION>
+      <REGION REF="1">
+        <N VAR="u" VALUE="0.0"/>
+        <N VAR="v" VALUE="0.0"/>
+        <D VAR="p" VALUE="0.0"/>
+      </REGION>
+      <REGION REF="2">
+        <D VAR="u" VALUE="0.0"/>
+        <D VAR="v" VALUE="0.0"/>
+        <N VAR="p" VALUE="0.0"/>
+      </REGION>
+    </BOUNDARYCONDITIONS>
+    <!-- mean IC -->
+    <FUNCTION NAME="InitialConditions">
+      <F VAR="u,v,p" FILE="ic.chk"/>
+    </FUNCTION>
+    <FUNCTION NAME="ForcingChannels">
+      <F VAR="g1_u,g1_v" FILE="qdag_channel.fld"/>
+    </FUNCTION>
+    <!-- u_fp of the measure A = <u, phi>, phi = antisym(u_fp)/||antisym(u_fp)||
+         (FilterDOMeasures); ic.chk is the unforced asymmetric fixed point -->
+    <FUNCTION NAME="FixedPoint">
+      <F VAR="u,v" FILE="ic.chk"/>
+    </FUNCTION>
+  </CONDITIONS>
+  <FILTERS>
+    <FILTER TYPE="Checkpoint">
+      <PARAM NAME="OutputFile">output/chks/casefile</PARAM>
+      <PARAM NAME="OutputFrequency">@CHK_STEPS@</PARAM>
+    </FILTER>
+    <FILTER TYPE="DOArchive">
+      <PARAM NAME="OutputFile">output/do/casefile</PARAM>
+      <PARAM NAME="OutputFrequency">100</PARAM>
+      <PARAM NAME="Format">Field</PARAM>
+    </FILTER>
+    <!-- asymmetry measures from the expansion (exact quadrature), one row per
+         archive: output/measures/measures.h5 -->
+    <FILTER TYPE="DOMeasures">
+      <PARAM NAME="OutputFile">output/measures/measures</PARAM>
+      <PARAM NAME="OutputFrequency">100</PARAM>
+      <PARAM NAME="LineOutputFrequency">100</PARAM>
+      <PARAM NAME="FixedPoint">FixedPoint</PARAM>
+    </FILTER>
+    <FILTER TYPE="HistoryPoints">
+      <PARAM NAME="OutputFile">output/asymmetry/axis_v</PARAM>
+      <PARAM NAME="OutputFrequency">100</PARAM>
+      <PARAM NAME="line">401,0,0,40,0</PARAM>
+    </FILTER>
+    <FILTER TYPE="ModalEnergy">
+      <PARAM NAME="OutputFile">output/energy/energy</PARAM>
+      <PARAM NAME="OutputFrequency">100</PARAM>
+    </FILTER>
+  </FILTERS>
+</NEKTAR>

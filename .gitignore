@@ -57,3 +57,7 @@ cases/**/mesh/casefile_*.chk
 
 # Top-level run outputs
 runs/
+
+# cases/se/figures: png and pdf figures are tracked (the global *.pdf rule above is lifted there); movies are not
+!cases/se/figures/**/*.pdf
+cases/se/figures/**/*.mp4

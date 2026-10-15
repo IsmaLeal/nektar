@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Forced DNS template (DOModes=0, one OU realization through qdag).
+     Placeholders @RE@, @SIGMA@, @SEED@, @T_END@, @NP@ are substituted by run_dns.sbatch
+     from one row of dns_sweep.tsv (NP = DOParticles, 1 unless the row has a 5th
+     column; with NP = Np of a DO run and the same seed, the forcing of this DNS is
+     the eta of particle 0 of that DO run: one RNG stream, Np*K draws per step). Derived from
+     runs/2026_08_08_dns_phi22p0_seed45/casefile.xml; everything else
+     (dt, tau, filters, ic.chk, qdag_channel.fld) unchanged. -->
+<NEKTAR>
+  <EXPANSIONS>
+    <E COMPOSITE="C[12]" NUMMODES="7" FIELDS="u,v,p" TYPE="MODIFIED" />
+  </EXPANSIONS>
+  <CONDITIONS>
+    <PARAMETERS>
+      <P> TimeStep      = 0.01 </P>
+      <P> FinTime       = @T_END@ </P>
+      <P> NumSteps      = FinTime / TimeStep </P>
+      <P> IO_InfoSteps  = 1000 </P>
+      <P> IO_CFLSteps   = 1000 </P>
+      <P> Re            = @RE@ </P>
+      <P> Kinvis        = 1.0 / Re </P>
+      <P> DOModes     = 0 </P>
+      <P> DOParticles = @NP@ </P>
+      <P> DOYiSeed    = 1234 </P>
+      <P> DOYiSigma   = 0.01 </P>
+      <P> DOForcingNumChannels = 1 </P>
+      <P> DOForcingTau         = 25.0 </P>
+      <P> DOForcingSigma       = @SIGMA@ </P>
+      <P> DOForcingSeed        = @SEED@ </P>
+    </PARAMETERS>
+    <SOLVERINFO>
+      <I PROPERTY="SolverType" VALUE="DOVelocityCorrectionScheme"/>
+      <I PROPERTY="EQTYPE" VALUE="UnsteadyNavierStokes"/>
+      <I PROPERTY="Projection" VALUE="Continuous"/>
+      <I PROPERTY="SPECTRALHPDEALIASING" VALUE="True"/>
+      <I PROPERTY="DOBatchedSolve" VALUE="True"/>
+    </SOLVERINFO>
+    <TIMEINTEGRATIONSCHEME>
+      <METHOD> IMEX </METHOD>
+      <ORDER> 2 </ORDER>
+    </TIMEINTEGRATIONSCHEME>
+    <VARIABLES>
+      <V ID="0"> u </V>
+      <V ID="1"> v </V>
+      <V ID="2"> p </V>
+    </VARIABLES>
+    <BOUNDARYREGIONS>
+      <B ID="0">C[9]</B>  <!-- Inlet  -->
+      <B ID="1">C[11]</B> <!-- Outlet -->
+      <B ID="2">C[10]</B> <!-- Walls  -->
+    </BOUNDARYREGIONS>
+    <BOUNDARYCONDITIONS>
+      <REGION REF="0">
+        <D VAR="u" VALUE="1-4*y*y"/>
+        <D VAR="v" VALUE="0"/>
+        <N VAR="p" VALUE="0"/>
+      </REGION>
+      <REGION REF="1">
+        <N VAR="u" VALUE="0.0"/>
+        <N VAR="v" VALUE="0.0"/>
+        <D VAR="p" VALUE="0.0"/>
+      </REGION>
+      <REGION REF="2">
+        <D VAR="u" VALUE="0.0"/>
+        <D VAR="v" VALUE="0.0"/>
+        <N VAR="p" VALUE="0.0"/>
+      </REGION>
+    </BOUNDARYCONDITIONS>
+    <!-- IC: unforced asymmetric fixed point at Re=100 (fp_relax chk 150, t=300) -->
+    <FUNCTION NAME="InitialConditions">
+      <F VAR="u,v,p" FILE="ic.chk"/>
+    </FUNCTION>
+    <FUNCTION NAME="ForcingChannels">
+      <F VAR="g1_u,g1_v" FILE="qdag_channel.fld"/>
+    </FUNCTION>
+  </CONDITIONS>
+  <FILTERS>
+    <FILTER TYPE="Checkpoint">
+      <PARAM NAME="OutputFile">output/chks/casefile</PARAM>
+      <PARAM NAME="OutputFrequency">400</PARAM>
+    </FILTER>
+    <FILTER TYPE="HistoryPoints">
+      <PARAM NAME="OutputFile">output/asymmetry/axis_v</PARAM>
+      <PARAM NAME="OutputFrequency">100</PARAM>
+      <PARAM NAME="line">401,0,0,40,0</PARAM>
+    </FILTER>
+    <FILTER TYPE="ModalEnergy">
+      <PARAM NAME="OutputFile">output/energy/energy</PARAM>
+      <PARAM NAME="OutputFrequency">100</PARAM>
+    </FILTER>
+  </FILTERS>
+</NEKTAR>
