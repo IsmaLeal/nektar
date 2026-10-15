@@ -17,13 +17,11 @@ Registered bands (sec 35): mean rel < 2e-2 and fluct rel < 0.1 PASS-class;
 from __future__ import annotations
 
 import argparse
-import subprocess
 from pathlib import Path
 
 import numpy as np
 
-from convergence_orders import FC_DEFAULT, fc_env, load_dat
-from do_quicklook import yi_from_fld
+from se import FIELDCONVERT, interp, load_dat, yi_from_fld
 
 S = 6
 NP = 24
@@ -33,13 +31,7 @@ CELL_AREA = (L / 160) ** 2
 
 
 def grid(xml: Path, fld: Path, cache: Path, fieldconvert: str) -> Path:
-    if cache.exists():
-        return cache
-    subprocess.run(
-        [fieldconvert, "-f", "-m",
-         f"interppoints:fromxml={xml}:fromfld={fld}:{PLANE}", str(cache)],
-        env=fc_env(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return cache
+    return interp(xml, fld, PLANE, cache, fieldconvert)
 
 
 def main() -> int:
@@ -49,7 +41,7 @@ def main() -> int:
     ap.add_argument("--fleet", type=Path, default=Path(
         "/home/isma/nektar_src_full/cases/vortex/runs/2026_07_28_mc_fleet"))
     ap.add_argument("--nstep", type=int, default=1000)
-    ap.add_argument("--fieldconvert", default=FC_DEFAULT)
+    ap.add_argument("--fieldconvert", default=FIELDCONVERT)
     args = ap.parse_args()
 
     arch = args.do_run / "output" / "do" / f"casefile.do_{args.nstep:06d}.fld"

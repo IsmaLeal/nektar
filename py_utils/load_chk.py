@@ -1113,7 +1113,7 @@ def _main_field_format(field_files: list[Path], fieldconvert: Path,
         with h5py.File(out, "w") as hf:
             for k, v in save_kwargs.items():
                 if isinstance(v, str):
-                    hf.create_dataset(k, data=np.string_(v))
+                    hf.create_dataset(k, data=np.bytes_(v))
                 else:
                     hf.create_dataset(k, data=np.asarray(v))
     else:

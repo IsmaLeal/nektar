@@ -25,9 +25,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import os
 import re
-import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -36,51 +34,15 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from do_quicklook import yi_from_fld
+from se import FIELDCONVERT, interp, load_dat, yi_from_fld
 
 PLANE = "plane=901,121,-5,-1.5,0,40,-1.5,0,40,1.5,0,-5,1.5,0"
-FC_DEFAULT = os.environ.get(
-    "NEKTAR_FIELDCONVERT",
-    "/home/isma/nektar_repro/build/utilities/FieldConvert/FieldConvert")
 CELL_AREA = (45.0 / 900) * (3.0 / 120)   # uniform plane-grid quadrature weight
 
 
-def fc_env():
-    env = os.environ.copy()
-    try:
-        asan = subprocess.run(["gcc", "-print-file-name=libasan.so"],
-                              capture_output=True, text=True).stdout.strip()
-        if "/" in asan:
-            env["LD_PRELOAD"] = asan
-    except OSError:
-        pass
-    env["ASAN_OPTIONS"] = "detect_leaks=0"
-    return env
-
-
-def load_dat(path, ncol):
-    rows = []
-    for ln in open(path):
-        p = ln.split()
-        if len(p) >= ncol:
-            try:
-                rows.append([float(v) for v in p[:ncol]])
-            except ValueError:
-                pass
-    return np.asarray(rows)
-
-
 def ensure_grid(run: Path, source: Path, fieldconvert: str):
-    """Interpolate `source` (.chk/.fld) onto the analysis plane, cached."""
-    out = run / "gdT.dat"
-    if out.exists():
-        return out
-    subprocess.run(
-        [fieldconvert, "-f", "-m",
-         f"interppoints:fromxml={run/'geometry.xml'}:fromfld={source}:{PLANE}",
-         str(out)], env=fc_env(),
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return out
+    """Interpolate source (.chk/.fld) onto the analysis plane, cached in run/gdT.dat."""
+    return interp(run / "geometry.xml", source, PLANE, run / "gdT.dat", fieldconvert)
 
 
 def do_state(run: Path, dt: float, T: float, fieldconvert: str, nmodes=6):
@@ -161,7 +123,7 @@ def main() -> int:
     ap.add_argument("--T", type=float, default=2.0)
     ap.add_argument("--interior", default="4,30,0.9",
                     help="xmin,xmax,ymax of the wall-excluding interior box")
-    ap.add_argument("--fieldconvert", default=FC_DEFAULT)
+    ap.add_argument("--fieldconvert", default=FIELDCONVERT)
     ap.add_argument("--out", type=Path, default=Path("convergence_orders.png"))
     args = ap.parse_args()
 

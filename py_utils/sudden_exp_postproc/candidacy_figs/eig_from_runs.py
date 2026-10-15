@@ -81,7 +81,7 @@ Y_CAP = 1e-2      # DO linearity cap on std(Y1)
 
 
 def _import(name: str, rel: str):
-    mod_path = Path(__file__).resolve().parent / rel
+    mod_path = Path(__file__).resolve().parent.parent / rel
     spec = importlib.util.spec_from_file_location(name, mod_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -119,7 +119,7 @@ def main() -> int:
     plt.rcParams.update({"text.usetex": True, "font.family": "serif",
                          "mathtext.fontset": "cm", "font.size": 9})
 
-    mhis = _import("mbar_from_his", "mbar_from_his.py")
+    se = _import("se", "se.py")
     psv = _import("phase_space_video", "phase_space_video.py")
 
     rows = []
@@ -127,8 +127,7 @@ def main() -> int:
         run = RUNS / name
         fig, ax = plt.subplots(figsize=(7, 4))
         if kind == "dns":
-            x, blocks = mhis.load_his(run / "output/asymmetry/axis_v.his")
-            t, M = mhis.m_of_t(x, blocks)
+            t, M = se.his_M(run / "output/asymmetry/axis_v.his")
             keep = np.concatenate(([True], np.diff(t) > 0))
             t, M = t[keep], np.abs(M[keep])
             lam, r2, win, (tw, ln_y, s, b) = fit_loglinear(t, M, t0, M_CAP)

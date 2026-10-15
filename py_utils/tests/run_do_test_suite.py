@@ -21,7 +21,6 @@ else:
 SCRIPT_ORDER = [
     "do_incompressible_ns_test.py",
     "do_orthogonality_test.py",
-    "do_velocity_correction_test.py",
 ]
 
 

@@ -21,9 +21,12 @@ from pathlib import Path
 
 import numpy as np
 
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # shared readers live one level up
+
 from vortex_mc_check import CELL_AREA, S, grid
-from convergence_orders import FC_DEFAULT, load_dat
-from do_quicklook import yi_from_fld
+from se import FIELDCONVERT, load_dat, yi_from_fld
 
 
 def load_run(run: Path, nstep: int, fieldconvert: str):
@@ -45,7 +48,7 @@ def main() -> int:
     ap.add_argument("--tags", default="dt0200,dt0100,dt0050,dt0025")
     ap.add_argument("--dts", default="0.002,0.001,0.0005,0.00025")
     ap.add_argument("--T", type=float, default=2.0)
-    ap.add_argument("--fieldconvert", default=FC_DEFAULT)
+    ap.add_argument("--fieldconvert", default=FIELDCONVERT)
     args = ap.parse_args()
 
     tags = args.tags.split(",")

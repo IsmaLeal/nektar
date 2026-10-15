@@ -14,7 +14,7 @@ Usage:
         --out figures/se_doublewell_mt.pdf
 """
 import argparse
-import importlib.util
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -38,12 +38,10 @@ ABAR = np.sqrt(-LAM / MU)
 V = lambda a: -LAM * a**2 / 2 - MU * a**4 / 4
 DV = V(0.0) - V(ABAR)
 
-spec = importlib.util.spec_from_file_location(
-    "mh", Path(__file__).resolve().parent / "mbar_from_his.py")
-mh = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mh)
-x, blocks = mh.load_his(args.his)
-t, M = mh.m_of_t(x, blocks)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # se.py lives one level up
+import se  # noqa: E402
+
+t, M = se.his_M(args.his)
 keep = np.concatenate(([True], np.diff(t) > 0))
 t, M = t[keep], M[keep]
 

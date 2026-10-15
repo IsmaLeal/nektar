@@ -25,7 +25,12 @@ from matplotlib.colors import LogNorm
 from matplotlib.patches import Rectangle
 from matplotlib.ticker import NullFormatter
 
-from convergence_orders import CELL_AREA, FC_DEFAULT, do_state, load_dat, obs_dist, s0_state
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # shared readers live one level up
+
+from convergence_orders import CELL_AREA, do_state, obs_dist, s0_state
+from se import FIELDCONVERT, load_dat
 
 plt.rcParams.update({
     "text.usetex": True,
@@ -47,8 +52,8 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--out", type=Path, required=True)
 args = ap.parse_args()
 
-DO = [do_state(RUNS / t, dt, T, FC_DEFAULT) for t, dt in zip(DO_TAGS, DTS)]
-S0 = [s0_state(RUNS / t, FC_DEFAULT) for t in S0_TAGS]
+DO = [do_state(RUNS / t, dt, T, FIELDCONVERT) for t, dt in zip(DO_TAGS, DTS)]
+S0 = [s0_state(RUNS / t, FIELDCONVERT) for t in S0_TAGS]
 
 x, y = DO[0][0], DO[0][1]
 mask2 = np.concatenate([(x >= XMIN) & (x <= XMAX) & (np.abs(y) <= YMAX)] * 2)

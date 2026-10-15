@@ -20,7 +20,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from do_quicklook import yi_from_fld
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # shared readers live one level up
+
+from se import yi_from_fld
 
 plt.rcParams.update({
     "text.usetex": True,

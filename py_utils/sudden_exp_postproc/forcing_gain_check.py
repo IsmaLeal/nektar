@@ -47,13 +47,13 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess
 from pathlib import Path
 
 import numpy as np
 
-from convergence_orders import CELL_AREA, PLANE, FC_DEFAULT, fc_env, load_dat
-from do_quicklook import yi_from_fld
+import se
+from convergence_orders import CELL_AREA, PLANE
+from se import FIELDCONVERT, load_dat, yi_from_fld
 
 S = 1
 PLANE_FINE = "plane=1801,241,-5,-1.5,0,40,-1.5,0,40,1.5,0,-5,1.5,0"
@@ -74,15 +74,7 @@ def eta_from_fld(fld):
 
 def interp(run: Path, fld: Path, tag: str, fieldconvert: str,
            plane: str) -> Path:
-    out = run / f"gaingrid_{tag}.dat"
-    if out.exists():
-        return out
-    subprocess.run(
-        [fieldconvert, "-f", "-m",
-         f"interppoints:fromxml={run/'geometry.xml'}:fromfld={fld}:{plane}",
-         str(out)], env=fc_env(),
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return out
+    return se.interp(run / "geometry.xml", fld, plane, run / f"gaingrid_{tag}.dat", fieldconvert)
 
 
 def gain(run: Path, arch: Path, tag: str, fieldconvert: str,
@@ -114,7 +106,7 @@ def main() -> int:
                     help="archives sampled for the g1(t) series")
     ap.add_argument("--fine", action="store_true",
                     help="add the finer-grid g1 recompute (quadrature bound)")
-    ap.add_argument("--fieldconvert", default=FC_DEFAULT)
+    ap.add_argument("--fieldconvert", default=FIELDCONVERT)
     args = ap.parse_args()
     run = args.run
 

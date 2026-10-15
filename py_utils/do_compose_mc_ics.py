@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "sudden_exp_postproc"))
 from load_chk import (_build_chk_mode_writer, _coeffs_per_element,
                       _decode_chk_elements_blob, _parse_elem_id_count,
                       _parse_num_modes_per_dir)
-from do_quicklook import yi_from_fld
+from se import yi_from_fld
 
 
 def archive_coeffs(archive: Path) -> dict[str, np.ndarray]:

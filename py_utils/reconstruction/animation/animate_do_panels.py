@@ -88,6 +88,26 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0, help="Seed for random particle selection if --particle not set")
     ap.add_argument("--max-frames", type=int, default=None, help="Limit number of frames for quick previews")
     ap.add_argument(
+        "--xmax",
+        type=float,
+        default=None,
+        help="Crop the six field panels to x <= xmax (grid columns beyond it are dropped).",
+    )
+    ap.add_argument(
+        "--shared-y-scale",
+        action="store_true",
+        help=("One common symmetric limit for the three coefficient scatters "
+              "(the largest of the per-coefficient robust limits) with equal "
+              "aspect, so the clouds' relative sizes are comparable."),
+    )
+    ap.add_argument(
+        "--marker-size-by-extent",
+        action="store_true",
+        help=("Scatter marker area proportional to the squared fraction of "
+              "the panel the cloud spans (floored at 1.5 pt^2), so clouds "
+              "concentrated near the origin of a wide panel stay resolvable."),
+    )
+    ap.add_argument(
         "--field",
         choices=["vorticity", "u", "v", "w", "velocity"],
         default="u",
@@ -171,6 +191,17 @@ def main() -> int:
 
     x = recon_mod._arr(data, "x")
     y = recon_mod._arr(data, "y")
+    if args.xmax is not None:
+        keep = x[0, :] <= args.xmax
+        if keep.sum() < 2:
+            raise ValueError(f"--xmax {args.xmax} keeps fewer than 2 grid columns")
+        u_mean = u_mean[:, keep, :]
+        v_mean = v_mean[:, keep, :]
+        mode_u = mode_u[:, :, keep, :]
+        mode_v = mode_v[:, :, keep, :]
+        x = x[:, keep]
+        y = y[:, keep]
+        nx = x.shape[1]
     dx, dy = _dx_dy_from_grid(x, y)
 
     nmodes_plot = min(4, S)
@@ -301,21 +332,24 @@ def main() -> int:
     # constrained_layout=False: the layout solver re-runs on every draw, and
     # any per-frame tick-text width changes on the colorbars get amplified into
     # apparent panel "zoom" jitter. Fix the layout once at init via subplots_adjust.
-    fig = plt.figure(figsize=(13, 9), constrained_layout=False)
-    gs = GridSpec(4, 3, figure=fig, height_ratios=[0.42, 0.42, 1.0, 0.62],
-                  hspace=0.5, wspace=0.22,
-                  left=0.055, right=0.985, top=0.94, bottom=0.06)
+    # 12 grid columns: the field rows use three 4-column panels, the scatter
+    # row four 3-column panels, the variance row spans all of them.
+    fig = plt.figure(figsize=(16, 9), constrained_layout=False)
+    gs = GridSpec(4, 12, figure=fig, height_ratios=[0.42, 0.42, 1.0, 0.62],
+                  hspace=0.5, wspace=0.9,
+                  left=0.045, right=0.985, top=0.94, bottom=0.06)
 
     axs = {
-        "mean": fig.add_subplot(gs[0, 0]),
-        "m1": fig.add_subplot(gs[0, 1]),
-        "m2": fig.add_subplot(gs[0, 2]),
-        "real": fig.add_subplot(gs[1, 0]),
-        "m3": fig.add_subplot(gs[1, 1]),
-        "m4": fig.add_subplot(gs[1, 2]),
-        "sc12": fig.add_subplot(gs[2, 0]),
-        "sc23": fig.add_subplot(gs[2, 1]),
-        "sc34": fig.add_subplot(gs[2, 2]),
+        "mean": fig.add_subplot(gs[0, 0:4]),
+        "m1": fig.add_subplot(gs[0, 4:8]),
+        "m2": fig.add_subplot(gs[0, 8:12]),
+        "real": fig.add_subplot(gs[1, 0:4]),
+        "m3": fig.add_subplot(gs[1, 4:8]),
+        "m4": fig.add_subplot(gs[1, 8:12]),
+        "sc12": fig.add_subplot(gs[2, 0:3]),
+        "sc13": fig.add_subplot(gs[2, 3:6]),
+        "sc23": fig.add_subplot(gs[2, 6:9]),
+        "sc34": fig.add_subplot(gs[2, 9:12]),
         "var": fig.add_subplot(gs[3, :]),
     }
 
@@ -414,24 +448,42 @@ def main() -> int:
         a = float(np.nanpercentile(np.abs(arr), sc_pct))
         return max(a, 1e-12)
 
+    # Shared limit = the largest per-coefficient robust limit over the
+    # coefficients that appear in the scatters (Y1..Y4), so the widest cloud
+    # fills its panel and the others show at their true relative size.
+    shared_lim = max(_sym_lim(yi[:, i, :]) for i in range(min(4, S))) if S > 0 else 1.0
+
     def _init_pair(ax, ia: int, ib: int):
         if S <= max(ia, ib):
             ax.set_visible(False)
             return None, None
-        s = ax.scatter(yi[:, ia, 0], yi[:, ib, 0], s=8, alpha=0.5)
-        hi = ax.scatter([yi[pidx, ia, 0]], [yi[pidx, ib, 0]], s=40,
+        if args.shared_y_scale:
+            xl = yl = shared_lim
+            ax.set_aspect("equal")
+        else:
+            xl = _sym_lim(yi[:, ia, :])
+            yl = _sym_lim(yi[:, ib, :])
+        # Marker area scales with the squared fraction of the panel the cloud
+        # spans (its robust extent over the panel limit), floored so the dots
+        # survive video compression; the highlighted particle follows suit.
+        s_pts, s_hi = 8.0, 40.0
+        if args.marker_size_by_extent:
+            frac = min(1.0, max(_sym_lim(yi[:, ia, :]) / xl, _sym_lim(yi[:, ib, :]) / yl))
+            s_pts = max(8.0 * frac * frac, 1.5)
+            s_hi = max(40.0 * frac * frac, 12.0)
+        s = ax.scatter(yi[:, ia, 0], yi[:, ib, 0], s=s_pts, alpha=0.5)
+        hi = ax.scatter([yi[pidx, ia, 0]], [yi[pidx, ib, 0]], s=s_hi,
                         color="#D55E00", zorder=5)
         ax.set_title(f"$(Y_{ia+1},Y_{ib+1})$")
         ax.set_xlabel(f"$Y_{ia+1}$")
         ax.set_ylabel(f"$Y_{ib+1}$")
-        xl = _sym_lim(yi[:, ia, :])
-        yl = _sym_lim(yi[:, ib, :])
         ax.set_xlim(-xl, xl)
         ax.set_ylim(-yl, yl)
         ax.autoscale(enable=False)          # belt-and-braces against per-frame relim
         return s, hi
 
     sc12, hi12 = _init_pair(axs["sc12"], 0, 1)
+    sc13, hi13 = _init_pair(axs["sc13"], 0, 2)
     sc23, hi23 = _init_pair(axs["sc23"], 1, 2)
     sc34, hi34 = _init_pair(axs["sc34"], 2, 3)
 
@@ -496,8 +548,8 @@ def main() -> int:
                 panel_scalar_mappables[idx].set_array(panel_scalars[idx][:, :, frame])
                 artists.append(panel_scalar_mappables[idx])
 
-        for cloud, hi, ia, ib in ((sc12, hi12, 0, 1), (sc23, hi23, 1, 2),
-                                  (sc34, hi34, 2, 3)):
+        for cloud, hi, ia, ib in ((sc12, hi12, 0, 1), (sc13, hi13, 0, 2),
+                                  (sc23, hi23, 1, 2), (sc34, hi34, 2, 3)):
             if cloud is None:
                 continue
             cloud.set_offsets(np.column_stack([yi[:, ia, frame], yi[:, ib, frame]]))

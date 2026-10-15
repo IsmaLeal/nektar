@@ -3,7 +3,7 @@
 asymmetry M, pooled over realisations and time, DO ensemble against the
 two reference DNS-mode simulations at the same forcing amplitude.
 
-python3 py_utils/sudden_exp_postproc/fig_pdf_m.py \
+python3 py_utils/sudden_exp_postproc/candidacy_figs/fig_pdf_m.py \
   --run cases/se/runs/2026_07_17_do_total_sig0p0144_t1000 \
   --dns cases/se/runs/2026_07_15_dns_clean_seed42 \
         cases/se/runs/2026_07_15_dns_clean_seed43 \
@@ -18,8 +18,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from do_quicklook import mp_series
-from do_stats_plots import dns_m_series
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # shared readers live one level up
+
+import se
 
 plt.rcParams.update({
     "text.usetex": True,
@@ -37,12 +40,12 @@ ap.add_argument("--tmin", type=float, default=30.0)
 ap.add_argument("--bins", type=int, default=91)
 args = ap.parse_args()
 
-t, _, Mp, _ = mp_series(args.run)
+t, _, Mp, _ = se.mp_series(args.run)
 do_pool = Mp[t >= args.tmin].ravel()
 
 dns_pool = []
 for d in args.dns:
-    td, Md = dns_m_series(d)
+    td, Md = se.his_M(Path(d) / "output/asymmetry/axis_v.his")
     dns_pool.append(Md[td >= args.tmin])
 dns_pool = np.concatenate(dns_pool)
 

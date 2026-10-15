@@ -18,27 +18,18 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import subprocess
 from pathlib import Path
 
 import numpy as np
 
-from convergence_orders import CELL_AREA, PLANE, FC_DEFAULT, fc_env, load_dat
-from do_quicklook import yi_from_fld
+from convergence_orders import CELL_AREA, PLANE
+from se import FIELDCONVERT, interp, load_dat, yi_from_fld
 
 S = 6
 
 
 def grid(run: Path, arch: Path, tag: str, fieldconvert: str) -> Path:
-    out = run / f"rankgrid_{tag}.dat"
-    if out.exists():
-        return out
-    subprocess.run(
-        [fieldconvert, "-f", "-m",
-         f"interppoints:fromxml={run/'geometry.xml'}:fromfld={arch}:{PLANE}",
-         str(out)], env=fc_env(),
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return out
+    return interp(run / "geometry.xml", arch, PLANE, run / f"rankgrid_{tag}.dat", fieldconvert)
 
 
 def state(run: Path, nstep: int, fieldconvert: str):
@@ -71,7 +62,7 @@ def main() -> int:
                     default=Path("/home/isma/nektar_src_full/cases/se/runs"))
     ap.add_argument("--T", type=float, default=2.0)
     ap.add_argument("--dt", type=float, default=0.01)
-    ap.add_argument("--fieldconvert", default=FC_DEFAULT)
+    ap.add_argument("--fieldconvert", default=FIELDCONVERT)
     args = ap.parse_args()
 
     runs = {n: args.runs_root / f"2026_07_28_rankinv_{n}"

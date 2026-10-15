@@ -4,7 +4,7 @@ M is defined as in Ducimetiere, Boujo & Gallaire, PRF 9, 053905 (2024),
 Eq. (25): M = sgn[V(x=2, ys)] * sqrt( int_0^L V(x, ys)^2 dx ), evaluated
 on the expansion symmetry axis. The .his file is the one-row-per-point
 format: each output time dumps npts rows of "t u v p", points ordered as
-in the header.
+in the header (read by se.read_his, M by se.axis_M).
 
 Usage:
     python mbar_from_his.py <axis_v.his> [--tail 50] [--out M_of_t.txt]
@@ -13,31 +13,7 @@ Usage:
 import argparse
 import numpy as np
 
-
-def load_his(path):
-    xs = []
-    with open(path) as f:
-        for line in f:
-            if not line.startswith("#"):
-                break
-            parts = line[1:].split()
-            if len(parts) == 4 and parts[0].isdigit():
-                xs.append(float(parts[1]))
-    x = np.array(xs)
-    npts = len(x)
-    data = np.loadtxt(path, comments="#")
-    nblocks = len(data) // npts
-    blocks = data[: nblocks * npts].reshape(nblocks, npts, 4)
-    return x, blocks
-
-
-def m_of_t(x, blocks):
-    j2 = int(np.argmin(np.abs(x - 2.0)))
-    t = blocks[:, 0, 0]
-    v = blocks[:, :, 2]
-    mag = np.sqrt(np.trapz(v**2, x, axis=1))
-    sgn = np.sign(v[:, j2])
-    return t, sgn * mag
+import se
 
 
 def main():
@@ -48,8 +24,8 @@ def main():
     ap.add_argument("--out", default=None, help="write t, M(t) to file")
     args = ap.parse_args()
 
-    x, blocks = load_his(args.his)
-    t, M = m_of_t(x, blocks)
+    t, x, f = se.read_his(args.his)
+    M = se.axis_M(x, f[:, :, 1])
 
     # drop duplicated blocks (init flushes repeat t=0)
     keep = np.concatenate(([True], np.diff(t) > 0))

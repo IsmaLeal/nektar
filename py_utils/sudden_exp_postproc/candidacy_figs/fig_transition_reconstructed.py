@@ -6,12 +6,12 @@ reconstructed one in blue with three instants marked on its curve, and
 ubar + sum_i Y_i u_i at those instants, stacked to the right: attached,
 mid-crossing, attached to the opposite wall.
 
-Traces come from do_quicklook.mp_series (axis-cache-aware); fields are
+Traces come from se.mp_series (axis-cache-aware); fields are
 reconstructed from the run's gridded archive (output/out_grid.h5), which
 stores mean, modes and coefficients on a regular grid at every archive
 instant, so the reconstruction is a plain weighted sum. Example:
 
-python3 py_utils/sudden_exp_postproc/fig_transition_reconstructed.py \
+python3 py_utils/sudden_exp_postproc/candidacy_figs/fig_transition_reconstructed.py \
   --run cases/se/runs/2026_07_17_do_total_sig0p0144_t1000 \
   --out ~/todisimo/studies/7.0_epfl/year1/academic/candidacy_exam/tex/figures/transition_reconstructed.pdf
 """
@@ -25,8 +25,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from do_quicklook import mp_series
-from do_stats_plots import transitions_per_particle
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # shared readers live one level up
+
+import se
 
 plt.rcParams.update({
     "text.usetex": True,
@@ -52,8 +55,9 @@ ap.add_argument("--nshow", type=int, default=4,
 args = ap.parse_args()
 
 # ---------------- traces ----------------
-t, yi, Mp, _ = mp_series(args.run)
-trans = transitions_per_particle(t, Mp, args.mbar, args.c, args.tmin)
+t, yi, Mp, _ = se.mp_series(args.run)
+win = t >= args.tmin
+trans = se.crossings(t[win], Mp[win], args.c * args.mbar)
 
 # Exemplar: the crossing with the most settled plateaus on both sides,
 # away from the run ends.

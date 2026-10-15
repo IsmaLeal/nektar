@@ -31,30 +31,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from do_quicklook import yi_series
-
-
-def casefile_param(run: Path, name: str, default=None):
-    txt = (run / "casefile.xml").read_text()
-    m = re.search(rf"{name}\s*=\s*([0-9eE.+-/]+)", txt)
-    if not m:
-        return default
-    try:
-        return float(eval(m.group(1), {"__builtins__": {}}))
-    except Exception:
-        return default
-
-
-def load_dat(path: Path, ncol: int) -> np.ndarray:
-    rows = []
-    for ln in path.read_text().splitlines():
-        p = ln.split()
-        if len(p) >= ncol:
-            try:
-                rows.append([float(v) for v in p[:ncol]])
-            except ValueError:
-                pass
-    return np.array(rows)
+from se import casefile_param, load_dat, yi_series
 
 
 def main() -> int:

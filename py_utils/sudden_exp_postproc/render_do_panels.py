@@ -14,10 +14,8 @@ positional xml/fld inputs (only fromxml=/fromfld= config keys), else it
 aborts with "should not use xml or fld inputs" (utilities/FieldConvert/
 FieldConvert.cpp:731-750).
 
-Requires the ASan-instrumented build at
-/home/isma/nektar_repro/build/dist/bin/FieldConvert (the only FieldConvert
-binary currently built in this tree); LD_PRELOAD/LD_LIBRARY_PATH set up to
-match. Exit codes from this binary are unreliable under ASan teardown even
+FieldConvert binary and environment: se.FIELDCONVERT, se.fc_env (the ASan
+build). Exit codes from this binary are unreliable under ASan teardown even
 on success, so completion is verified by checking the output .dat file's
 row count instead of the process return code.
 
@@ -31,48 +29,19 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import os
-import re
 import subprocess
 from pathlib import Path
 
-FC = "/home/isma/nektar_repro/build/dist/bin/FieldConvert"
-NX, NY = 901, 121
-XMIN, XMAX, YMIN, YMAX = -5, 40, -1.5, 1.5
-EXPECTED_LINES = NX * NY + 3  # Variables line + blank + Zone line + data
+import se
+
+EXPECTED_LINES = se.NX * se.NY + 3  # Variables line + blank + Zone line + data
 
 HERE = Path(__file__).resolve().parent
 
 
-def _fc_env():
-    lib_dirs = set()
-    for root in ("/home/isma/nektar_repro/build/library",
-                 "/home/isma/nektar_repro/build/solvers",
-                 "/home/isma/nektar_repro/build/ThirdParty/dist"):
-        for so in Path(root).rglob("*.so*"):
-            lib_dirs.add(str(so.parent))
-    env = os.environ.copy()
-    env["LD_PRELOAD"] = "/usr/lib/x86_64-linux-gnu/libasan.so.8"
-    env["LD_LIBRARY_PATH"] = ":".join(sorted(lib_dirs))
-    env["ASAN_OPTIONS"] = "detect_leaks=0"
-    return env
-
-
-def casefile_param(run: Path, name: str, default=None):
-    txt = (run / "casefile.xml").read_text()
-    m = re.search(rf"{name}\s*=\s*([0-9eE.+-/]+)", txt)
-    if not m:
-        return default
-    return eval(m.group(1), {"__builtins__": {}})
-
-
-def interp_one(run: Path, fld: Path, out_dat: Path, env: dict) -> bool:
-    box = f"box={NX},{NY},1,{XMIN},{XMAX},{YMIN},{YMAX},0,0"
-    cmd = [FC, "-m",
-          f"interppoints:fromxml=geometry.xml:fromfld={fld.relative_to(run)}:{box}",
-          str(out_dat)]
-    subprocess.run(cmd, cwd=run, env=env, stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL)
+def interp_one(run: Path, fld: Path, out_dat: Path) -> bool:
+    """se.BOX plane of one archive (se.interp); True when the .dat is complete."""
+    se.interp(run / "geometry.xml", fld, se.BOX, out_dat)
     if not out_dat.exists():
         return False
     with open(out_dat) as f:
@@ -84,7 +53,6 @@ def build_grid_cache(run: Path) -> int:
     cache = run / "output/py_utils_results/grid_cache"
     cache.mkdir(parents=True, exist_ok=True)
     archives = sorted((run / "output/do").glob("casefile.do_*.fld"))
-    env = _fc_env()
     done = 0
     for fld in archives:
         step = fld.name.split("do_")[1].split(".")[0]
@@ -95,7 +63,7 @@ def build_grid_cache(run: Path) -> int:
                     done += 1
                     continue
             out_dat.unlink()
-        ok = interp_one(run, fld, out_dat, env)
+        ok = interp_one(run, fld, out_dat)
         if not ok:
             print(f"  FAILED: {fld.name}")
             if out_dat.exists():

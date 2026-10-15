@@ -32,8 +32,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from do_quicklook import yi_from_fld
-from forcing_gain_check import eta_from_fld, gain, FC_DEFAULT
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # shared readers live one level up
+
+from forcing_gain_check import eta_from_fld, gain
+from se import FIELDCONVERT, yi_from_fld
 
 plt.rcParams.update({
     "text.usetex": True,
@@ -92,7 +96,7 @@ def measure(run: Path, fieldconvert: str):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--fieldconvert", default=FC_DEFAULT)
+    ap.add_argument("--fieldconvert", default=FIELDCONVERT)
     args = ap.parse_args()
 
     legs = [("np1", "o", "full", -0.12), ("np2", "s", "none", 0.0),

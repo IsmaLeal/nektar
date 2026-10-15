@@ -80,7 +80,7 @@ def copy_static(stage1: Path, stage2: Path, out: Path, stage1_fintime: float,
         f"Stage 1: {stage1.name} (t=0-{stage1_fintime:g})\n"
         f"Stage 2: {stage2.name} (restart from stage1's t={stage1_fintime:g} "
         f"DOArchive state, global t={stage1_fintime:g}-{total_fintime:g})\n\n"
-        "Assembled by py_utils/sudden_exp_postproc/assemble_do_total_run.py. "
+        "Assembled by py_utils/sudden_exp_postproc/candidacy_figs/assemble_do_total_run.py. "
         "Continuity verified by md5 match of restart_archive.fld against "
         "stage1's final archive.\n"
     )

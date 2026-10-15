@@ -7,7 +7,7 @@ scale, so the mirror antisymmetry of (b) and (c) is visible directly.
 Inputs are gridded .h5 files produced by py_utils/load_chk.py (single
 snapshot each). Example:
 
-python3 py_utils/sudden_exp_postproc/fig_se_states.py \
+python3 py_utils/sudden_exp_postproc/candidacy_figs/fig_se_states.py \
   --base $TMP/state_base.h5 --pos $TMP/state_pos.h5 --neg $TMP/state_neg.h5 \
   --out figures/se_states.pdf
 """
@@ -17,6 +17,8 @@ from pathlib import Path
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+
+TRAP = np.trapezoid if hasattr(np, "trapezoid") else np.trapz   # numpy 2 has no np.trapz
 
 plt.rcParams.update({
     "text.usetex": True,
@@ -61,7 +63,7 @@ def observable(x, y, vfield):
     vline = np.ma.filled(vfield[iy, :], 0.0)
     m = xs >= 0
     ix2 = np.argmin(np.abs(xs - 2.0))
-    return np.sign(vline[ix2]) * np.sqrt(np.trapz(vline[m] ** 2, xs[m]))
+    return np.sign(vline[ix2]) * np.sqrt(TRAP(vline[m] ** 2, xs[m]))
 
 
 states = [load(args.base), load(args.pos), load(args.neg)]

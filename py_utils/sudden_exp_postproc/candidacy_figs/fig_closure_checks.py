@@ -23,8 +23,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from convergence_orders import FC_DEFAULT, load_dat
-from do_quicklook import yi_from_fld
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # shared readers live one level up
+
+from se import FIELDCONVERT, load_dat, yi_from_fld
 from rankinv_check import pair, state
 from vortex_mc_check import CELL_AREA as MC_AREA
 from vortex_mc_check import NP, S, grid
@@ -169,7 +172,7 @@ def fig_rank(outdir: Path, fieldconvert: str):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--outdir", type=Path, required=True)
-    ap.add_argument("--fieldconvert", default=FC_DEFAULT)
+    ap.add_argument("--fieldconvert", default=FIELDCONVERT)
     args = ap.parse_args()
     args.outdir.mkdir(parents=True, exist_ok=True)
     fig_mc(args.outdir, args.fieldconvert)

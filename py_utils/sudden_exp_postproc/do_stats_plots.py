@@ -2,8 +2,8 @@
 """Statistical plots of a DO run's transition behaviour.
 
 All plots are views of the same per-particle reconstruction
-(t, Y_i(t), M_p(t)) provided by do_quicklook.mp_series (axis-cache-aware,
-incremental). Available plots:
+(t, Y_i(t), M_p(t)) provided by se.mp_series (axis-cache-aware,
+incremental); transitions by se.crossings. Available plots:
 
   traj   Y_1(t) and M_p(t). Default: two stacked panels with a grey sample
          of particles and every hopper coloured. With --particle P: a
@@ -36,35 +36,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from do_quicklook import mp_series
-
-
-def transitions_per_particle(t, Mp, mbar, c, tmin):
-    """List of transition-time arrays, one per particle (t >= tmin)."""
-    thr = c * mbar
-    w = t >= tmin
-    tw = t[w]
-    state = np.where(Mp[w] > thr, 1, np.where(Mp[w] < -thr, -1, 0))
-    out = []
-    for p in range(Mp.shape[1]):
-        sv = state[:, p]
-        idx = np.where(sv != 0)[0]
-        s = sv[idx]
-        times = [tw[idx[a]] for a in range(1, len(s)) if s[a] != s[a - 1]]
-        out.append(np.array(times))
-    return out
-
-
-def dns_m_series(dns_dir, xsensor=2.0):
-    """(t, M) of a single-realization run from its axis_v.his."""
-    from do_quicklook import read_his
-    trapz = getattr(np, "trapezoid", None) or np.trapz
-    t, pts = read_his(Path(dns_dir) / "output/asymmetry/axis_v.his")
-    v = pts[:, :, 1]
-    x = 0.1 * np.arange(v.shape[1])
-    isen = int(round(xsensor / (x[1] - x[0])))
-    M = np.sign(v[:, isen]) * np.sqrt(trapz(v**2, x, axis=1))
-    return t, M
+import se
 
 
 def spells_from_trans(trans_list, t0, tend):
@@ -302,17 +274,12 @@ def plot_yheat(t, yi, args):
 def plot_fig4(t, Mp, args):
     """Ducimetiere Fig.-4-style panel: PDF of |M| (raw axis), DO ensemble
     with the DNS overlay(s) from --dns run directories."""
-    from do_quicklook import read_his
-    trapz = getattr(np, "trapezoid", None) or np.trapz
     w = t >= args.tmin
     fig, ax = plt.subplots(figsize=(7.5, 4.2))
     ax.hist(np.abs(Mp[w]).ravel(), bins=args.bins, density=True,
             color="0.45", alpha=0.8, label="DO ensemble")
     for dns in (args.dns or []):
-        td, pts = read_his(Path(dns) / "output/asymmetry/axis_v.his")
-        v = pts[:, :, 1]
-        x = 0.1 * np.arange(v.shape[1])
-        Md = np.sign(v[:, 20]) * np.sqrt(trapz(v**2, x, axis=1))
+        td, Md = se.his_M(Path(dns) / "output/asymmetry/axis_v.his")
         Md = Md[td >= args.tmin]
         ax.hist(np.abs(Md), bins=args.bins, density=True,
                 histtype="step", lw=1.6, label=f"DNS {Path(dns).name[-6:]}")
@@ -364,8 +331,9 @@ def main() -> int:
     t_sources = []          # (label, [transition-time arrays], t0, tend)
     dns_traj = []            # (label, td, Md) for traj -- raw, unpooled
     if args.run is not None:
-        t, yi, Mp, _ = mp_series(args.run)
-        trans = transitions_per_particle(t, Mp, args.mbar, args.c, args.tmin)
+        t, yi, Mp, _ = se.mp_series(args.run)
+        win = t >= args.tmin
+        trans = se.crossings(t[win], Mp[win], args.c * args.mbar)
         hoppers = [p for p, tr in enumerate(trans) if len(tr)]
         nev = sum(len(tr) for tr in trans)
         print(f"{args.run.name}: {nev} transitions by {len(hoppers)} "
@@ -374,21 +342,10 @@ def main() -> int:
         m_sources.append((f"DO ({Mp.shape[1]} particles)", m_vals.ravel()))
         t_sources.append(("DO", trans, args.tmin, t[-1]))
     for dns in (args.dns or []):
-        td, Md = dns_m_series(dns, args.xsensor if hasattr(args, "xsensor")
-                              else 2.0)
+        td, Md = se.his_M(Path(dns) / "output/asymmetry/axis_v.his")
         wd = td >= args.tmin
         # transitions of the DNS trajectory with the same protocol
-        thr = args.c * args.mbar
-        state = 0
-        times = []
-        for k in range(len(td)):
-            if td[k] < args.tmin:
-                continue
-            s = 1 if Md[k] > thr else (-1 if Md[k] < -thr else 0)
-            if s != 0:
-                if state != 0 and s != state:
-                    times.append(td[k])
-                state = s
+        times = se.crossings(td[wd], Md[wd], args.c * args.mbar)
         label = f"DNS {Path(dns).name.split('_')[-1]}"
         print(f"{Path(dns).name}: {len(times)} transitions "
               f"(t >= {args.tmin:g})")

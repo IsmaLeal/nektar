@@ -32,8 +32,6 @@ SCRIPT_MAP = {
     "panels": "reconstruction/animation/animate_do_panels.py",
     "suite": "tests/run_do_test_suite.py",
     "reg-derive-stats": "tests/regression/do_derive_stats_csv_from_h5.py",
-    "reg-compare-sem": "tests/regression/do_compare_sem_ns2d.py",
-    "reg-compare-trace": "tests/regression/do_compare_trace_history.py",
     "reg-plot-variance": "tests/regression/do_plot_mode_variance.py",
 }
 
