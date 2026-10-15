@@ -38,6 +38,7 @@ IF( NEKTAR_SOLVER_INCNAVIERSTOKES )
         ./Filters/FilterMovingBody.cpp
         ./Filters/FilterAeroForcesSPM.cpp
         ./Filters/FilterDOArchive.cpp
+        ./Filters/FilterDOMeasures.cpp
         ./Forcing/ForcingIncNSSyntheticEddy.cpp
         ./Forcing/ForcingMovingBody.cpp
         ./Forcing/ForcingStabilityCoupledLNS.cpp
@@ -76,6 +77,7 @@ IF( NEKTAR_SOLVER_INCNAVIERSTOKES )
             Filters/FilterMovingBody.h
             Filters/FilterReynoldsStresses.h
             Filters/FilterDOArchive.h
+            Filters/FilterDOMeasures.h
             Forcing/ForcingIncNSSyntheticEddy.h
             Forcing/ForcingMovingBody.h
             Forcing/ForcingStabilityCoupledLNS.h

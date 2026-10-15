@@ -584,6 +584,8 @@ const hid_t DataTypeTraits<unsigned long>::NativeType = H5T_NATIVE_ULONG;
 template <>
 const hid_t DataTypeTraits<unsigned long long>::NativeType = H5T_NATIVE_ULLONG;
 
+template <> const hid_t DataTypeTraits<float>::NativeType = H5T_NATIVE_FLOAT;
+
 template <> const hid_t DataTypeTraits<double>::NativeType = H5T_NATIVE_DOUBLE;
 
 template <> const hid_t DataTypeTraits<BasisType>::NativeType = H5T_NATIVE_INT;

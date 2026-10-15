@@ -87,6 +87,10 @@ public:
     const Array<OneD, NekDouble>
         &GetForcingEta() const { return m_forcingEta; }
     void SerializeForcingRng(std::ostream &os) const { os << m_forcingRng; }
+    /// quadrature weights times Jacobian at the physical points (used by
+    /// FilterDOMeasures so its inner products are the solver's)
+    const Array<OneD, NekDouble>
+        &GetPhysWeights() const { return m_physWeights; }
 
     /// Constant-velocity-subspace data for the strip-constants gauge:
     /// domainArea is |Omega|; onesCoeffs[c] holds the FE coefficients of

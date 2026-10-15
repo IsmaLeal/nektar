@@ -62,10 +62,10 @@
 
 namespace Nektar
 {
-// seeded-run init flag: when extra (file-provided) modes are appended, the
-// init-time DiagonaliseCov rotations are skipped (sampling-noise-degenerate
-// variance pairs would mix the seeded direction; runtime rotations, driven
-// by physical correlations, stay enabled)
+// when extra (file-provided) modes are appended, the init-time DiagonaliseCov
+// rotations are skipped (sampling-noise-degenerate variance pairs would mix
+// the seeded direction; runtime rotations, driven by physical correlations,
+// stay enabled)
 static int s_nSeededExtras = 0;
 namespace
 {
@@ -199,7 +199,7 @@ void RestoreVelocityBCState(
 // ===========================================================================
 // These helpers store DO modes and define the mass inner product. Modes live
 // outside m_fields, so their coeffs and phys values are stored in ModeData.
-// Mode operations (MGS, projections, normalisation) use this inner product.
+// Mode operations (CGS2, projections, normalisation) use this inner product.
 
 /**
  * Stores one DO mode component-by-component.
@@ -276,22 +276,24 @@ void ProjectOutConstantsFromMode(
 }
 
 /**
- * Symmetric eigendecomposition A = V diag(w) V^T via LAPACK Dspev.
- * A is the n*n row-major symmetric matrix. Returns:
+ * Symmetric eigendecomposition A = V diag(w) V^T via LAPACK Dspev. Dspev
+ * solves packed-symmetric real matrix eigenproblems. It takes the matrix's
+ * upper triangle stored column-wise (A_00, A_01, A_11, A_02, A_12, A_22, ...)
+ * A is the n*n symmetric matrix (flattened by stacking rows one after
+ * the next one). Returns:
  *      - eigvals is size n, sorted ascending (LAPACK convention);
- *      - V is size n*n, row-major, with columns as the eigenvectors.
+ *      - V is size n*n (also flattened), with columns as the eigenvectors.
  */
 void SymmetricEig(int n,
                   const std::vector<NekDouble> &A,
                   std::vector<NekDouble> &V,
                   std::vector<NekDouble> &eigvals)
 {
-    // pack upper triangle of A in LAPACK packed format:
-    //   AP[i + j*(j+1)/2] = A_{ij}  for i <= j.
+    // Packed format for LAPACK stored in AP
     std::vector<NekDouble> AP(n*(n+1)/2);
     for (int j = 0; j < n; ++j)
         for (int i = 0; i <= j; ++i)
-            AP[i + j*(j+1)/2] = A[i*n + j];
+            AP[i + j*(j+1)/2] = A[i*n + j]; // change row-major to col-major
 
     eigvals.assign(n, 0.0);
     std::vector<NekDouble> z(n*n), work(3*n);
@@ -630,11 +632,13 @@ void DOVelocityCorrectionScheme::v_DoInitialise(bool dumpInitialConditions)
     // ensembles). Only the channels are initialised; no DO subsystem.
     if (!m_modesInitialised && m_nDOModes == 0 && m_nForcingChannels > 0)
     {
-        ASSERTL0(m_nDOParticles == 1,
-                 "DNS forcing mode (DOModes=0) requires DOParticles=1 "
-                 "(a single noise realization).");
+        ASSERTL0(m_nDOParticles >= 1,
+                 "DNS forcing mode (DOModes=0) requires DOParticles>=1.");
         InitialiseForcingBasis();
-        AdvanceForcingState();  // draw eta for the first step
+        if (m_nDOParticles == 1)
+        {
+            AdvanceForcingState();  // draw eta for the first step
+        }
         m_modesInitialised = true;
         return;
     }
@@ -2249,10 +2253,13 @@ void DOVelocityCorrectionScheme::DOImplicitSolveBatched(
 /**
  * Rotates the basis to diagonalise C = E[Y Y^T].
  *
- * Eigendecomposes C using LAPACK and applies the orthogonal V to:
- *   - per-mode arrays: m_DOModePhys, m_DOModeCoeffs, m_DOModePCoeffs;
- *   - per-particle Y:   m_Yi (Y_new = V^T Y_old);
- *   - history values in the integrator.
+ * Eigendecomposes C using SymmetricEig() and applies the orthogonal V to:
+ *   - mode arrays : m_DOModePhys, m_DOModeCoeffs, m_DOModePCoeffs;
+ *   - particles   :   m_Yi (Y_new = V^T Y_old);
+ *
+ * However, rotation of the history values in the integrator is deferred
+ * to ReOrthonormalise, where the rotation and the basis change are applied
+ * as a single transform to the integrator history.
  */
 void DOVelocityCorrectionScheme::DiagonaliseCov(
     std::vector<NekDouble> *deferredV)
@@ -2264,21 +2271,23 @@ void DOVelocityCorrectionScheme::DiagonaliseCov(
     if (m_nDOModes <= 1) return;
     ComputeYMoments();
 
-    // symmetric eigendecomposition via LAPACK Dspev:
-    // w returns ascending eigenvalues; columns of V are eigenvectors
+    // eigendecompose (w: ascending eigenvalues; V: eigenvectors as columns)
     std::vector<NekDouble> V, w;
     SymmetricEig(m_nDOModes, m_Cij, V, w);
 
-    // sort eigenvalues descending
+    // sort eigvals descending
     std::vector<int> ord(m_nDOModes);
-    std::iota(ord.begin(), ord.end(), 0);
-    std::sort(ord.begin(), ord.end(),
-      [&](int i, int j){ return w[i] > w[j]; });
+    std::iota(ord.begin(), ord.end(), 0); // ord=[0, 1, ..., m_nDOModes-1]
+    std::sort(ord.begin(), ord.end(),     // ord=indices of descending eigvals
+      [&](int i, int j){                  // 3rd argument: anonymous function
+        return w[i] > w[j];               // with pairwise sorting rule
+    }
+    );
     std::vector<NekDouble> Vs(m_nDOModes*m_nDOModes, 0.0);
     for (int i = 0; i < m_nDOModes; ++i)
-        for (int k = 0; k < m_nDOModes; ++k)
-            Vs[k*m_nDOModes + i] = V[k*m_nDOModes + ord[i]];
-    V = std::move(Vs);
+        for (int j = 0; j < m_nDOModes; ++j)
+            Vs[j*m_nDOModes + i] = V[j*m_nDOModes + ord[i]];
+    V = std::move(Vs);                    // sorted V
 
     // eigendecomposition determines the new basis up to
     //    - a per-column sign for non-degenerate eigenvalues, and
@@ -2287,49 +2296,49 @@ void DOVelocityCorrectionScheme::DiagonaliseCov(
     // Thus, we implement Procrustes alignment to avoid mode flipping/rotation.
     //
     // For each cluster B = {a, a+1, ..., a+m-1}:
-    //   - m == 1 (singleton):  Q[a,a] = sign(V[a,a]).
-    //   - m > 1 : Q_B = polar(V_B^T) = V_B^T (V_B V_B^T)^{-1/2}.
+    //   - single eigval (non-degenerate):  Q[a,a] = sign(V[a,a]).
+    //   - more than one: Q_B = polar(V_B^T) = V_B^T (V_B V_B^T)^{-1/2},
+    //     where Q_B is the mxm orthogonal matrix closest to V_B^T,
+    //     the rows and columns of V from the cluster B.
     {
-        std::vector<NekDouble> dvec(m_nDOModes);    // descending eigenvalues
+        std::vector<NekDouble> w_sorted(m_nDOModes); // descending eigvals
         for (int i = 0; i < m_nDOModes; ++i)
         {
-            dvec[i] = w[ord[i]];
+            w_sorted[i] = w[ord[i]];
         }
-        NekDouble dMax = 0.0;
-        for (NekDouble v : dvec)
-        {
-            dMax = std::max(dMax, std::abs(v));
-        }
-        const NekDouble degTol = 1e-3 * std::max(dMax, NekDouble{1e-300});
-        // identify clusters of (near-)equal sorted eigenvalues.
+
+        // identify clusters of (near-)equal sorted eigenvalues
+        // group i-1 & i if gap is smaller than relTol * eigval_{i-1}
+        const NekDouble relTol = 1e-2;
         std::vector<std::pair<int,int>> blocks;
         {
             int b0 = 0;
             for (int i = 1; i <= m_nDOModes; ++i)
-                if (i == m_nDOModes || std::abs(dvec[i-1] - dvec[i]) > degTol)
-                {
+                if (i == m_nDOModes || std::abs(w_sorted[i-1] - w_sorted[i]) >
+                relTol * std::max(std::abs(w_sorted[i-1]), NekDouble{1e-300}))
+                {   // only different-cluster eigvals see this code
                     blocks.emplace_back(b0, i);
                     b0 = i;
                 }
         }
+
         // build block-diagonal Q
         std::vector<NekDouble> Q(m_nDOModes*m_nDOModes, 0.0);
-        for (auto [a, b] : blocks)
+        for (auto [a, b] : blocks) // iterate over each block
         {
-            const int m = b - a;
-            // non-degenerate eigenvalues (only sign fix)
-            if (m == 1)
+            const int m = b - a;   // cluster size
+            if (m == 1)            // non-degeneracy: only sign fix needed
             {
                 Q[a*m_nDOModes + a] = (V[a*m_nDOModes + a] >= 0.0) ? 1.0 : -1.0;
                 continue;
             }
-            // Q_B for m > 1
+            // Q_B for m > 1 (degenerate eigvals)
             std::vector<NekDouble> Vt(m*m), VVt(m*m, 0.0);
-            // populate Vt = V^T
+            // populate Vt = V_B^T for this block
             for (int i = 0; i < m; ++i)
                 for (int j = 0; j < m; ++j)
                     Vt[i*m + j] = V[(a+j)*m_nDOModes + (a+i)];
-            // compute VVt (= Vt^T Vt) = V V^T
+            // compute VVt = V_B V_B^T
             for (int i = 0; i < m; ++i)
                 for (int j = 0; j < m; ++j)
                 {
@@ -2338,13 +2347,17 @@ void DOVelocityCorrectionScheme::DiagonaliseCov(
                         s += Vt[k*m + i] * Vt[k*m + j];
                     VVt[i*m + j] = s;
                 }
-            // symmetric eigendecomposition of VVt via Dspev
+            // we need VVt^{-1/2}: eigendecompose it
             std::vector<NekDouble> E, dE;
             SymmetricEig(m, VVt, E, dE);
-            // floor 0 or negative eigenvalues (only from roundoff)
-            for (int i = 0; i < m; ++i)
-                dE[i] = std::max(dE[i], NekDouble{1e-300});
-            // (V V^T)^{-1/2} = E diag(1/sqrt(d)) E^T
+            // if V_BB is near-singular: undefined polar P, so we keep Q_B = I
+            if (dE[0] <= 1e-12 * dE[m-1])
+            {
+                for (int i = 0; i < m; ++i)
+                    Q[(a+i)*m_nDOModes + (a+i)] = 1.0;
+                continue;
+            }
+            // VVt^{-1/2} = E diag(1/sqrt(dE)) E^T
             std::vector<NekDouble> InvSqrt(m*m, 0.0);
             for (int i = 0; i < m; ++i)
                 for (int j = 0; j < m; ++j)
@@ -2354,7 +2367,7 @@ void DOVelocityCorrectionScheme::DiagonaliseCov(
                         s += E[i*m + k] * (1.0/std::sqrt(dE[k])) * E[j*m + k];
                     InvSqrt[i*m + j] = s;
                 }
-            // Q_block = V^T (V V^T)^{-1/2}
+            // Q_B = Vt VVt^{-1/2}
             for (int i = 0; i < m; ++i)
                 for (int j = 0; j < m; ++j)
                 {
@@ -2364,7 +2377,7 @@ void DOVelocityCorrectionScheme::DiagonaliseCov(
                     Q[(a+i)*m_nDOModes + (a+j)] = s;
                 }
         }
-        // V <- VQ
+        // replace V by VQ
         std::vector<NekDouble> Veff(m_nDOModes*m_nDOModes, 0.0);
         for (int i = 0; i < m_nDOModes; ++i)
             for (int j = 0; j < m_nDOModes; ++j)
@@ -2396,7 +2409,7 @@ void DOVelocityCorrectionScheme::DiagonaliseCov(
     auto rotateYi = [&](Array<OneD, NekDouble> &Yarr) {
         if (Yarr.size() == 0) return;
         std::vector<NekDouble> tmp(m_nDOModes, 0.0);
-        for (int p = 0; p < m_npLocal; ++p)          // local particle shard
+        for (int p = 0; p < m_npLocal; ++p)
         {
             for (int i = 0; i < m_nDOModes; ++i)     // new mode i
             {
@@ -2422,12 +2435,8 @@ void DOVelocityCorrectionScheme::DiagonaliseCov(
     rotateModeBlocks(m_DOModePCoeffs, nPC);
     rotateYi(m_Yi);
 
-    // The integrator history is NOT rotated here: the only caller with a
-    // live history (v_PostIntegrate) defers the rotation, which
-    // ReOrthonormalise composes with its own basis change into a single
-    // history pass. All other call sites run before InitializeScheme.
     if (m_doSchemeInited)
-    {
+    {   // deverredV will be used in ReOrthonormalise to rotate history values
         ASSERTL0(deferredV,
                  "DiagonaliseCov with a live integrator history requires "
                  "deferredV; ReOrthonormalise applies the composed history "
@@ -2435,6 +2444,15 @@ void DOVelocityCorrectionScheme::DiagonaliseCov(
         *deferredV = V;
     }
     ComputeYMoments();
+}
+
+/**
+ * Starts the per-step timer, calls the base VCS pre-integration method
+ */
+bool DOVelocityCorrectionScheme::v_PreIntegrate(int step)
+{
+    m_stepTimer.Start();
+    return VelocityCorrectionScheme::v_PreIntegrate(step);
 }
 
 /**
@@ -2449,21 +2467,14 @@ void DOVelocityCorrectionScheme::DiagonaliseCov(
  *        step's DOExplicitRhs).
  *      - diagonalises the covariance and orthonormalises the basis.
  */
-bool DOVelocityCorrectionScheme::v_PreIntegrate(int step)
-{
-    m_stepTimer.Start();
-    return VelocityCorrectionScheme::v_PreIntegrate(step);
-}
-
 bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
 {
-    // base VCS (m_fields <- mean^{n+1}); a true return value requests
-    // termination of the time loop (e.g. steady-state) and must propagate
+    // base VCS (m_fields <- advanced mean); returns true when termination
+    // is required
     bool terminate = VelocityCorrectionScheme::v_PostIntegrate(step);
-    ++m_doStepCounter;  // per-step verbose-only counter
+    ++m_doStepCounter;  // step counter
 
-    // DNS forcing mode: just refresh eta for the next step (and close the
-    // step timer opened by v_PreIntegrate, as the DO path does below)
+    // DNS mode: advance OU for next step, stop the timer now
     if (m_nDOModes == 0 && m_nForcingChannels > 0)
     {
         AdvanceForcingState();
@@ -2472,41 +2483,36 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
         return terminate;
     }
 
+    // DO mode
+    const int nVel    = m_velocity.size();
+    const int nPhys   = m_fields[0]->GetTotPoints();
+    const int nCoeffs = m_fields[0]->GetNcoeffs();
     if (m_nDOModes > 0 && m_doSchemeInited)
-    {
+    {   // advance forcing
         AdvanceForcingState();
-
+        // advance modes & coeffs
         const auto &advanced = m_doScheme->TimeIntegrate(step, m_timestep);
 
-        // update m_DOModePhys / m_DOModeCoeffs / m_Yi.
-        const int nVel    = m_velocity.size();
-        const int nPhys   = m_fields[0]->GetTotPoints();
-        const int nCoeffs = m_fields[0]->GetNcoeffs();
+        // update modes & coeffs
         auto piBcState = CaptureVelocityBCState(m_fields, m_velocity);
         HomogenizeVelocityBCsForModes(m_fields, m_velocity);
-        Array<OneD, NekDouble> tmpPhys(nPhys, 0.0), tmpCoef(nCoeffs, 0.0);
         for (int i = 0; i < m_nDOModes; ++i)    // loop over modes
             for (int c = 0; c < nVel; ++c)      // loop over components
-            {
+            {   // mode phys values
                 Vmath::Vcopy(nPhys, advanced[i*nVel + c].data(), 1,
                              m_DOModePhys.data() + (i*nVel + c)*nPhys, 1);
-                Vmath::Vcopy(nPhys, advanced[i*nVel + c].data(), 1,
-                             tmpPhys.data(), 1);
-                // warm-start the mass solve from last step's coefficients
-                Vmath::Vcopy(nCoeffs,
-                             m_DOModeCoeffs.data() + (i*nVel + c)*nCoeffs, 1,
-                             tmpCoef.data(), 1);
-                m_fields[m_velocity[c]]->FwdTrans(tmpPhys, tmpCoef);
-                Vmath::Vcopy(nCoeffs, tmpCoef.data(), 1,
-                             m_DOModeCoeffs.data() + (i*nVel + c)*nCoeffs, 1);
+                // old mode coeffs are the solve's perfect initial guess
+                Array<OneD, NekDouble> phys =
+                    m_DOModePhys + (i*nVel + c)*nPhys;
+                Array<OneD, NekDouble> coef =
+                    m_DOModeCoeffs + (i*nVel + c)*nCoeffs;
+                m_fields[m_velocity[c]]->FwdTrans(phys, coef);
             }
         RestoreVelocityBCState(m_fields, piBcState);
         Vmath::Vcopy(m_npLocal*m_nDOModes, advanced[m_doYIdx].data(), 1,
                      m_Yi.data(), 1);
 
-        // DiagonaliseCov defers its history rotation (deferredV);
-        // ReOrthonormalise composes it with its own basis change and
-        // applies a single transform pass to the integrator history.
+        
         std::vector<NekDouble> deferredV;
         DiagonaliseCov(&deferredV);
         ReOrthonormalise(&deferredV);
@@ -2532,7 +2538,7 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
     m_stepTimer.Stop();
     m_stepAccumTime += m_stepTimer.TimePerTest(1);
 
-    if (m_infosteps && !((step + 1) % m_infosteps) &&
+    if (m_infosteps && !((step + 1) % m_infosteps) && // print step's I/O
         m_session->GetComm()->GetSpaceComm()->GetRank() == 0)
     {
         std::stringstream ss;
@@ -2555,31 +2561,28 @@ bool DOVelocityCorrectionScheme::v_PostIntegrate(int step)
 
 void DOVelocityCorrectionScheme::v_PrintStatusInformation(
     const int /*step*/, const NekDouble /*cpuTime*/)
-{
-    // printing deferred to v_PostIntegrate where the full step time is known
-}
+{   // the mere existence of this function avoids base VCS to print its IO
+}   // without this here, IO lines are duplicated
 
 /**
  * Orthonormalise the DO mode basis after each integration step.
  *
  * Per mode:
- *   - Helmholtz-Hodge projection onto the discrete div-free subspace:
+ *   - First time-step: Helmholtz-Hodge projection:
  *           lap(phi) = div(u),    (HelmSolve with lambda = 0)
  *           u <- u - grad(phi);
+ *     DOImplicitSolve() runs a Poisson pressure-correction step for each
+ *     mode, so weak div-freedom is guaranteed from step 2 onward
  *   - optional constants strip (if DOAllowConstantModes = false);
  *   - classical Gram-Schmidt with reorthogonalisation against the accepted
  *     basis (two passes; four during initialisation);
- *   - divergence-L2 sanity check; re-project once if dirty;
  *   - normalise; abort if collapsed.
  *
  * After all modes are processed, perform the Y / mode-pressure / history-
- * mode co-transform so the realisation u_p = ubar + sum_i Y_{p,i} u_i is
- * invariant under the MGS basis change (kept verbatim from the prior
- * implementation --
- * load-bearing for time-integration state consistency).
+ * mode transform so the total field is invariant under this basis change.
  *
- * Velocity- and pressure-BC brackets at the top zero homogeneous BC DOFs;
- * both are restored on exit.
+ * Velocity and pressure BCs are homogenised at the beginning and restored
+ * at exit.
  */
 void DOVelocityCorrectionScheme::ReOrthonormalise(
     const std::vector<NekDouble> *pendingV)
@@ -2615,18 +2618,17 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
     const int nCoeffs = m_fields[m_velocity[0]]->GetNcoeffs();
     const int nPhys   = m_fields[m_velocity[0]]->GetTotPoints();
 
-    std::vector<ModeData> basis;
+    std::vector<ModeData> basis; // will hold the accepted orthonormal modes
 
-    // Helmholtz-Hodge decomposition
+    // Helmholtz-Hodge decomposition of a mode
     auto projectHHD = [&](Array<OneD, Array<OneD, NekDouble>> &u) {
         Array<OneD, NekDouble> divU(nPhys, 0.0), tmp(nPhys);
-        // compute div(u)
-        for (int c = 0; c < nVel; ++c)
+        for (int c = 0; c < nVel; ++c) // div(u)
         {
             m_fields[m_velocity[c]]->PhysDeriv(c, u[c], tmp);
             Vmath::Vadd(nPhys, tmp.data(), 1, divU.data(), 1, divU.data(), 1);
         }
-        // HelmSolve with lambda = 0 to find phi: lap(phi) = div(u)
+        // HelmSolve to find phi
         StdRegions::ConstFactorMap fac;
         fac[StdRegions::eFactorLambda] = 0.0;
         Vmath::Zero(m_pressure->GetNcoeffs(),
@@ -2642,25 +2644,20 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
         else
             m_pressure->PhysDeriv(m_pressure->GetPhys(),
                                   grad[0], grad[1], grad[2]);
-        // u -= grad(phi) is now divergence-free
+        // u -= grad(phi) now divergence-free
         for (int c = 0; c < nVel; ++c)
             Vmath::Vsub(nPhys, u[c].data(), 1, grad[c].data(), 1,
                         u[c].data(), 1);
     };
 
-    // 4-pass modified Gram-Schmidt against accepted basis.
-    // All k = basis.size() inner products <basis[j], cand> for j=0..k-1 are
-    // computed locally and reduced in one AllReduce per pass instead of k.
+    // orthogonalises cand wrt basis using GS
     auto runMgs = [&](ModeData &cand) {
         const int k = (int)basis.size();
         if (k == 0) return;
         auto comm = m_fields[m_velocity[0]]->GetComm()->GetRowComm();
         std::vector<NekDouble> alphas(k);
         Array<OneD, NekDouble> wCand(nPhys);
-        // Two classical-GS passes suffice during time stepping, where
-        // candidates enter near-orthonormal (O(dt) drift).
-        // Initialisation keeps four passes: POD candidates can be strongly
-        // rank-deficient there.
+        // two GS passes, but init step keeps four
         const int nPasses = (m_doStepCounter <= 1) ? 4 : 2;
         for (int pass = 0; pass < nPasses; ++pass)
         {
@@ -2675,7 +2672,8 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
                                             basis[j].phys[c].data(), 1,
                                             wCand.data(), 1);
             }
-            // one AllReduce for all k inner products
+            // everything is rank-wise: add all alphas across different ranks
+            // (inner product is domain-wide)
             comm->AllReduce(alphas, LibUtilities::ReduceSum);
             for (int j = 0; j < k; ++j)
             {
@@ -2701,19 +2699,19 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
     }
     Array<OneD, NekDouble> coefTmp(nCoeffs), physTmp(nPhys);
 
-    // physWeights squared norm: 1 AllReduce.
-    auto physWeightsNorm2 = [&](ModeData &md) -> NekDouble {
+    // compute the candidate's norm (1 AllReduce)
+    auto physWeightsNorm = [&](ModeData &cand) -> NekDouble {
         NekDouble s = 0.0;
         Array<OneD, NekDouble> wBuf(nPhys);
         for (int c = 0; c < nVel; ++c)
         {
             Vmath::Vmul(nPhys, m_physWeights.data(), 1,
-                        md.phys[c].data(), 1, wBuf.data(), 1);
-            s += Vmath::Dot(nPhys, md.phys[c].data(), 1, wBuf.data(), 1);
+                        cand.phys[c].data(), 1, wBuf.data(), 1);
+            s += Vmath::Dot(nPhys, cand.phys[c].data(), 1, wBuf.data(), 1);
         }
         m_fields[m_velocity[0]]->GetComm()->GetRowComm()->AllReduce(
             s, LibUtilities::ReduceSum);
-        return s;
+        return std::sqrt(s);
     };
 
     // Helmholtz-Hodge project, enforce BCs
@@ -2722,7 +2720,7 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
             std::copy(cand.phys[c].begin(), cand.phys[c].end(), uTmp[c].data());
         projectHHD(uTmp);
         for (int c = 0; c < nVel; ++c)
-        {
+        {   // enforce BCs in coeffs and phys values
             auto cf = std::dynamic_pointer_cast<MultiRegions::ContField>(
                 m_fields[m_velocity[c]]);
             Vmath::Zero(nCoeffs, coefTmp.data(), 1);
@@ -2736,15 +2734,15 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
 
     basis.reserve(m_nDOModes);
 
-    // project, MGS, normalise, accept for each mode
+    // project, 2-pass GS, normalise, accept for each mode
     for (int i = 0; i < m_nDOModes; ++i)
     {
-        // create candidate cand, populate with mode values
+        // create candidate cand
         ModeData cand;
         cand.coeffs.resize(nVel);
         cand.phys.resize(nVel);
         for (int c = 0; c < nVel; ++c)
-        {
+        {   // populate cand with mode values
             const int cOff = (i*nVel + c)*nCoeffs;
             const int pOff = (i*nVel + c)*nPhys;
             cand.coeffs[c].assign(m_DOModeCoeffs.data() + cOff,
@@ -2752,19 +2750,11 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
             cand.phys[c].assign(m_DOModePhys.data() + pOff,
                                 m_DOModePhys.data() + pOff + nPhys);
         }
-        // norm pre-MGS: diagnostic only and costs an AllReduce, so skip it
-        // unless verbose (m_verbose is uniform across ranks, keeping the
-        // collective aligned)
+        // verbose-only for orthogonality checks
         const NekDouble preMgsNrm =
-            m_verbose ? std::sqrt(std::max(physWeightsNorm2(cand), 0.0))
-                      : 0.0;
+            m_verbose ? physWeightsNorm(cand) : 0.0;
 
-        // HHD: DOImplicitSolve has already run a Poisson pressure-correction
-        // step for every mode before this function is called, so weak
-        // div-freedom is guaranteed from step 2 onward.  Run HHD only on the
-        // very first step as a conservative safety net for initialisation;
-        // all subsequent steps skip the Poisson solve entirely, saving 6
-        // HelmSolves + 6 FwdTrans per step and all their AllReduces.
+        // make div-free at startup
         if (m_doStepCounter <= 1)
         {
             projectAndSync(cand);
@@ -2772,11 +2762,9 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
         if (!m_doAllowConstantModes)
             ProjectOutConstantsFromMode(m_fields, m_velocity,
                                         m_constSubspace, cand);
-        runMgs(cand);
+        runMgs(cand); // GS
 
-        // norm post-MGS
-        const NekDouble nrm = std::sqrt(std::max(
-            physWeightsNorm2(cand), 0.0));
+        const NekDouble nrm = physWeightsNorm(cand);
         if (!(nrm > 1e-12) && m_verbose)
         {
             std::cout << "[DOVelocityCorrectionScheme][reorth-FATAL] step="
@@ -2785,7 +2773,7 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
         }
         ASSERTL0(nrm > 1e-12,
                  "DOVelocityCorrectionScheme: orthonormalisation collapsed.");
-        const NekDouble invNrm = 1.0 / nrm;
+        const NekDouble invNrm = 1.0 / nrm; // normalise the candidate
         for (int c = 0; c < nVel; ++c)
         {
             for (auto &v : cand.coeffs[c])
@@ -2800,7 +2788,7 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
         basis.push_back(std::move(cand));
     }
 
-    // Y / mode-pressure / history need to be transformed
+    // Y, mode-pressure, and history rotations
     //  - G[j,i] = <basis[j], u_old[i]>_M;
     //  - Y_new = G*Y_old;
     //  - mode-pressure rotates by G^{-T};
@@ -2848,7 +2836,7 @@ void DOVelocityCorrectionScheme::ReOrthonormalise(
             }
             int info = 0;
             // G stored C-style as G[j*S+i]; BLAS sees G_blas = G_math^T.
-            // G_math is upper triangular (MGS: basis[j] orthogonal to u_old[i]
+            // G_math is upper triangular (CGS2: basis[j] orthogonal to u_old[i]
             // for j>i), so G_blas = G_math^T is lower triangular.
             Lapack::Dtrtrs('L', 'N', 'N', m_nDOModes, nPC,
                            G.data(), m_nDOModes, P.data(), m_nDOModes, info);
@@ -2974,11 +2962,6 @@ void DOVelocityCorrectionScheme::InitialiseModesFromEllipticEigenbasis()
 {
     if (m_nDOModes == 0) return;
 
-    // DOReducedCGEigenBasis runs ARPACK on the per-rank local CG-reduced space;
-    // its iteration arithmetic is not MPI-aware, so under multi-rank runs
-    // each rank produces a DIFFERENT eigenbasis and the subsequent collective
-    // HelmSolve / MGS calls deadlock on inconsistent state. Detect and abort
-    // with a clear pointer to the workaround.
     ASSERTL0(m_session->GetComm()->GetSize() == 1,
              "DOInitModeBasis=Laplacian is single-rank only (the underlying "
              "ARPACK eigensolver is not MPI-aware). For multi-rank runs use "
@@ -3034,8 +3017,8 @@ void DOVelocityCorrectionScheme::InitialiseModesFromEllipticEigenbasis()
 }
 
 /**
- * Initialises the modes via POD from a set of velocity snapshots stored in
- * .chk/.fld files. Reads session keys (all under <SOLVERINFO>):
+ * Initialises the modes via POD from a set of snapshots stored in .chk/.fld
+ * files. Reads session keys (all under <SOLVERINFO>):
  *   <I PROPERTY="PODSnapshotPattern" VALUE="snap_*.chk"/>      (required)
  *   <I PROPERTY="PODMeanType"
  *              VALUE="TimeMean|FirstSnapshot|ProvidedMeanField"/>
@@ -3151,10 +3134,7 @@ void DOVelocityCorrectionScheme::InitialiseModesFromPOD()
     pod.Compute();
     pod.ExportToDOMode(m_DOModePhys, m_DOModeCoeffs);
 
-    // Install POD mean as the simulation mean field, overriding whatever
-    // VelocityCorrectionScheme::v_DoInitialise set from <InitialConditions>.
-    // Without this, the mean (= <InitialConditions>) and modes (= POD modes
-    // around the POD time mean) are inconsistent at t=0.
+    // overwrite POD mean as the simulation mean field
     {
         const int nVel    = (int)m_velocity.size();
         const int nCoeffs = m_fields[m_velocity[0]]->GetNcoeffs();
@@ -3169,16 +3149,13 @@ void DOVelocityCorrectionScheme::InitialiseModesFromPOD()
         }
     }
 
-    // Stash POD spectrum + eigenvectors for InitialiseYi (Y from projection).
+    // store POD singular values, eigvecs and snapshot count (for InitialiseYi)
     m_podSigmas       = pod.SingularValues();
     m_podEigVecs      = pod.EigenVectors();
     m_podNumSnapshots = pod.NumSnapshots();
 
-    if (nExtra > 0)   // seeded (file-provided) trailing modes
+    if (nExtra > 0)   // file-provided modes, if any
     {
-        // CRITICAL: FwdTrans on ContFields imposes the stored (mean-flow)
-        // BCs; homogenize while projecting mode-like fields, as every other
-        // mode operation in this class does.
         auto seedBcState = CaptureVelocityBCState(m_fields, m_velocity);
         HomogenizeVelocityBCsForModes(m_fields, m_velocity);
         const int nVel    = (int)m_velocity.size();
