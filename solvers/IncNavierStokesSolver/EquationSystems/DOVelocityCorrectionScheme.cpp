@@ -469,12 +469,16 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     // which is not thread-safe), so a single tmp + d2u pair suffices.
     m_gradScratch = Array<OneD, NekDouble>(2 * nPhys, 0.0);
 
-    // physWeights[k] = w_k * J_k at each quadrature point k.
-    // Supports tensor-product elements: 2D quads, 3D hexahedra.
-    // Tet/prism/pyramid (non-tensor-product) are not supported.
-    // Flat index convention: direction 0 is innermost (stride 1),
-    // direction 1 next, direction 2 outermost -- matching Nektar's
-    // physical array layout and GeomFactors::GetJac() storage order.
+    // One quadrature weight per physical point, Jacobian included, so that
+    // the sum of weight times value over all points is the integral of a
+    // field over the domain. Quads and hexes: the product of the 1D weights
+    // and the Jacobian, points ordered as in the phys array (direction 0
+    // fastest). Triangles, tets, prisms and pyramids have no such product
+    // (collapsed coordinates), so each weight is simply what the element
+    // itself integrates for a field that is 1 at that point and 0 at the
+    // others: Nektar's own rule, nothing re-derived; nq^2 work per element,
+    // once. Afterwards every element checks that its weights add up to its
+    // integral of 1 (relative 1e-10), whatever the shape.
     ASSERTL0(nDim == 2 || nDim == 3,
         "DOVelocityCorrectionScheme: physWeights supports "
         "2D and 3D only.");
@@ -482,46 +486,81 @@ void DOVelocityCorrectionScheme::v_InitObject(bool DeclareField)
     for (int e = 0; e < m_fields[0]->GetExpSize(); ++e)
     {
         auto exp_e = m_fields[0]->GetExp(e);
-        ASSERTL0(exp_e->DetShapeType() == LibUtilities::eQuadrilateral ||
-                     exp_e->DetShapeType() == LibUtilities::eHexahedron,
-                 "DOVelocityCorrectionScheme: physWeights supports "
-                 "tensor-product elements (quads, hexes) only.");
-        const int nq0  = exp_e->GetBasis(0)->GetNumPoints();
-        const int nq1  = exp_e->GetBasis(1)->GetNumPoints();
-        const auto &w0 = exp_e->GetBasis(0)->GetW();
-        const auto &w1 = exp_e->GetBasis(1)->GetW();
-        auto *gf = exp_e->GetGeomFactors();
-        const auto &jac = gf->GetJac();
-        const bool deformed =
-            (gf->GetGtype() == SpatialDomains::eDeformed);
+        const LibUtilities::ShapeType shape = exp_e->DetShapeType();
         const int off = m_fields[0]->GetPhys_Offset(e);
-        if (nDim == 2)
+        const int nqe = exp_e->GetTotPoints();
+        if (shape == LibUtilities::eQuadrilateral ||
+            shape == LibUtilities::eHexahedron)
         {
-            // q increments in the same order as the phys array:
-            // dir0 innermost (stride 1), dir1 outer (stride nq0).
-            int q = 0;
-            for (int k1 = 0; k1 < nq1; ++k1)
-                for (int k0 = 0; k0 < nq0; ++k0, ++q)
-                {
-                    const NekDouble J = deformed ? jac[q] : jac[0];
-                    m_physWeights[off + q] = w0[k0] * w1[k1] * J;
-                }
-        }
-        else  // nDim == 3
-        {
-            const int nq2  = exp_e->GetBasis(2)->GetNumPoints();
-            const auto &w2 = exp_e->GetBasis(2)->GetW();
-            int q = 0;
-            for (int k2 = 0; k2 < nq2; ++k2)
+            const int nq0  = exp_e->GetBasis(0)->GetNumPoints();
+            const int nq1  = exp_e->GetBasis(1)->GetNumPoints();
+            const auto &w0 = exp_e->GetBasis(0)->GetW();
+            const auto &w1 = exp_e->GetBasis(1)->GetW();
+            auto *gf = exp_e->GetGeomFactors();
+            const auto &jac = gf->GetJac();
+            const bool deformed =
+                (gf->GetGtype() == SpatialDomains::eDeformed);
+            if (nDim == 2)
+            {
+                // q increments in the same order as the phys array:
+                // dir0 innermost (stride 1), dir1 outer (stride nq0).
+                int q = 0;
                 for (int k1 = 0; k1 < nq1; ++k1)
                     for (int k0 = 0; k0 < nq0; ++k0, ++q)
                     {
-                        const NekDouble J = deformed
-                            ? jac[q] : jac[0];
-                        m_physWeights[off + q] =
-                            w0[k0] * w1[k1] * w2[k2] * J;
+                        const NekDouble J = deformed ? jac[q] : jac[0];
+                        m_physWeights[off + q] = w0[k0] * w1[k1] * J;
                     }
+            }
+            else  // nDim == 3
+            {
+                const int nq2  = exp_e->GetBasis(2)->GetNumPoints();
+                const auto &w2 = exp_e->GetBasis(2)->GetW();
+                int q = 0;
+                for (int k2 = 0; k2 < nq2; ++k2)
+                    for (int k1 = 0; k1 < nq1; ++k1)
+                        for (int k0 = 0; k0 < nq0; ++k0, ++q)
+                        {
+                            const NekDouble J = deformed
+                                ? jac[q] : jac[0];
+                            m_physWeights[off + q] =
+                                w0[k0] * w1[k1] * w2[k2] * J;
+                        }
+            }
         }
+        else if (shape == LibUtilities::eTriangle ||
+                 shape == LibUtilities::eTetrahedron ||
+                 shape == LibUtilities::ePrism ||
+                 shape == LibUtilities::ePyramid)
+        {
+            Array<OneD, NekDouble> unit(nqe, 0.0);
+            for (int q = 0; q < nqe; ++q)
+            {
+                unit[q] = 1.0;
+                m_physWeights[off + q] = exp_e->Integral(unit);
+                unit[q] = 0.0;
+            }
+        }
+        else
+        {
+            ASSERTL0(false,
+                     "DOVelocityCorrectionScheme: physWeights supports "
+                     "triangles, quadrilaterals, tetrahedra, prisms, "
+                     "pyramids and hexahedra only (element " +
+                     std::to_string(exp_e->GetGeom()->GetGlobalID()) +
+                     " is a " + LibUtilities::ShapeTypeMap[shape] + ").");
+        }
+        // self-check: the weights of the element sum to its integral of 1
+        Array<OneD, NekDouble> ones(nqe, 1.0);
+        const NekDouble vol = exp_e->Integral(ones);
+        const NekDouble sum =
+            Vmath::Vsum(nqe, m_physWeights.data() + off, 1);
+        ASSERTL0(std::abs(sum - vol) <= 1e-10 * std::abs(vol),
+                 "DOVelocityCorrectionScheme: physWeights of element " +
+                 std::to_string(exp_e->GetGeom()->GetGlobalID()) + " (" +
+                 LibUtilities::ShapeTypeMap[shape] + ") sum to " +
+                 std::to_string(sum) + ", its integral of 1 is " +
+                 std::to_string(vol) + ".");
     }
 
     // Time integrator state-vector layout:
