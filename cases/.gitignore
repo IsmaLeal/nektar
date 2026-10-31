@@ -1,0 +1,8 @@
+# only code is tracked under cases/: scripts, sbatch files, Makefiles
+*
+!*/
+!*.py
+!*.sh
+!*.sbatch
+!Makefile
+!.gitignore
