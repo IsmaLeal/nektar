@@ -41,17 +41,15 @@
 //                R the mirror y -> -y (u even, v odd); u_fp read from the
 //                FUNCTION named by the FixedPoint parameter; R is a
 //                permutation of the quadrature points (symmetric mesh).
-//   A0 = <ubar, phi>, A_i = <u_i, phi>, a_i = <ubar, u_i>, G_ij = <u_i, u_j>,
-//   <ubar, ubar>; over the elements with x >= 0: <1,1>, <1,y>, <ubar,1>,
-//   <ubar,y>, <u_i,1>, <u_i,y>.
-//   centreline y = 0, x >= 0: v of the mean and of every mode at the edge
-//   quadrature points; c = int vbar^2 dx, b_i = int vbar v_i dx,
+//   A0 = <ubar, phi>, A_i = <u_i, phi>; over the elements with x >= 0:
+//   <1,1>, <1,y>, <ubar,1>, <ubar,y>, <u_i,1>, <u_i,y>.
+//   centreline y = 0, x >= 0: c = int vbar^2 dx, b_i = int vbar v_i dx,
 //   C_ij = int v_i v_j dx (1D Gauss-Lobatto rule of each edge, exact);
 //   v(SENSOR_X, 0) from the polynomial of the edge holding it.
 //   walls y = +-WALL_Y: du/dn (n into the fluid) of the mean and of every
 //   mode at the edge points, the derivative of the element polynomial on
-//   its edge; p at the same points.
-//   per particle p: A_p = A0 + sum_i Y_pi A_i; M1_p = a_1 + Y_p1;
+//   its edge.
+//   Written, per particle p: A_p = A0 + sum_i Y_pi A_i;
 //   M_p = sgn(v_p(SENSOR_X, 0)) sqrt(c + 2 b.Y_p + Y_p C Y_p);
 //   y_b,p = (<1,y> - <ubar,y> - sum_i Y_pi <u_i,y>) /
 //           (<1,1> - <ubar,1> - sum_i Y_pi <u_i,1>);
@@ -59,10 +57,12 @@
 //   that wall: walking from the step downstream, the first stretch with
 //   du/dn > 0 (the corner eddy) is skipped, the first stretch with
 //   du/dn < 0 is the bubble and L is the root of the edge polynomial where
-//   it ends; no negative stretch gives the x of the outlet.
+//   it ends; no negative stretch gives the x of the outlet;
+//   and Y_p, the S coefficients of the particle.
 //
-// Output: one HDF5 file, one row per output, flushed after each row; the
-// centreline and wall values go every LineOutputFrequency steps.
+// Output: one HDF5 file (t, step, A_p, M_p, yb_p, dL_p, Y_p; header
+// attributes: n_modes, n_particles, dt, output_frequency, antisym_norm =
+// ||antisym(u_fp)||), one row per output, flushed after each row.
 //
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -87,10 +87,10 @@ std::string FilterDOMeasures::className =
                                                FilterDOMeasures::create);
 
 // the sudden-expansion geometry the measures are defined on
-static const NekDouble AXIS_Y      = 0.0;   // the centreline
-static const NekDouble WALL_Y      = 1.5;   // the expansion walls, y = +-WALL_Y
-static const NekDouble EXPANSION_X = 0.0;   // the step; x >= EXPANSION_X is the expansion
-static const NekDouble SENSOR_X    = 2.0;   // where the sign of v is read for M
+static const NekDouble AXIS_Y      = 0.0;   // centreline
+static const NekDouble WALL_Y      = 1.5;   // expansion height, y = +-WALL_Y
+static const NekDouble EXPANSION_X = 0.0;   // expansion
+static const NekDouble SENSOR_X    = 2.0;   // probe for v (used in M_{YM})
 static const NekDouble GEOM_TOL    = 1e-8;  // coordinate tolerance for the lines above
 static const NekDouble MIRROR_Q    = 1e-6;  // cell size of the mirror lookup
 static const NekDouble MIRROR_TOL  = 1e-7;  // largest accepted point -> mirror distance
@@ -103,6 +103,7 @@ FilterDOMeasures::FilterDOMeasures(
 {
     m_outName = Filter::SetupOutput(".h5", pParams);
 
+    // read OutputFrequency, ensure it exists and is valid
     auto it = pParams.find("OutputFrequency");
     if (it != pParams.end())
     {
@@ -111,17 +112,6 @@ FilterDOMeasures::FilterDOMeasures(
     }
     ASSERTL0(m_outputFrequency > 0, "FilterDOMeasures: OutputFrequency must "
                                     "be positive.");
-
-    m_lineFrequency = m_outputFrequency;
-    it              = pParams.find("LineOutputFrequency");
-    if (it != pParams.end())
-    {
-        LibUtilities::Equation equ(m_session->GetInterpreter(), it->second);
-        m_lineFrequency = round(equ.Evaluate());
-    }
-    ASSERTL0(m_lineFrequency > 0 && m_lineFrequency % m_outputFrequency == 0,
-             "FilterDOMeasures: LineOutputFrequency must be a positive "
-             "multiple of OutputFrequency.");
 
     it = pParams.find("FixedPoint");
     if (it != pParams.end())
@@ -151,16 +141,6 @@ void FilterDOMeasures::v_Initialise(
     m_comm       = pFields[0]->GetComm()->GetRowComm();
     m_nPhys      = pFields[0]->GetTotPoints();
     m_index      = 0;
-
-    const auto &varNames = m_session->GetVariables();
-    for (size_t j = 0; j < varNames.size(); ++j)
-    {
-        if (varNames[j] == "p")
-        {
-            m_pIdx = (int)j;
-        }
-    }
-    ASSERTL0(m_pIdx >= 0, "FilterDOMeasures: no pressure variable p.");
 
     // one quadrature rule for every element and both directions: the edge
     // values of every line then share one set of points and one polynomial
@@ -240,16 +220,12 @@ void FilterDOMeasures::v_Initialise(
     m_physV = Array<OneD, NekDouble>(m_nPhys);
     m_wu    = Array<OneD, NekDouble>(m_nPhys);
     m_wv    = Array<OneD, NekDouble>(m_nPhys);
-    m_wui   = Array<OneD, NekDouble>(m_nPhys);
-    m_wvi   = Array<OneD, NekDouble>(m_nPhys);
-    int nqMax = 0, ncMax = 0;
+    int nqMax = 0;
     for (int e = 0; e < pFields[0]->GetExpSize(); ++e)
     {
         nqMax = std::max(nqMax, pFields[0]->GetTotPoints(e));
-        ncMax = std::max(ncMax, pFields[m_pIdx]->GetNcoeffs(e));
     }
-    m_elmtBuf  = Array<OneD, NekDouble>(std::max(nqMax, 1));
-    m_elmtBuf2 = Array<OneD, NekDouble>(std::max({nqMax, ncMax, 1}));
+    m_elmtBuf = Array<OneD, NekDouble>(std::max(nqMax, 1));
     m_edgeBuf.resize(S + 1);
     for (int f = 0; f <= S; ++f)
     {
@@ -271,8 +247,7 @@ void FilterDOMeasures::v_Initialise(
                   << ", largest point-to-mirror distance "
                   << std::setprecision(3) << m_mirrorMismatch
                   << "; writing " << m_outName << " every "
-                  << m_outputFrequency << " steps, lines every "
-                  << m_lineFrequency << std::endl;
+                  << m_outputFrequency << " steps" << std::endl;
     }
 
     Compute(pFields, 0, time);
@@ -673,88 +648,35 @@ void FilterDOMeasures::OpenOutput()
     auto dom = std::dynamic_pointer_cast<Nektar::DOVelocityCorrectionScheme>(equ);
     const hsize_t S = m_nModes, Np = m_nParticles;
     const int steps = equ->GetSteps();
-    m_nRows     = steps / m_outputFrequency + 1;
-    m_nLineRows = steps / m_lineFrequency + 1;
-    m_row = m_lineRow = 0;
+    m_nRows = steps / m_outputFrequency + 1;
+    m_row   = 0;
 
     m_file   = H5::File::Create(m_outName, H5F_ACC_TRUNC);
     auto hdr = m_file->CreateGroup("header");
-    hdr->SetAttribute("format", std::string("DO_MEASURES_V1"));
+    hdr->SetAttribute("format", std::string("DO_MEASURES_V2"));
     hdr->SetAttribute("n_modes", m_nModes);
     hdr->SetAttribute("n_particles", m_nParticles);
     hdr->SetAttribute("dt", dom->GetTimeStep());
     hdr->SetAttribute("output_frequency", (int)m_outputFrequency);
-    hdr->SetAttribute("line_output_frequency", (int)m_lineFrequency);
     hdr->SetAttribute("antisym_norm", m_antisymNorm);
-    hdr->SetAttribute("mirror_mismatch", m_mirrorMismatch);
-    hdr->SetAttribute("area_plus", m_areaPlus);
-    hdr->SetAttribute("int_y_plus", m_yPlus);
-    hdr->SetAttribute("n_axis_edges", m_nAxisEdges);
-    hdr->SetAttribute("n_wall_edges", m_nWallEdges);
-    hdr->SetAttribute("npts_edge", m_nptsEdge);
-    hdr->SetAttribute("axis_y", AXIS_Y);
-    hdr->SetAttribute("wall_y", WALL_Y);
-    hdr->SetAttribute("expansion_x", EXPANSION_X);
-    hdr->SetAttribute("sensor_x", SENSOR_X);
 
-    const hsize_t T = m_nRows, TL = m_nLineRows;
-    const hsize_t nA = m_nAxisPts, nW = m_nWallPts;
-
+    const hsize_t T = m_nRows;
     AddSet<double>("t", {T});
     AddSet<int>("step", {T});
-    AddSet<double>("A0", {T});
-    AddSet<double>("mean_norm2", {T});
-    AddSet<double>("int_ubar", {T});
-    AddSet<double>("int_y_ubar", {T});
-    AddSet<double>("c", {T});
-    AddSet<double>("v2_mean", {T});
     AddSet<float>("A_p", {T, Np});
     AddSet<float>("M_p", {T, Np});
     AddSet<float>("yb_p", {T, Np});
     AddSet<float>("dL_p", {T, Np});
     if (S > 0)
     {
-        AddSet<double>("Ai", {T, S});
-        AddSet<double>("a", {T, S});
-        AddSet<double>("G", {T, S, S});
-        AddSet<double>("int_ui", {T, S});
-        AddSet<double>("int_y_ui", {T, S});
-        AddSet<double>("b", {T, S});
-        AddSet<double>("C", {T, S, S});
-        AddSet<double>("v2_modes", {T, S});
-        AddSet<float>("M1_p", {T, Np});
-        AddSet<float>("Y1_p", {T, Np});
+        AddSet<float>("Y_p", {T, Np, S});
     }
-    AddSet<int>("line_step", {TL});
-    AddSet<double>("line_t", {TL});
-    AddSet<double>("v_axis", {TL, S + 1, nA});
-    AddSet<double>("dudn_wall", {TL, S + 1, 2, nW});
-    AddSet<double>("p_wall", {TL, S + 1, 2, nW});
-    AddSet<double>("x_axis", {nA});
-    AddSet<double>("x_wall", {2, nW});
 
     // rows not yet written read as step -1
+    std::vector<int> none(1, -1);
+    for (hsize_t r = 0; r < T; ++r)
     {
-        std::vector<int> none(1, -1);
-        for (hsize_t r = 0; r < T; ++r)
-        {
-            PutRow<int>("step", r, none);
-        }
-        for (hsize_t r = 0; r < TL; ++r)
-        {
-            PutRow<int>("line_step", r, none);
-        }
-    }
-    m_sets.at("x_axis").set->Write(
-        std::vector<double>(m_xAxis.data(), m_xAxis.data() + nA));
-    {
-        std::vector<double> xw(2 * nW);
-        for (int w = 0; w < 2; ++w)
-        {
-            std::copy(m_xWall[w].data(), m_xWall[w].data() + nW,
-                      xw.begin() + w * nW);
-        }
-        m_sets.at("x_wall").set->Write(xw);
+        PutRow<int>("step", r, none);
     }
 }
 
@@ -820,7 +742,7 @@ NekDouble FilterDOMeasures::Reattachment(const NekDouble *tau,
 }
 
 /**
- * Everything of one output: the inner products, the lines, the particles,
+ * Everything of one output: the inner products, the particles,
  * and the row of the file.
  */
 void FilterDOMeasures::Compute(
@@ -831,12 +753,8 @@ void FilterDOMeasures::Compute(
         m_equ.lock());
     const auto &velocity = dom->GetVelocityIdx();
     const int S = m_nModes, Np = m_nParticles, nPhys = m_nPhys;
-    const int n = m_nptsEdge, nA = m_nAxisPts, nW = m_nWallPts;
-    const bool lines = (step % m_lineFrequency == 0);
+    const int n = m_nptsEdge, nW = m_nWallPts;
     const auto &modePhys = dom->GetDOModePhys();
-    const auto &pCoeffs  = dom->GetDOModePCoeffs();
-    const int nPC        = pFields[m_pIdx]->GetNcoeffs();
-    const bool modeP     = (S > 0 && (int)pCoeffs.size() == S * nPC);
 
     // the mean velocity at the quadrature points
     const NekDouble *ub, *vb;
@@ -870,44 +788,29 @@ void FilterDOMeasures::Compute(
     };
 
     // ---- inner products over the domain, one packed reduction
-    // A0 | Ai(S) | a(S) | mean_norm2 | G(S*S) | int_ubar | int_y_ubar |
-    // int_ui(S) | int_y_ui(S)
-    const int iA0 = 0, iAi = 1, ia = 1 + S, iNorm = 1 + 2 * S,
-              iG = 2 + 2 * S, iIu = 2 + 2 * S + S * S, iIyu = iIu + 1,
+    // A0 | Ai(S) | int_ubar | int_y_ubar | int_ui(S) | int_y_ui(S)
+    const int iA0 = 0, iAi = 1, iIu = 1 + S, iIyu = iIu + 1,
               iIui = iIu + 2, iIyui = iIui + S, nPk = iIyui + S;
     Array<OneD, NekDouble> pk(nPk, 0.0);
     Vmath::Vmul(nPhys, m_w.data(), 1, ub, 1, m_wu.data(), 1);
     Vmath::Vmul(nPhys, m_w.data(), 1, vb, 1, m_wv.data(), 1);
     pk[iA0] = Vmath::Dot(nPhys, m_wu.data(), m_phiU.data()) +
               Vmath::Dot(nPhys, m_wv.data(), m_phiV.data());
-    pk[iNorm] = Vmath::Dot(nPhys, m_wu.data(), ub) +
-                Vmath::Dot(nPhys, m_wv.data(), vb);
     pk[iIu]  = Vmath::Dot(nPhys, m_wPlus.data(), ub);
     pk[iIyu] = Vmath::Dot(nPhys, m_wPlusY.data(), ub);
     for (int i = 0; i < S; ++i)
     {
         pk[iAi + i] = Vmath::Dot(nPhys, m_wPhiU.data(), U(i, 0)) +
                       Vmath::Dot(nPhys, m_wPhiV.data(), U(i, 1));
-        pk[ia + i] = Vmath::Dot(nPhys, m_wu.data(), U(i, 0)) +
-                     Vmath::Dot(nPhys, m_wv.data(), U(i, 1));
         pk[iIui + i]  = Vmath::Dot(nPhys, m_wPlus.data(), U(i, 0));
         pk[iIyui + i] = Vmath::Dot(nPhys, m_wPlusY.data(), U(i, 0));
-        Vmath::Vmul(nPhys, m_w.data(), 1, U(i, 0), 1, m_wui.data(), 1);
-        Vmath::Vmul(nPhys, m_w.data(), 1, U(i, 1), 1, m_wvi.data(), 1);
-        for (int j = i; j < S; ++j)
-        {
-            const NekDouble g = Vmath::Dot(nPhys, m_wui.data(), U(j, 0)) +
-                                Vmath::Dot(nPhys, m_wvi.data(), U(j, 1));
-            pk[iG + i * S + j] = pk[iG + j * S + i] = g;
-        }
     }
     m_comm->AllReduce(pk, LibUtilities::ReduceSum);
 
-    // ---- centreline: c | b(S) | C(S*S) | v2(S+1); the line values
+    // ---- centreline: c | b(S) | C(S*S) | v2(S+1)
     const int ic = 0, ib = 1, iC = 1 + S, iv2 = 1 + S + S * S,
               nAx = iv2 + S + 1;
     Array<OneD, NekDouble> ax(nAx, 0.0);
-    Array<OneD, NekDouble> vAxis(std::max((S + 1) * nA, 1), 0.0);
     for (size_t ie = 0; ie < m_axis.size(); ++ie)
     {
         const auto &e = m_axis[ie];
@@ -918,10 +821,6 @@ void FilterDOMeasures::Compute(
         {
             const NekDouble *src = (f == 0) ? vb + off : U(f - 1, 1) + off;
             ExtractEdge(exp, e, wrap(src, nq), m_edgeBuf[f]);
-            for (int k = 0; k < n; ++k)
-            {
-                vAxis[f * nA + e.gpos * n + k] = m_edgeBuf[f][e.sorted[k]];
-            }
         }
         for (int k = 0; k < n; ++k)
         {
@@ -954,25 +853,18 @@ void FilterDOMeasures::Compute(
         }
     }
     m_comm->AllReduce(ax, LibUtilities::ReduceSum);
-    if (lines)
-    {
-        m_comm->AllReduce(vAxis, LibUtilities::ReduceSum);
-    }
 
-    // ---- walls: du/dn and p of the mean and of every mode at the points
+    // ---- walls: du/dn of the mean and of every mode at the points
     // layout f * (2 nW) + wall * nW + gpos * n + k
     const int nWW = 2 * nW;
-    Array<OneD, NekDouble> dudn((S + 1) * nWW, 0.0), pw((S + 1) * nWW, 0.0);
+    Array<OneD, NekDouble> dudn((S + 1) * nWW, 0.0);
     for (int w = 0; w < 2; ++w)
     {
         for (const auto &e : m_wall[w])
         {
-            auto exp       = pFields[velocity[0]]->GetExp(e.elmt);
-            auto pexp      = pFields[m_pIdx]->GetExp(e.elmt);
-            const int off  = pFields[0]->GetPhys_Offset(e.elmt);
-            const int nq   = pFields[0]->GetTotPoints(e.elmt);
-            const int coff = pFields[m_pIdx]->GetCoeff_Offset(e.elmt);
-            const int nc   = pFields[m_pIdx]->GetNcoeffs(e.elmt);
+            auto exp      = pFields[velocity[0]]->GetExp(e.elmt);
+            const int off = pFields[0]->GetPhys_Offset(e.elmt);
+            const int nq  = pFields[0]->GetTotPoints(e.elmt);
             for (int f = 0; f <= S; ++f)
             {
                 const NekDouble *src = (f == 0) ? ub + off : U(f - 1, 0) + off;
@@ -984,33 +876,9 @@ void FilterDOMeasures::Compute(
                         e.sign * m_edgeBuf[f][e.sorted[k]];
                 }
             }
-            if (lines)
-            {
-                for (int f = 0; f <= S; ++f)
-                {
-                    if (f > 0 && !modeP)
-                    {
-                        break;
-                    }
-                    const NekDouble *cf =
-                        (f == 0) ? pFields[m_pIdx]->GetCoeffs().data() + coff
-                                 : pCoeffs.data() + (f - 1) * nPC + coff;
-                    pexp->BwdTrans(wrap(cf, nc), m_elmtBuf2);
-                    ExtractEdge(pexp, e, m_elmtBuf2, m_edgeBuf[f]);
-                    for (int k = 0; k < n; ++k)
-                    {
-                        pw[f * nWW + w * nW + e.gpos * n + k] =
-                            m_edgeBuf[f][e.sorted[k]];
-                    }
-                }
-            }
         }
     }
     m_comm->AllReduce(dudn, LibUtilities::ReduceSum);
-    if (lines)
-    {
-        m_comm->AllReduce(pw, LibUtilities::ReduceSum);
-    }
 
     // ---- the particles (Y gathered on every rank; the rest on rank 0)
     Array<OneD, NekDouble> Y(std::max(1, Np * S), 0.0);
@@ -1036,7 +904,8 @@ void FilterDOMeasures::Compute(
                     m_tau.data() + p * nWW, 1);
     }
 
-    std::vector<float> Ap(Np), Mp(Np), ybp(Np), dLp(Np), M1p(Np), Y1p(Np);
+    std::vector<float> Ap(Np), Mp(Np), ybp(Np), dLp(Np);
+    std::vector<float> Yall(Np * S);
     for (int p = 0; p < Np; ++p)
     {
         const NekDouble *Yp = Y.data() + p * S;
@@ -1062,8 +931,10 @@ void FilterDOMeasures::Compute(
                          Reattachment(tp, m_xWall[0].data(), m_nWallEdges));
         if (S > 0)
         {
-            M1p[p] = (float)(pk[ia] + Yp[0]);
-            Y1p[p] = (float)Yp[0];
+            for (int i = 0; i < S; ++i)
+            {
+                Yall[p * S + i] = (float)Yp[i];
+            }
         }
     }
 
@@ -1078,44 +949,17 @@ void FilterDOMeasures::Compute(
         ++m_row;
         return;
     }
-    auto vec = [](const NekDouble *p, int size) {
-        return std::vector<double>(p, p + size);
-    };
     PutRow<double>("t", m_row, {time});
     PutRow<int>("step", m_row, {step});
-    PutRow<double>("A0", m_row, {pk[iA0]});
-    PutRow<double>("mean_norm2", m_row, {pk[iNorm]});
-    PutRow<double>("int_ubar", m_row, {pk[iIu]});
-    PutRow<double>("int_y_ubar", m_row, {pk[iIyu]});
-    PutRow<double>("c", m_row, {ax[ic]});
-    PutRow<double>("v2_mean", m_row, {ax[iv2]});
     PutRow<float>("A_p", m_row, Ap);
     PutRow<float>("M_p", m_row, Mp);
     PutRow<float>("yb_p", m_row, ybp);
     PutRow<float>("dL_p", m_row, dLp);
     if (S > 0)
     {
-        PutRow<double>("Ai", m_row, vec(pk.data() + iAi, S));
-        PutRow<double>("a", m_row, vec(pk.data() + ia, S));
-        PutRow<double>("G", m_row, vec(pk.data() + iG, S * S));
-        PutRow<double>("int_ui", m_row, vec(pk.data() + iIui, S));
-        PutRow<double>("int_y_ui", m_row, vec(pk.data() + iIyui, S));
-        PutRow<double>("b", m_row, vec(ax.data() + ib, S));
-        PutRow<double>("C", m_row, vec(ax.data() + iC, S * S));
-        PutRow<double>("v2_modes", m_row, vec(ax.data() + iv2 + 1, S));
-        PutRow<float>("M1_p", m_row, M1p);
-        PutRow<float>("Y1_p", m_row, Y1p);
+        PutRow<float>("Y_p", m_row, Yall);
     }
     ++m_row;
-    if (lines && m_lineRow < m_nLineRows)
-    {
-        PutRow<int>("line_step", m_lineRow, {step});
-        PutRow<double>("line_t", m_lineRow, {time});
-        PutRow<double>("v_axis", m_lineRow, vec(vAxis.data(), (S + 1) * nA));
-        PutRow<double>("dudn_wall", m_lineRow, vec(dudn.data(), (S + 1) * nWW));
-        PutRow<double>("p_wall", m_lineRow, vec(pw.data(), (S + 1) * nWW));
-        ++m_lineRow;
-    }
     H5Fflush(m_file->GetId(), H5F_SCOPE_GLOBAL);
 }
 

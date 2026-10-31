@@ -29,12 +29,11 @@
 // DEALINGS IN THE SOFTWARE.
 //
 // Description: SolverUtils Filter that writes, every OutputFrequency steps,
-//              the asymmetry measures of the sudden-expansion campaign
-//              computed on the expansion with the solver's own quadrature:
-//              the inner products with the reference direction phi, the
-//              centreline and wall lines, and per particle A, M, M1, y_b,
-//              Delta L and Y_1. Runs on DOVelocityCorrectionScheme, with
-//              DOModes = 0 (a DNS) included.
+//              the asymmetry measures of the sudden-expansion campaign,
+//              per particle, computed on the expansion with the solver's
+//              own quadrature: A, M, y_b, Delta L and the S coefficients
+//              Y_i. Runs on DOVelocityCorrectionScheme, with DOModes = 0
+//              (a DNS) included.
 //
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -139,17 +138,15 @@ private:
     // parameters
     std::string  m_outName;
     unsigned int m_outputFrequency = 1;
-    unsigned int m_lineFrequency   = 1;
     std::string  m_fixedPointName  = "FixedPoint";
 
     // sizes
     int m_nModes     = 0;   ///< S
     int m_nParticles = 0;   ///< Np
     int m_nPhys      = 0;   ///< quadrature points of this rank
-    int m_pIdx       = -1;  ///< index of the pressure field
     int m_nptsEdge   = 0;   ///< quadrature points per edge (uniform)
     unsigned int m_index = 0;
-    hsize_t m_row = 0, m_lineRow = 0, m_nRows = 0, m_nLineRows = 0;
+    hsize_t m_row = 0, m_nRows = 0;
 
     LibUtilities::CommSharedPtr m_comm;
 
@@ -178,8 +175,8 @@ private:
 
     // ---- scratch
     Array<OneD, NekDouble> m_physU, m_physV;             ///< BwdTrans fallbacks
-    Array<OneD, NekDouble> m_wu, m_wv, m_wui, m_wvi;      ///< weighted fields
-    Array<OneD, NekDouble> m_elmtBuf, m_elmtBuf2;        ///< one element
+    Array<OneD, NekDouble> m_wu, m_wv;                   ///< weighted fields
+    Array<OneD, NekDouble> m_elmtBuf;                    ///< one element
     std::vector<Array<OneD, NekDouble>> m_edgeBuf;       ///< (S+1) edges
     Array<OneD, NekDouble> m_tau;                        ///< Np x 2 x nWallPts
 
