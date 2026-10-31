@@ -10,12 +10,8 @@ or for the runs named:
 
 Writes cases/se/figures/<pair>/<run>/phi_u<K>.png (phi_u<K>_t<t>.png for an instant other than the last) and the
 .cmd next to it. The mode is taken at one of the instants where measures.h5 keeps the modes on the whole plane
-(grid/t, every 1000 t.u.); the axes below the channels hold <u_K, phi>^2 and <u_K - phi, u_K - phi>^2 at every
-instant of measures.h5 (Ai and G there, <phi, phi> from phi_Re<Re>.npz), with < , > the inner product on the plane
-of extract_lib.py.
-
-Two interpreters: this script reads the h5 files (system python), the drawing runs in the divulg venv (manim, no
-h5py), MANIM_PYTHON overrides its path. The data handed from one to the other lives in a temporary directory.
+(grid/t); the axes below the channels hold <u_K, phi>^2 and <u_K - phi, u_K - phi>^2 at those same instants,
+computed on the plane (legacy.ip, <phi, phi> = 1).
 """
 import argparse
 import os
@@ -28,24 +24,28 @@ from pathlib import Path
 import h5py
 import numpy as np
 
+import legacy
 import se
 
-MANIM_PYTHON = os.environ.get("MANIM_PYTHON", str(Path.home() / "todisimo/despojos/divulg/.venv/bin/python"))
+MANIM_PYTHON = os.environ.get("MANIM_PYTHON", sys.executable)
 STILL = Path(__file__).resolve().parent / "do_fields_still.py"
 
 
 def data(run, out, t=None, mode=1):
     """Writes <out>.npz for do_fields_still.py; returns the instant of the mode."""
     phi = np.load(se.TPL / f"phi_Re{se.params(run)['Re']}.npz")
-    with h5py.File(se.h5(run), "r") as f:
+    pu, pv = phi["phi_u"], phi["phi_v"]
+    with h5py.File(se.planes(run), "r") as f:
         tg = f["grid/t"][:]
         k = len(tg) - 1 if t is None else int(np.flatnonzero(tg == t)[0])
-        u = f["grid/mode_u"][k, mode - 1]
-        v = f["grid/mode_v"][k, mode - 1]
-        ts, a, g = f["t"][:], f["Ai"][:, mode - 1], f["G"][:, mode - 1, mode - 1]
-    pp = float(((phi["phi_u"] ** 2 + phi["phi_v"] ** 2) * se.W).sum())
-    np.savez(f"{out}.npz", x=se.x, y=se.y, phi_u=phi["phi_u"], phi_v=phi["phi_v"], u=u, v=v, inside=se.INSIDE,
-             t=tg[k], k=mode, run=Path(run).name, ts=ts, a=a, g=g, pp=pp)
+        a, g = np.empty(len(tg)), np.empty(len(tg))
+        for j in range(len(tg)):
+            uj, vj = f["grid/mode_u"][j, mode - 1].astype(float), f["grid/mode_v"][j, mode - 1].astype(float)
+            a[j], g[j] = legacy.ip(uj, vj, pu, pv), legacy.ip(uj, vj, uj, vj)
+            if j == k:
+                u, v = uj, vj
+    np.savez(f"{out}.npz", x=se.x, y=se.y, phi_u=pu, phi_v=pv, u=u, v=v, inside=se.INSIDE,
+             t=tg[k], k=mode, run=Path(run).name, ts=tg, a=a, g=g)
     return tg[k], tg[-1]
 
 

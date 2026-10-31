@@ -41,11 +41,10 @@ def draw(ax, curves, tlim='0:4000'):
     (run,), p = curves[0]
     par = se.params(run)
     if par['kind'] == 'dns':
-        name = f'DNS {run.parent.name} seed {run.name.split("_seed")[1]}'
+        name = se.label(run)
     else:
         assert p is not None, f'cross: {run.name} needs a particle, RUN@P'
-        cfg = se.short_eps(run.name.split(f'_sig{par["sig"]}_', 1)[1].replace('_seed45', ''))     # e.g. S6_Np1000_eps1e-4
-        name = f'DO {cfg.replace("_", " ")}, particle {p}'
+        name = f'{se.label(run)}, particle {p}'
     t, a = se.series(run, 'A', p); a = a[:, 0]
     t0, t1 = (float(s) for s in tlim.split(':'))
     am = runmean(t, a, WIN)

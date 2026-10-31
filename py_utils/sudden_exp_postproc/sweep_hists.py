@@ -33,7 +33,7 @@ def main():
     ap.add_argument("--out", type=Path, default=se.FIGS / "sweep", help="directory of hist_<q>_sweep.png")
     args = ap.parse_args()
 
-    pairs = [p for p in sorted(se.SWEEP.glob("Re*_sig*")) if p.is_dir() and float(p.name.split("_sig")[1]) > 0]
+    pairs = [p for p in sorted(se.RUNS.glob("Re*_sig*")) if p.is_dir() and float(p.name.split("_sig")[1]) > 0]
     Res = sorted({int(p.name[2:].split("_sig")[0]) for p in pairs})
     sigs = sorted({p.name.split("_sig")[1] for p in pairs}, key=float)
     for q in args.q:
@@ -42,7 +42,7 @@ def main():
                                  figsize=(draw_hist.SIZE[0] * len(sigs), draw_hist.SIZE[1] * len(Res)))
         for i, Re in enumerate(Res):
             for j, sig in enumerate(sigs):
-                pair = se.SWEEP / f"Re{Re}_sig{sig}"
+                pair = se.RUNS / f"Re{Re}_sig{sig}"
                 if pair not in pairs:
                     axes[i, j].set_axis_off()
                     continue

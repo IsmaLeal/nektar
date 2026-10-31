@@ -19,11 +19,11 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent # resolve() makes the path absolute
 sys.path.insert(0, str(HERE.parents[1] / "cases" / "se" / "templates"))
-from extract_lib import ip
+from legacy import ip
 from figsave import save
 
 REPO = HERE.parents[1]  # repo home (nektar_src_full)
-SWEEP = REPO / "cases/se/runs/2026_09_13_jed_sweep"
+SWEEP = REPO / "cases/se/runs"
 FIGS = REPO / "cases/se/figures"
 
 plt.rcParams.update({"text.usetex": True, "font.family": "serif", "mathtext.fontset": "cm", "font.size": 9})
@@ -45,7 +45,7 @@ gu, gv = gu / gn, gv / gn
 fig, axes = plt.subplots(len(args.runs), 1, figsize=(6.3, 2.3 * len(args.runs)), sharex=True,
                          constrained_layout=True, squeeze=False)
 for ax, run in zip(axes[:, 0], args.runs):
-    with h5py.File(args.pair / run / "output/extract/measures.h5", "r") as h:
+    with h5py.File(args.pair / run / "campos/measures.h5", "r") as h:
         t = h["grid/t"][:]
         mu, mv = h["grid/mode_u"][:], h["grid/mode_v"][:]            # (T, S, NY, NX)
     T, S = mu.shape[:2]

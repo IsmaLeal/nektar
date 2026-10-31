@@ -4,17 +4,10 @@
     assemble.py dns RUN NPZDIR OUT.h5 [--dt 0.01] [--chk-steps 400]
     assemble.py do  RUN NPZDIR OUT.h5 [--dt 0.01]
 
-DNS  -> grid.h5:   t (T,), u, v (T, 121, 901) float32, v_axis (T, 801),
-                   u_wall (T, 2, 800), p_wall (T, 2, 801), A, dL, M_grid,
-                   norm2 (T,), x, y, and the his file is NOT copied (rsync it).
-DO   -> measures.h5: t (T,), step (T,), yi (T, Np, S) float64, a (T, S),
-                   G (T, S, S), A0 (T,), Ai (T, S), mean_norm2 (T,),
-                   v_axis_mean (T, 801), v_axis_modes (T, S, 801),
-                   u_wall_mean (T, 2, 800), u_wall_modes (T, S, 2, 800),
-                   p_wall_mean (T, 2, 801), p_wall_modes (T, S, 2, 801), x, y;
-                   plus group grid/ with mean_u, mean_v (K, 121, 901) and
-                   mode_u, mode_v (K, S, 121, 901) float32 for the K archives
-                   reduced with --keep-grid, with their own t_grid.
+DNS  -> grid.h5:   t (T,), u, v (T, 121, 901) float32, x, y; the his file is NOT copied (rsync it).
+DO   -> measures.h5: t (T,), step (T,), x, y, plus group grid/
+                   with mean_u, mean_v (K, 121, 901) and mode_u, mode_v (K, S, 121, 901)
+                   float32 for the K archives reduced with --keep-grid, with their own step and t.
 The time of a DNS checkpoint N is N * chk_steps * dt; of a DO archive with
 step NNNNNN it is NNNNNN * dt. Row/column conventions: extract_lib.py.
 Exits non-zero if any index in the contiguous range is missing.
@@ -79,9 +72,7 @@ def main():
         if args.mode == "dns":
             h.attrs["chk_steps"] = args.chk_steps
             h["t"] = np.array(ks, dtype=np.float64) * args.chk_steps * args.dt
-            keys = ["v_axis", "u_wall", "p_wall", "A", "dL", "M_grid", "norm2"]
-            keys = [k for k in keys if k in first]
-            ds = {k: h.create_dataset(k, (T,) + np.asarray(first[k]).shape, dtype=np.float64) for k in keys}
+            ds = {}
             for f in ("u", "v"):
                 ds[f] = h.create_dataset(f, (T, L.NY, L.NX), dtype=np.float32, chunks=(1, L.NY, L.NX))
             for i, k in enumerate(ks):
@@ -93,13 +84,7 @@ def main():
             h["t"] = np.array(ks, dtype=np.float64) * args.dt
             S = int(first["S"])
             h.attrs["S"] = S
-            keys = ["yi", "a", "G", "A0", "Ai", "mean_norm2", "v_axis_mean", "v_axis_modes",
-                    "u_wall_mean", "u_wall_modes", "p_wall_mean", "p_wall_modes"]
-            keys = [k for k in keys if k in first]
-            # yi and the scalar/matrix projections in float64; the line samples in float32
-            f32 = {"v_axis_mean", "v_axis_modes", "u_wall_mean", "u_wall_modes", "p_wall_mean", "p_wall_modes"}
-            ds = {k: h.create_dataset(k, (T,) + np.asarray(first[k]).shape,
-                                      dtype=np.float32 if k in f32 else np.float64) for k in keys}
+            ds = {}
             grid_idx = [k for k in ks if "mean_u" in np.load(files[k])]
             if grid_idx:
                 g = h.create_group("grid")

@@ -1,22 +1,21 @@
 #!/bin/bash
 # extract_one.sh -- one FieldConvert interpolation + one reduction.
 #
-#   extract_one.sh dns RUN CHKFILE   OUTDIR PHI KEEP
-#   extract_one.sh do  RUN ARCHIVE   OUTDIR PHI KEEP
+#   extract_one.sh dns RUN CHKFILE   OUTDIR KEEP
+#   extract_one.sh do  RUN ARCHIVE   OUTDIR KEEP
 #
 # RUN      run directory (holds geometry.xml)
-# CHKFILE  output/chks/casefile_N.chk   (relative to RUN)
-# ARCHIVE  output/do/casefile.do_NNNNNN.fld (relative to RUN; a directory
+# CHKFILE  fuentes/chks/casefile_N.chk   (relative to RUN)
+# ARCHIVE  fuentes/do/casefile.do_NNNNNN.fld (relative to RUN; a directory
 #          for MPI runs, a single file for serial runs)
 # OUTDIR   where <index>.npz goes (index = N for chks, NNNNNN for archives)
-# PHI      phi npz from make_phi.sh, or "none"
 # KEEP     "grid" to keep the full plane of mean and modes (DO only), else "-"
 #
 # Environment: FIELDCONVERT = FieldConvert executable (or a wrapper), EXTRACT_LIB =
 # path of extract_lib.py. The interpolated .dat is deleted after the
 # reduction. Exit code 0 only if the .npz exists at the end.
 set -u
-MODE=$1; RUN=$2; FILE=$3; OUTDIR=$4; PHI=$5; KEEP=$6
+MODE=$1; RUN=$2; FILE=$3; OUTDIR=$4; KEEP=$5
 : "${FIELDCONVERT:?set FIELDCONVERT}" "${EXTRACT_LIB:?set EXTRACT_LIB}"
 
 base=$(basename "$FILE")
@@ -41,12 +40,11 @@ if [ ! -s "$dat" ]; then
 fi
 rm -f "$dat.log"
 
-phiarg=(); [ "$PHI" != "none" ] && phiarg=(--phi "$PHI")
 if [ "$MODE" = dns ]; then
-    python3 "$EXTRACT_LIB" reduce-dns "$dat" "$out" "${phiarg[@]}"
+    python3 "$EXTRACT_LIB" reduce-dns "$dat" "$out"
 else
     keeparg=(); [ "$KEEP" = grid ] && keeparg=(--keep-grid)
-    python3 "$EXTRACT_LIB" reduce-do "$dat" "$out" --info "$FILE" "${phiarg[@]}" "${keeparg[@]}"
+    python3 "$EXTRACT_LIB" reduce-do "$dat" "$out" "${keeparg[@]}"
 fi
 rc=$?
 rm -f "$dat"

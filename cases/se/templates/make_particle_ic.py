@@ -9,7 +9,7 @@ serial .chk with fields u, v, p and the element blocks of the archive.
 
     python3 make_particle_ic.py ARCHIVE OUT.chk [--particle 0]
 
-ARCHIVE is e.g. RUN/output/do/casefile.do_000000.fld (the step-0 archive).
+ARCHIVE is e.g. RUN/fuentes/do/casefile.do_000000.fld (the step-0 archive).
 """
 
 import argparse

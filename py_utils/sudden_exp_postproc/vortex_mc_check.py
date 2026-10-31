@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from se import FIELDCONVERT, interp, load_dat, yi_from_fld
+from legacy import FIELDCONVERT, interp, load_dat, yi_from_fld
 
 S = 6
 NP = 24

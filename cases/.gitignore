@@ -6,3 +6,4 @@
 !*.sbatch
 !Makefile
 !.gitignore
+.idea/

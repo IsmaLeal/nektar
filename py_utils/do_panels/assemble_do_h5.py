@@ -3,7 +3,7 @@
 
 Reads per-archive plane interpolations from
 RUN/output/py_utils_results/grid_cache/gd_STEP.dat (produced by FieldConvert
-interppoints, columns x y z | u v p | mode_i_u mode_i_v ...), plus Yi from
+interppoints, columns x y z | u v p | mode_i_u mode_i_v ... | mode_i_p ...), plus Yi from
 the archive metadata, and writes an HDF5 with these keys (animate_do_panels.py
 reads them):
     x, y            (Ny, Nx)
@@ -17,8 +17,7 @@ simulation advances, then re-run this assembler; only missing archives need
 interpolating.
 
 Usage:
-    python3 assemble_do_h5.py RUN_DIR [--out RUN_DIR/output/out_grid.h5]
-                              [--nx 901] [--ny 121]
+    python3 assemble_do_h5.py RUN_DIR --nx NX --ny NY [--out RUN_DIR/output/out_grid.h5]
 """
 
 from __future__ import annotations
@@ -30,15 +29,17 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from se import casefile_param, load_dat, yi_series
+import time
+
+from archives import casefile_param, load_dat, progress, yi_series
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("run", type=Path)
     ap.add_argument("--out", type=Path, default=None)
-    ap.add_argument("--nx", type=int, default=901)
-    ap.add_argument("--ny", type=int, default=121)
+    ap.add_argument("--nx", type=int, required=True)
+    ap.add_argument("--ny", type=int, required=True)
     args = ap.parse_args()
     run = args.run
     out = args.out or run / "output/out_grid.h5"
@@ -60,7 +61,9 @@ def main() -> int:
     T = len(files)
     u = np.zeros((ny, nx, T)); v = np.zeros((ny, nx, T)); p = np.zeros((ny, nx, T))
     mu = np.zeros((S, ny, nx, T)); mv = np.zeros((S, ny, nx, T))
+    t0 = time.time()
     for k, f in enumerate(files):
+        progress(k, T, t0, "grids read")
         d = load_dat(f, ncol)
         u[:, :, k] = togrid(d, 3)
         v[:, :, k] = togrid(d, 4)
@@ -68,6 +71,7 @@ def main() -> int:
         for i in range(S):
             mu[i, :, :, k] = togrid(d, 6 + 2 * i)
             mv[i, :, :, k] = togrid(d, 7 + 2 * i)
+    progress(T, T, t0, "grids read")
 
     t_yi, yi = yi_series(str(run / "output/do"), nmodes=S, dt=dt)
     steps_yi = list((np.round(t_yi / dt)).astype(int))

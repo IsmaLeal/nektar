@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 
 from convergence_orders import CELL_AREA, PLANE
-from se import FIELDCONVERT, interp, load_dat, yi_from_fld
+from legacy import FIELDCONVERT, interp, load_dat, yi_from_fld
 
 S = 6
 
@@ -59,7 +59,7 @@ def pair(sa, sb):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs-root", type=Path,
-                    default=Path("/home/isma/nektar_src_full/cases/se/runs"))
+                    default=Path("/home/isma/nektar_src_full/cases/se/runs/cerrado"))
     ap.add_argument("--T", type=float, default=2.0)
     ap.add_argument("--dt", type=float, default=0.01)
     ap.add_argument("--fieldconvert", default=FIELDCONVERT)

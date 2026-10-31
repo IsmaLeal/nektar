@@ -2,7 +2,7 @@
 # different Re, sigma, S, Np or eps never share a folder:
 #
 #   Re<Re>/                 unforced, one Re: phi, the adjoint mode, eigenvalue fits, kicks
-#   Re<Re>_sig<sigma>/      one forced pair, as in cases/se/runs/2026_09_13_jed_sweep/:
+#   Re<Re>_sig<sigma>/      one forced pair, as in cases/se/runs/:
 #     <run>/                one run, the folder named as its run directory (crossings, movies, phi_u1;
 #                           the twin figure sits in the folder of the DNS twin)
 #     vary_<p>_<fixed>/     one line of DO runs, which differ in p only, each figure with the DNS (histograms)
@@ -18,14 +18,14 @@
 #   with the command line that made it. Diagnostics that only make sense with one
 #   run (stats_*, do_panels_*, burn-in checks) stay in that run's output/. Movies are not in git.
 #
-# Targets regenerate from the local extraction (cases/se/runs/2026_09_13_jed_sweep):
+# Targets regenerate from the local extraction (cases/se/runs):
 #   make fields hists stills traces rates    make candidacy CAND=~/.../candidacy_exam
 
 REPO  := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../..)
 PP    := $(REPO)/py_utils/sudden_exp_postproc
 TPL   := $(REPO)/cases/se/templates
-SWEEP := $(REPO)/cases/se/runs/2026_09_13_jed_sweep
-PAIR  := $(SWEEP)/Re100_sig0.0144
+RUNS  := $(REPO)/cases/se/runs
+PAIR  := $(RUNS)/Re100_sig0.0144
 CAND  ?= $(HOME)/todisimo/studies/7.0_epfl/year1/academic/candidacy_exam
 PY    := python3
 
@@ -34,16 +34,10 @@ PY    := python3
 all: fields hists stills traces rates
 
 # Every field figure comes from plot_plane.py, so they all share one x window (-5..15; --full = whole domain).
-ADJ := $(REPO)/cases/se/runs/2026_07_12_m03_Re79p3_arnoldi_adjoint
-
-fields: $(patsubst %,Re%/phi.pdf,90 100 110) Re79p3/qdagger.pdf
+fields: $(patsubst %,Re%/phi.pdf,90 100 110)
 
 Re%/phi.pdf: $(TPL)/phi_Re%.npz $(PP)/plot_plane.py
 	$(PY) $(PP)/plot_plane.py $< --title 'Re $*' --out $@
-
-# leading adjoint eigenmode of the Re 79.3 Arnoldi run (geometry_eig_0.fld) on the extraction plane
-$(TPL)/qdagger_Re79p3.npz: $(ADJ)/geometry_eig_0.fld $(PP)/plane_from_fld.py
-	$(PY) $(PP)/plane_from_fld.py $< --geometry $(ADJ)/geometry.xml --out $@
 
 Re79p3/qdagger.pdf: $(TPL)/qdagger_Re79p3.npz $(PP)/plot_plane.py
 	$(PY) $(PP)/plot_plane.py $< --keys u v --labels '$$q^\dagger_u$$' '$$q^\dagger_v$$' --title 'Re 79.3' --out $@
@@ -86,7 +80,7 @@ traces:
 
 rates:
 	mkdir -p sweep
-	$(PY) $(PP)/sweep_rates.py --sweep $(SWEEP) --out sweep/sweep_rates
+	$(PY) $(PP)/sweep_rates.py --sweep $(RUNS) --out sweep/sweep_rates
 
 # The candidacy figure set: cases/se/figures/candidacy/ is the source, the tex and
 # slides folders receive copies (never deleted, the folders also hold other files).

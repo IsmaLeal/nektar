@@ -9,7 +9,7 @@ dudy_wall_data.py writes the data needed by this script.
 Run with the python of the divulg venv (manim + classic_isma); the .cmd next to the movie holds the command line.
 
 Example:
-    ~/todisimo/despojos/divulg/.venv/bin/python dudy_wall_movie.py /tmp/dudy_Re100_sig0.0144_dns_seed45 \
+    python3 dudy_wall_movie.py /tmp/dudy_Re100_sig0.0144_dns_seed45 \
         --out cases/se/figures/Re100_sig0.0144/dns_Re100_sig0.0144_seed45/dudy_wall.mp4
 """
 import argparse

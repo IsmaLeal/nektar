@@ -11,7 +11,7 @@
 # /scratch/lealaske/se_runs/Re<Re>_sig<sigma>/do_Re<Re>_sig<sigma>_S<S>_Np<Np>_seed<seed>[_eps<eps>][_frc<fseed>]/
 # (one directory per (Re, sigma) pair holds its DNS and DO runs; never
 # reused: an existing run dir aborts the task). The snapshot set is
-# ../dns_Re<Re>_sig<sigma>_seed<seed>/output/chks/, every <stride>-th chk
+# ../dns_Re<Re>_sig<sigma>_seed<seed>/fuentes/chks/, every <stride>-th chk
 # (stride 1 = all, 2 = every 8 t.u., 5 = every 20 t.u.). <seed> names the DNS
 # that seeds the POD; the optional 9th column <fseed> sets DOForcingSeed on
 # its own (default: fseed = seed), for repeats that change only the noise.
@@ -37,11 +37,11 @@ RUN=$PAIR/do_Re${RE}_sig${SIGMA}_S${S}_Np${NP}_seed${SEED}
 [ "$FSEED" = "$SEED" ] || RUN=${RUN}_frc${FSEED}   # noise-only repeats carry the forcing seed
 DNS=$PAIR/dns_Re${RE}_sig${SIGMA}_seed${SEED}
 [ -e "$RUN" ] && { echo "error: $RUN already exists, not overwriting" >&2; exit 1; }
-[ -d "$DNS/output/chks" ] || { echo "error: no DNS snapshots at $DNS/output/chks" >&2; exit 1; }
+[ -d "$DNS/fuentes/chks" ] || { echo "error: no DNS snapshots at $DNS/fuentes/chks (an older run: mkdir -p $DNS/fuentes && mv $DNS/output/chks $DNS/fuentes/)" >&2; exit 1; }
 echo "task $SLURM_ARRAY_TASK_ID: Re=$RE sigma=$SIGMA S=$S Np=$NP stride=$STRIDE seed=$SEED fseed=$FSEED T_END=$T_END eps=$EPS -> $RUN"
 
 # --- snapshot pattern (relative to the run dir; ';' joins several globs) -----
-REL=../dns_Re${RE}_sig${SIGMA}_seed${SEED}/output/chks/casefile_
+REL=../dns_Re${RE}_sig${SIGMA}_seed${SEED}/fuentes/chks/casefile_
 case "$STRIDE" in
     1) PATTERN="${REL}*.chk" ;;
     2) PATTERN="${REL}*0.chk;${REL}*2.chk;${REL}*4.chk;${REL}*6.chk;${REL}*8.chk" ;;
@@ -50,7 +50,7 @@ case "$STRIDE" in
 esac
 
 # --- run dir: inputs + output tree ------------------------------------------
-mkdir -p "$RUN/output/chks" "$RUN/output/do" "$RUN/output/asymmetry" "$RUN/output/energy" "$RUN/output/measures"
+mkdir -p "$RUN/fuentes/chks" "$RUN/fuentes/do" "$RUN/series"
 cp "$TPL/geometry.opt" "$TPL/ic.chk" "$TPL/qdag_channel.fld" "$RUN/"
 cp "$TPL/geometry_m03.xml" "$RUN/geometry.xml"   # quad mesh (meshes/m03); templates/geometry.xml is the tri mesh
 sed -e "s|@DT@|0.01|" -e "s|@T_END@|$T_END|" -e "s|@RE@|$RE|" \

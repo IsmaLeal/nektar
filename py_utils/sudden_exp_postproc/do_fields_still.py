@@ -13,7 +13,7 @@ do_fields.py writes the data needed by this script and calls it: python3 do_fiel
 Run with the python of the divulg venv (manim + classic_isma); the .cmd next to the image holds the command line.
 
 By hand, on data written by do_fields.data():
-    ~/todisimo/despojos/divulg/.venv/bin/python do_fields_still.py /tmp/data \
+    python3 do_fields_still.py /tmp/data \
         --out cases/se/figures/Re100_sig0.0144/do_Re100_sig0.0144_S6_Np1000_seed45_eps0.0001/phi_u1.png
 """
 import argparse
@@ -44,7 +44,7 @@ FIELDS = [(s, np.where(INSIDE, f[:, j], 0.0)) for s, f in FIELDS]
 TS = d["ts"]
 NORMS = [(rf"\langle \mathbf{{u}}_{K}, \boldsymbol{{\phi}} \rangle^2", d["a"] ** 2, CURVE),
          (rf"\langle \mathbf{{u}}_{K} - \boldsymbol{{\phi}},\, \mathbf{{u}}_{K} - \boldsymbol{{\phi}} \rangle^2",
-          (d["g"] - 2 * d["a"] + d["pp"]) ** 2, CORAL)]
+          (d["g"] - 2 * d["a"] + 1) ** 2, CORAL)]
 
 FRAME_H = 12.0        # the still is taller than a 16:9 frame: the channels, and the axes below them
 S = 0.45              # scene units per unit of x and of y (true aspect)
@@ -96,8 +96,8 @@ def norms():
     g.add(formula("t").next_to(ax.x_axis.get_end(), DOWN, buff=0.2))
     for tex, f, c in NORMS:
         p = o + TS[:, None] * ux + (np.log10(f) - LO)[:, None] * uy
-        g.add(curve(p, color=c, nib=False, width=TRACE_WIDTH, n=4 * len(TS)),
-              formula(tex, size=24, color=c).next_to(p[-1], RIGHT, buff=0.15))
+        g.add(curve(p, colour=c, nib=False, width=TRACE_WIDTH, n=4 * len(TS)),
+              formula(tex, size=24, colour=c).next_to(p[-1], RIGHT, buff=0.15))
     return g
 
 

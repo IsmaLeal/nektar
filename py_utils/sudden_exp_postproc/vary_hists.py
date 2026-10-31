@@ -12,7 +12,7 @@ never a line of their own. The figure itself is draw_hist.py's.
 
 Writes cases/se/figures/<pair>/vary_<p>_<the rest>/hist_<q>.png and the .cmd next to it:
 vary_S_Np1000_eps1e-4/hist_A.png = S varies, Np 1000 and eps 1e-4 fixed. The runs are those with their
-measures.h5 under the sweep root (se.runs): the absTol runs, moved out of it, are not drawn.
+measures.h5 under cases/se/runs (se.runs): the absTol runs, in cerrado/, are not drawn.
 """
 import argparse
 import os

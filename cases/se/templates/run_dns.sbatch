@@ -38,7 +38,7 @@ RUN=${RUN}${TAG}
 echo "task $SLURM_ARRAY_TASK_ID: Re=$RE sigma=$SIGMA seed=$SEED T_END=$T_END NP=$NP IC=$IC -> $RUN"
 
 # --- run dir: inputs + output tree ------------------------------------------
-mkdir -p "$RUN/output/chks" "$RUN/output/asymmetry" "$RUN/output/energy"
+mkdir -p "$RUN/fuentes/chks" "$RUN/series"
 cp "$TPL/geometry.opt" "$TPL/qdag_channel.fld" "$RUN/"
 cp "$TPL/$IC" "$RUN/ic.chk"
 cp "$TPL/geometry_m03.xml" "$RUN/geometry.xml"   # quad mesh (meshes/m03); templates/geometry.xml is the tri mesh

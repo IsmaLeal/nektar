@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 
 trap = np.trapezoid if hasattr(np, 'trapezoid') else np.trapz
 
-PATH = '/home/isma/nektar_src_full/cases/se/runs/2026_08_16_do_phi22_t3000_jed/output/out_grid.h5'
+PATH = '/home/isma/nektar_src_full/cases/se/runs/cerrado/2026_08_16_do_phi22_t3000_jed/output/out_grid.h5'
 OUT = '/home/isma/todisimo/studies/7.0_epfl/year2/academic/my_notes/1_sep/18_sep_1.pdf'
 P = 6
 

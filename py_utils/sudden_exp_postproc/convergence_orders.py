@@ -34,7 +34,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from se import FIELDCONVERT, interp, load_dat, yi_from_fld
+from legacy import FIELDCONVERT, interp, load_dat, yi_from_fld
 
 PLANE = "plane=901,121,-5,-1.5,0,40,-1.5,0,40,1.5,0,-5,1.5,0"
 CELL_AREA = (45.0 / 900) * (3.0 / 120)   # uniform plane-grid quadrature weight
@@ -112,7 +112,7 @@ def exponent_scan(E, dts):
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--runs-root", type=Path,
-                    default=Path("/home/isma/nektar_src_full/cases/se/runs"))
+                    default=Path("/home/isma/nektar_src_full/cases/se/runs/cerrado"))
     ap.add_argument("--do-tags",
                     default="2026_07_19_conv_dt100,2026_07_19_conv_dt050,"
                             "2026_07_19_conv_dt025,2026_07_19_conv_dt0125")

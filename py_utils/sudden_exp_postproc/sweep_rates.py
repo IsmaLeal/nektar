@@ -4,8 +4,9 @@ extraction: one grid.h5 per run, M_grid(t) every 4 time units.
 
 Well level m per Re: |M| of the unforced fixed point of that Re when the
 sweep holds its relaxation run (dns_Re<Re>_sig0.0_seed0: 0.1266 / 0.1696 /
-0.1945 for Re 90 / 100 / 110), else the median of |M| (t >= tmin) in the run
-with the smallest sigma of that Re. The forcing inflates |M| (M is quadratic in v
+0.1945 for Re 90 / 100 / 110); at Re 100 without it, se.M_WELL (0.1696, M at
+t = 0 of every Re 100 DNS: the IC is that fixed point); else the median of
+|M| (t >= tmin) in the run with the smallest sigma of that Re. The forcing inflates |M| (M is quadratic in v
 on the axis: at Re 100 the median |M| is 0.171, 0.211, 0.281 for sigma
 0.0072, 0.0144, 0.0288 against 0.1696 at the unforced fixed point), so a
 per-run median would raise the threshold with sigma and undercount the
@@ -27,7 +28,7 @@ figure lambda vs 1/sigma^2 with one series per Re (Arrhenius axes).
 
 Usage:
     python3 sweep_rates.py [--sweep DIR] [--out PREFIX] [--c 0.8]
-        [--tmin 30]
+        [--tmin 100]
 """
 from __future__ import annotations
 
@@ -69,11 +70,11 @@ def rate_of_run(run: Path, c: float, tmin: float, m: float | None = None):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sweep", type=Path, default=se.SWEEP)
+    ap.add_argument("--sweep", type=Path, default=se.RUNS)
     ap.add_argument("--out", type=Path,
-                    default=se.SWEEP / "sweep_rates")
+                    default=se.RUNS / "sweep_rates")
     ap.add_argument("--c", type=float, default=se.C)
-    ap.add_argument("--tmin", type=float, default=30.0)
+    ap.add_argument("--tmin", type=float, default=100.0)
     ap.add_argument("--m-per-run", action="store_true",
                     help="well level from each run's own median |M|")
     args = ap.parse_args()
@@ -91,6 +92,8 @@ def main() -> int:
             fp = [k for k in files if k[0] == Re and k[1] == 0.0]
             if fp:
                 m_of_Re[Re] = float(abs(se.dns(files[fp[0]])["M"][-1]))
+            elif Re == 100:
+                m_of_Re[Re] = se.M_WELL                  # M at t = 0 of every Re 100 DNS: the IC is the fixed point
             else:
                 k0 = min((k for k in files if k[0] == Re), key=lambda k: k[1])
                 m_of_Re[Re] = rate_of_run(files[k0], args.c, args.tmin)["m"]

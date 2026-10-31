@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Reads a run's output/extract/grid.h5 and writes:
+Reads a run's campos/grid.h5 and writes:
     <out>_u.npy   u on the extraction plane for x >= -1, every snapshot, float16 (T, ny, nx)
     <out>.npz     x, y (the plane's axes for that window), t, xs (x > 0), up, low (T, len(xs))
 
@@ -9,7 +9,7 @@ up and low are du/dy at the plane's first rows off the walls, y = 1.475 (sign fl
     up = -(u[-1] - u[-3]) / (2 dy)
 
 Example:
-    python3 dudy_wall_data.py cases/se/runs/2026_09_13_jed_sweep/Re100_sig0.0144/dns_Re100_sig0.0144_seed45 \
+    python3 dudy_wall_data.py cases/se/runs/Re100_sig0.0144/dns_Re100_sig0.0144_seed45 \
         --out /tmp/dudy_Re100_sig0.0144_dns_seed45
 """
 import argparse
@@ -21,14 +21,14 @@ import numpy as np
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("run", help="run directory (holding output/extract/grid.h5)")
+    ap.add_argument("run", help="run directory (holding campos/grid.h5)")
     ap.add_argument("--out", required=True, help="output prefix: <out>_u.npy and <out>.npz")
     ap.add_argument("--xmin", type=float, default=-1.0, help="left end of the field window")
     args = ap.parse_args()
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    with h5py.File(Path(args.run) / "output/extract/grid.h5", "r") as f:
+    with h5py.File(Path(args.run) / "campos/grid.h5", "r") as f:
         x, y = f["x"][0], f["y"][:, 0]                  # load x, y
         t = f["t"][:]                                   # t
         j0 = int(np.searchsorted(x, args.xmin))         # returns index i s.t. x[i]

@@ -20,7 +20,7 @@ adjoint mode and the modes live); --full shows the whole domain -5..40.
 Examples:
   python3 plot_plane.py cases/se/templates/phi_Re100.npz --title 'Re 100' \
       --out cases/se/figures/Re100/phi.pdf
-  python3 plot_plane.py run/output/extract/do_00100.npz --keys mode_u mode_v --mode 0 \
+  python3 plot_plane.py run/campos/npz/000100.npz --keys mode_u mode_v --mode 0 \
       --out cases/se/figures/Re100_sig0.0144/RUN/mode0.pdf
   python3 plot_plane.py cases/se/templates/qdagger_Re79p3.npz --keys u v \
       --labels '$q^\dagger_u$' '$q^\dagger_v$' --title 'Re 79.3' --out cases/se/figures/Re79p3/qdagger.pdf
@@ -34,19 +34,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from draw_modes import RC, XMAX, field
 from figsave import save
-from se import INSIDE, x, y
+from se import INSIDE, x
 
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "serif",
-    "mathtext.fontset": "cm",
-    "font.size": 9,
-})
+plt.rcParams.update(RC)
 
 SYMBOL = {"phi_u": r"$\phi_u$", "phi_v": r"$\phi_v$", "u": "$u$", "v": "$v$",
           "mean_u": r"$\bar u$", "mean_v": r"$\bar v$", "mode_u": "$u_{{{k}}}$", "mode_v": "$v_{{{k}}}$"}
-XMIN, XMAX = -5.0, 15.0          # the window shared by every field figure
 
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 ap.add_argument("npz", type=Path)
@@ -78,39 +73,18 @@ for k in keys:
         f = f[args.mode]
     if f.shape != INSIDE.shape:
         sys.exit(f"{k}: shape {f.shape}, expected {INSIDE.shape}")
-    fields.append(np.ma.masked_where(~INSIDE, f))
-
-allv = np.concatenate([f.compressed() for f in fields])
-lim = max(1e-12, np.nanpercentile(np.abs(allv), args.pct))
-neg = allv[allv < 0]
-nlim = max(1e-6, np.nanpercentile(np.abs(neg), args.pct)) if neg.size else 1e-6
-nlim = min(nlim, lim)
-# Remap the colormap so white sits at zero under a plain linear norm (fig_se_states.py).
-f0 = nlim / (nlim + lim)
-n0 = max(2, int(round(2048 * f0)))
-cols = np.vstack([plt.cm.RdBu_r(np.linspace(0.0, 0.5, n0)),
-                  plt.cm.RdBu_r(np.linspace(0.5, 1.0, 2048 - n0))])
-cmap = matplotlib.colors.ListedColormap(cols)
-cmap.set_bad("0.85")
-norm = matplotlib.colors.Normalize(vmin=-nlim, vmax=lim)
+    fields.append(f)
+allv = np.concatenate([f[INSIDE] for f in fields])          # one colour scale for every panel
 
 fig, axes = plt.subplots(len(fields), 1, figsize=(6.3, 1.15 * len(fields) + 0.6), sharex=True,
                          constrained_layout=True, squeeze=False)
 axes = axes[:, 0]
 for i, (ax, f, k) in enumerate(zip(axes, fields, keys)):
-    im = ax.imshow(f, origin="lower", extent=[x.min(), x.max(), y.min(), y.max()],
-                   cmap=cmap, norm=norm, aspect="auto", interpolation="bilinear")
-    ax.set_facecolor("0.85")
-    ax.set_xlim(XMIN, x.max() if args.full else XMAX)
-    ax.set_ylim(y.min(), y.max())
-    ax.set_yticks([-1.5, 0, 1.5])
-    ax.set_ylabel("$y$", fontsize=13)
     sym = args.labels[i] if args.labels else SYMBOL.get(k, k.replace('_', r'\_')).format(k=args.mode)
     lab = f"({chr(97 + i)}) " + sym
     if args.title:
         lab += f", {args.title}"
-    ax.text(0.995, 0.92, lab, transform=ax.transAxes, va="top", ha="right", fontsize=11,
-            bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=1.5))
+    im = field(ax, f, lab, scale=allv, pct=args.pct, xmax=x.max() if args.full else XMAX)
 axes[-1].set_xlabel("$x$", fontsize=13)
 fig.colorbar(im, ax=axes, shrink=0.9, pad=0.015)
 

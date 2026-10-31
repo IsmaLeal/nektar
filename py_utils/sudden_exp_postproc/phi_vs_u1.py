@@ -2,13 +2,13 @@ import sys
 import numpy as np, h5py
 import matplotlib.pyplot as plt
 sys.path.insert(0, "../../cases/se/templates")
-from extract_lib import ip
+from legacy import ip
 
 phi = np.load("../../cases/se/templates/phi_Re100.npz")
 phi_u, phi_v = phi["phi_u"], phi["phi_v"]
 
-run = "../../cases/se/runs/2026_09_13_jed_sweep/Re100_sig0.0144/do_Re100_sig0.0144_S6_Np1000_seed45_eps0.0001"
-with h5py.File(run + "/output/extract/measures.h5", "r") as h:
+run = "../../cases/se/runs/Re100_sig0.0144/do_Re100_sig0.0144_S6_Np1000_seed45_eps0.0001"
+with h5py.File(run + "/campos/measures.h5", "r") as h:
     t = h["grid/t"][:]
     u1, v1 = h["grid/mode_u"][:, 0], h["grid/mode_v"][:, 0]
 

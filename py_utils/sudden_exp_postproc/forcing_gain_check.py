@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 """White-noise injection audit of the DO forcing path, research plan 3.3.
 
-Re-creation of the 2026-07-15 executed-gain audit (runs 2026_07_15_val_np*,
-deleted 2026-07-21; the original analysis script was session-scoped and is
-lost). Rig: S = 1, Np = 1000, one channel g = qdag, white-in-time branch
-(DOForcingTau = 0: eta = sigma*sqrt(dt)*xi drawn i.i.d. per step, particle
-and channel), per-step DO archives. Runs:
-cases/se/runs/2026_07_30_frc_audit_np{1,2,4}.
+S = 1, Np = 1000, one channel g = qdag, white-in-time branch. Runs:
+cases/se/runs/cerrado/2026_07_30_frc_audit_np{1,2,4}.
 
 Measured, per run:
 
@@ -51,9 +47,9 @@ from pathlib import Path
 
 import numpy as np
 
-import se
+import legacy
 from convergence_orders import CELL_AREA, PLANE
-from se import FIELDCONVERT, load_dat, yi_from_fld
+from legacy import FIELDCONVERT, load_dat, yi_from_fld
 
 S = 1
 PLANE_FINE = "plane=1801,241,-5,-1.5,0,40,-1.5,0,40,1.5,0,-5,1.5,0"
@@ -74,7 +70,7 @@ def eta_from_fld(fld):
 
 def interp(run: Path, fld: Path, tag: str, fieldconvert: str,
            plane: str) -> Path:
-    return se.interp(run / "geometry.xml", fld, plane, run / f"gaingrid_{tag}.dat", fieldconvert)
+    return legacy.interp(run / "geometry.xml", fld, plane, run / f"gaingrid_{tag}.dat", fieldconvert)
 
 
 def gain(run: Path, arch: Path, tag: str, fieldconvert: str,

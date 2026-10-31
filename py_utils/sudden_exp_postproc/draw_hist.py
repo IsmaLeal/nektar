@@ -25,7 +25,7 @@ import se
 
 RC, SIZE, DPI = {}, (6.5, 4.2), 150        # rcParams, size of one panel, dpi of the png
 
-tmin = 300.0        # initial transient dropped (every run starts at the fixed point of its Re)
+tmin = 100.0        # initial transient dropped (every run starts at the fixed point of its Re)
 bins = 60
 escape_bins = np.arange(0, 3001, 100)
 XLABEL = {'M': 'M', 'A': 'A', 'absM': '|M|', 'Y1': '$Y_1$', 'dL': '$\\Delta L$',
@@ -37,8 +37,9 @@ XLABEL = {'M': 'M', 'A': 'A', 'absM': '|M|', 'Y1': '$Y_1$', 'dL': '$\\Delta L$',
 
 def threshold(q, Re):
     """The crossing threshold of an escape-time quantity, None for the others."""
-    return {'escape_A': 0.5 * se.a_fp(Re), 'escape_M': se.C * se.M_WELL, 'escape_Y1': 0.5 * se.a_fp(Re),
-            'escape_dL': 0.5 * se.DL_FP}.get(q)
+    h = {'escape_A': lambda: 0.5 * se.a_fp(Re), 'escape_M': lambda: se.C * se.M_WELL,
+         'escape_Y1': lambda: 0.5 * se.a_fp(Re), 'escape_dL': lambda: 0.5 * se.dl_fp(Re)}.get(q)
+    return h() if h else None
 
 
 # ---------------------------------------------------------------- escape times

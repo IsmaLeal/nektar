@@ -8,7 +8,7 @@ Kinds, one file each (draw_<kind>.py draws its runs into the axis it is handed):
     hist    histogram of q=M, A, absM, escape_A, escape_M                 draw_hist.py
     cross   A(t) of one series with the crossings marked, tlim=T0:T1      draw_cross.py
     trace   q=A, M, dL, Y1 against time, a DNS and DO particles           draw_trace.py
-    qdag    projection of q^dagger on the DO modes of one run             draw_qdag.py
+    modes   one DO mode u_k or v_k of one run on the plane, k=K comp=u t=T   draw_modes.py
 
 Runs (se.py): a directory name of the pair or the part after
 dns_<pair>_ / do_<pair>_; one argument is one curve, a glob or names joined
@@ -25,8 +25,6 @@ the command line next to it (figsave.py).
 Examples:
   python3 panel.py --panel hist q=A 'seed??' S6_Np1000_seed45 S8_Np1000_seed45 S12_Np1000_seed45 \
       --out cases/se/figures/Re100_sig0.0144/vary_S_Np1000_eps1e-2/hist_A.png
-  python3 panel.py --sharex --panel qdag S6_Np1000_seed45_eps1e-4 --panel qdag S16_Np1000_seed45_eps1e-4 \
-      --out cases/se/figures/Re100_sig0.0144/qdag_proj.pdf
   python3 panel.py --sharex --tags \
       --panel trace q=A seed45_Np1000_S8p0 S8_Np1000_seed45_eps1e-4@0 S8_Np1000_seed45_eps1e-8@0 \
       --panel trace q=M --panel trace q=dL --panel trace q=Y1 \
@@ -41,7 +39,7 @@ import matplotlib.pyplot as plt
 import se
 from figsave import save
 
-KINDS = ('hist', 'cross', 'trace', 'qdag')
+KINDS = ('hist', 'cross', 'trace', 'modes')
 
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 ap.add_argument('--pair', default='Re100_sig0.0144', help='directory of one (Re, sigma) pair of the sweep, or its name under the sweep root')

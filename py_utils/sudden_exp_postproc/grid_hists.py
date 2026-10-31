@@ -9,18 +9,19 @@ Uses draw_hist.py.
     python3 grid_hists.py                       q = M, A, Y1, dL and their escape times; S 8 12 16; Np 1000 2000 5000;
                                                 eps 1e-4 1e-8 (Y1 is the DO's alone: no DNS curve)
     python3 grid_hists.py --q M --S 8 12 --Np 1000 5000 --eps 0.0001 --out grid.png
+    python3 grid_hists.py --q M --redraw           draws hist_M.npz again, the h5 files unread (seconds, not minutes)
 
-Writes cases/se/figures/<pair>/vary_S_Np_eps/hist_<q>.png (or --out, one q) and the .cmd next to it.
+Writes cases/se/figures/<pair>/vary_S_Np_eps/hist_<q>.png (or --out, one q), the .cmd next to it and the histograms
+themselves in hist_<q>.npz (edges and densities of every curve, what the drawing reads).
 
 Two interpreters: this script reads the h5 files (system python), the drawing runs in the divulg venv (manim, no
-h5py), MANIM_PYTHON overrides its path. The data handed from one to the other lives in a temporary directory.
+h5py), MANIM_PYTHON overrides its path. The .npz is what is handed from one to the other.
 """
 import argparse
 import os
 import shlex
 import subprocess
 import sys
-import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -32,7 +33,7 @@ import draw_hist
 HERE = Path(__file__).resolve().parent
 
 QS = ("M", "A", "Y1", "dL", "escape_M", "escape_A", "escape_Y1", "escape_dL")
-MANIM_PYTHON = os.environ.get("MANIM_PYTHON", str(Path.home() / "todisimo/despojos/divulg/.venv/bin/python"))
+MANIM_PYTHON = os.environ.get("MANIM_PYTHON", sys.executable)
 STILL = HERE / "grid_hists_still.py"
 
 
@@ -49,6 +50,8 @@ def main():
     ap.add_argument("--eps", type=float, nargs="+", default=[1e-4, 1e-8], help="one DO curve per eps in every cell")
     ap.add_argument("--q", nargs="+", default=list(QS), choices=QS)
     ap.add_argument("--out", type=Path, help="figure path (one --q); default <pair>/vary_S_Np_eps/hist_<q>.png")
+    ap.add_argument("--redraw", action="store_true", help="draw the saved hist_<q>.npz again, the h5 files unread")
+    ap.add_argument("--logy", action="store_true", help="y axis in log10")
     args = ap.parse_args()
     assert not args.out or len(args.q) == 1, "--out takes one --q"
 
@@ -63,6 +66,13 @@ def main():
     assert not missing, f"no run of {missing} in {pair}"
 
     for q in args.q:
+        out = args.out or se.FIGS / pair.name / "vary_S_Np_eps" / f"hist_{q}{'_logy' if args.logy else ''}.png"
+        data = (args.out or out.parent / f"hist_{q}.png").with_suffix(".npz")
+        if args.redraw:
+            assert data.exists(), f"{data}: no saved histograms, run without --redraw"
+            draw(q, data, out, args.logy)
+            cmd_file(args, pair, q, out)
+            continue
         h = draw_hist.threshold(q, RE)
         bins = draw_hist.escape_bins if q.startswith("escape") else draw_hist.bins
         if q.endswith("Y1"):                                       # a DNS has no Y_1
@@ -77,19 +87,27 @@ def main():
                 for k, eps in enumerate(args.eps):
                     do_dens[i, j, k], do_edges[i, j, k] = np.histogram(pooled(do[(S, Np, eps)], q, h), bins=bins, density=True)
                     print(f"  S {S}, Np {Np}, eps {se.eps_str(eps)}: " + ", ".join(r.name for r in do[(S, Np, eps)]))
-        out = args.out or se.FIGS / pair.name / "vary_S_Np_eps" / f"hist_{q}.png"
-        with tempfile.TemporaryDirectory() as tmp:
-            prefix = f"{tmp}/data"
-            np.savez(f"{prefix}.npz", q=q, Re=RE, sig=pair.name.split("_sig")[1], h=h if h is not None else np.nan,
-                     S=args.S, Np=args.Np, eps=args.eps, dns_edges=dns_edges, dns_dens=dns_dens,
-                     do_edges=do_edges, do_dens=do_dens)
-            r = subprocess.run([MANIM_PYTHON, str(STILL), prefix, "--out", str(out)], capture_output=True, text=True)
-            if r.returncode:
-                sys.exit(f"hist_{q}: the drawing failed\n{r.stdout[-3000:]}{r.stderr[-3000:]}")
-        cmd = ["python3", str(Path(__file__).resolve()), "--pair", pair.name, "--q", q, "--S", *map(str, args.S),
-               "--Np", *map(str, args.Np), "--eps", *(se.eps_str(e) for e in args.eps)] + (["--out", str(out)] if args.out else [])
-        out.with_suffix(".cmd").write_text(f"cd {os.getcwd()}\n{shlex.join(cmd)}\n")
-        print(f"Saved: {out}")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(data, q=q, Re=RE, sig=pair.name.split("_sig")[1], h=h if h is not None else np.nan,
+                 S=args.S, Np=args.Np, eps=args.eps, dns_edges=dns_edges, dns_dens=dns_dens,
+                 do_edges=do_edges, do_dens=do_dens)
+        draw(q, data, out, args.logy)
+        cmd_file(args, pair, q, out)
+
+
+def draw(q, data, out, logy):
+    """grid_hists_still.py on the saved histograms, in the manim venv"""
+    r = subprocess.run([MANIM_PYTHON, str(STILL), str(data.with_suffix("")), "--out", str(out)] + (["--logy"] if logy else []), capture_output=True, text=True)
+    if r.returncode:
+        sys.exit(f"hist_{q}: the drawing failed\n{r.stdout[-3000:]}{r.stderr[-3000:]}")
+
+
+def cmd_file(args, pair, q, out):
+    """the .cmd next to the figure: the command that makes it from the runs (no --redraw)"""
+    cmd = ["python3", str(Path(__file__).resolve()), "--pair", pair.name, "--q", q, "--S", *map(str, args.S),
+           "--Np", *map(str, args.Np), "--eps", *(se.eps_str(e) for e in args.eps)] + (["--logy"] if args.logy else []) + (["--out", str(out)] if args.out else [])
+    out.with_suffix(".cmd").write_text(f"cd {os.getcwd()}\n{shlex.join(cmd)}\n")
+    print(f"Saved: {out}")
 
 
 if __name__ == "__main__":
