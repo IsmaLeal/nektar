@@ -220,6 +220,10 @@ protected:
     /// pre-allocated scratch for parallel ComputeNModeBody in DOExplicitRhs.
     /// (i*nVel+c)*nPhys for mode i, component c.
     Array<OneD, NekDouble> m_NAllBuf;
+    /// triple terms of every mode, filled by ComputeModeConvectiveTerms
+    /// before the ComputeNModeBody loop: m_tripleAll[(i*nVel+c)*nPhys] =
+    /// -sum_{k,l} M_kli (u_k . grad) u_l[c]
+    Array<OneD, NekDouble> m_tripleAll;
     /// Laplacian cache: m_modeLap[(i*nVel+c)*nPhys] = sum_d d^2/dx_d^2 u_i[c].
     /// Filled by PrecomputeGradients so ComputeNModeBody needs no PhysDeriv.
     Array<OneD, NekDouble> m_modeLap;
@@ -262,6 +266,11 @@ protected:
     void BuildConstantSubspaceCache();
     /// compute moments C_ij, M_kli from m_Yi
     void ComputeYMoments();
+    /// regularisation deltaReg = DOInvCovRegEps * max_q |C_qq|
+    NekDouble DeltaReg() const;
+    /// regularised inverse of mode i's variance:
+    /// invMuReg = C_ii / (C_ii^2 + deltaReg^2)
+    NekDouble InvMuReg(int i) const;
 
     /// compute the DO contribution to the mean explicit term (vector)
     void ComputeDOMeanCoupling(Array<OneD, Array<OneD, NekDouble>> &doCorr);
@@ -270,17 +279,22 @@ protected:
     /// betasOut[0..nDOModes) with the local (pre-AllReduce) inner products
     /// <N + nu*lap, u_p>, and constIntOut[0..nVel) with the local integrals
     /// of N + nu*lap used by the strip-constants gauge (zero when the gauge
-    /// is inactive). Thread-safe: writes only the per-mode bodyBuf slab and
-    /// the per-mode output slots, with no MemPool allocations, so
-    /// DOExplicitRhs may run it inside an OpenMP parallel region.
+    /// is inactive). Reads the triple term from m_tripleAll, filled by
+    /// ComputeModeConvectiveTerms. Thread-safe: writes only the per-mode
+    /// bodyBuf slab and the per-mode output slots, with no MemPool
+    /// allocations, so DOExplicitRhs may run it inside an OpenMP parallel
+    /// region.
     void ComputeNModeBody(int i, Array<OneD, Array<OneD, NekDouble>> &N,
                           NekDouble *bodyBuf, NekDouble *betasOut,
                           NekDouble *constIntOut);
 
-    /// local (pre-AllReduce) Y-RHS tensors ipKi[k*S+i] = <F_k - grad(p_k),
-    /// u_i> and ipKli[(k*S+l)*S+i] = <F_kl, u_i>; DOExplicitRhs reduces them
-    /// in the same AllReduce as the mode-projection terms
-    void BuildYRhsTensors(NekDouble *ipKi, NekDouble *ipKli);
+    /// local (pre-AllReduce) ipKli[(k*S+l)*S+i] = <F_kl, u_i> and
+    /// m_tripleAll, from one evaluation of each F_kl = -(u_k . grad) u_l
+    void ComputeModeConvectiveTerms(NekDouble *ipKli);
+    /// local (pre-AllReduce) Y-RHS tensor ipKi[k*S+i] = <F_k - grad(p_k),
+    /// u_i>; DOExplicitRhs reduces it, with ipKli, in the same AllReduce as
+    /// the mode-projection terms
+    void BuildYRhsTensors(NekDouble *ipKi);
     /// per-particle Y-RHS assembly from the reduced tensors (BLAS)
     void AssembleYRhs(const NekDouble *ipKi, const NekDouble *ipKli,
                       Array<OneD, NekDouble> &rhs);
