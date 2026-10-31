@@ -56,7 +56,8 @@ INSIDE, BOX, read_dat = xl.INSIDE, xl.BOX, xl.read_dat    # inlet-wall mask, Fie
 #   dns_Re<Re>_sig<sig>_seed<seed>                    forced DNS
 #   dns_Re<Re>_sig<sig>_seed<seed>_Np<Np>_S<S>p0      DNS twin of particle 0 of the DO run (S, Np, seed)
 #   do_Re<Re>_sig<sig>_S<S>_Np<Np>_seed<seed>[_eps<eps>][_frc<fseed>]
-#       no _eps suffix = the default 0.01; _frc<fseed> = forcing seed differs from the POD seed
+#       _frc<fseed> = forcing seed differs from the POD seed; eps is in the name only for the runs before
+#       2026-10-31 (now in cerrado/), else it is DOInvCovRegEps of the run's casefile.xml (solver default 0.01)
 # Inside a run: casefile.xml, run.log, series/ (the DOMeasures filter's measures.h5, energy.mdl), campos/ (the
 # planes JED extracted from the archives, cases/se/templates/extract.sbatch: grid.h5 of a DNS, measures.h5
 # of a DO run) and, on JED only, fuentes/ (chks, archives). Its measures file, h5(run), is series/measures.h5
@@ -79,8 +80,15 @@ def params(run):
     m = _DO.match(name)
     assert m, f'{name}: not a run of the sweep'
     return dict(kind='do', Re=int(m.group(1)), sig=m.group(2), S=int(m.group(3)), Np=int(m.group(4)), seed=int(m.group(5)),
-                eps=float(m.group(6)) if m.group(6) else 0.01,
+                eps=float(m.group(6)) if m.group(6) else _casefile_eps(run),
                 frc=int(m.group(7)) if m.group(7) else None)
+
+
+def _casefile_eps(run):
+    """DOInvCovRegEps of the run's casefile.xml; 0.01 (the solver default) when the file or the parameter is absent."""
+    f = Path(run) / 'casefile.xml'
+    m = re.search(r'DOInvCovRegEps\s*=\s*([0-9.eE+-]+)', f.read_text()) if f.exists() else None
+    return float(m.group(1)) if m else 0.01
 
 
 SYM = dict(Re=r'\mathrm{Re}', sig=r'\sigma', S='S', Np='N_p')

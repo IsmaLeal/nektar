@@ -8,7 +8,8 @@
 # its own (Re, sigma). Row SLURM_ARRAY_TASK_ID+1 of do_sweep.tsv
 # (Re, sigma, S, Np, stride, seed, T_END, eps[, fseed]) fills casefile_do.xml;
 # the run lives in
-# /scratch/lealaske/se_runs/Re<Re>_sig<sigma>/do_Re<Re>_sig<sigma>_S<S>_Np<Np>_seed<seed>[_eps<eps>][_frc<fseed>]/
+# /scratch/lealaske/se_runs/Re<Re>_sig<sigma>/do_Re<Re>_sig<sigma>_S<S>_Np<Np>_seed<seed>[_frc<fseed>]/
+# (eps is not in the name: it is DOInvCovRegEps of the run's casefile.xml)
 # (one directory per (Re, sigma) pair holds its DNS and DO runs; never
 # reused: an existing run dir aborts the task). The snapshot set is
 # ../dns_Re<Re>_sig<sigma>_seed<seed>/fuentes/chks/, every <stride>-th chk
@@ -33,7 +34,6 @@ FSEED=${FSEED:-$SEED}                          # forcing seed; the DNS seed unle
 
 PAIR=$ROOT/Re${RE}_sig${SIGMA}                 # the (Re, sigma) directory shared by the DNS and its DO runs
 RUN=$PAIR/do_Re${RE}_sig${SIGMA}_S${S}_Np${NP}_seed${SEED}
-[ "$EPS" = "0.01" ] || RUN=${RUN}_eps${EPS}   # default eps (1e-2) runs carry no suffix
 [ "$FSEED" = "$SEED" ] || RUN=${RUN}_frc${FSEED}   # noise-only repeats carry the forcing seed
 DNS=$PAIR/dns_Re${RE}_sig${SIGMA}_seed${SEED}
 [ -e "$RUN" ] && { echo "error: $RUN already exists, not overwriting" >&2; exit 1; }

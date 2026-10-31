@@ -72,9 +72,9 @@ def point_at(row):
 
 def run_label():
     """Re, sigma, S, N_p, eps of the run and the instant of the mode, in one line"""
-    m = re.match(r"do_Re(\d+)_sig([0-9.]+)_S(\d+)_Np(\d+)_seed\d+(?:_eps([0-9.]+))?", str(d["run"]))
-    Re, sig, S_, Np, eps = m.groups()
-    e = int(round(np.log10(float(eps) if eps else 0.01)))
+    m = re.match(r"do_Re(\d+)_sig([0-9.]+)_S(\d+)_Np(\d+)_seed\d+", str(d["run"]))
+    Re, sig, S_, Np = m.groups()
+    e = int(round(np.log10(float(d["eps"]))))   # eps from do_fields.py (se.params: casefile or name)
     return label(rf"$Re = {Re}$, $\sigma = {sig}$, $S = {S_}$, $N_p = {Np}$, $\varepsilon = 10^{{{e}}}$, "
                  rf"mode at $t = {T_K:g}$", size=24)
 

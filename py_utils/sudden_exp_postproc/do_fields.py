@@ -45,7 +45,7 @@ def data(run, out, t=None, mode=1):
             if j == k:
                 u, v = uj, vj
     np.savez(f"{out}.npz", x=se.x, y=se.y, phi_u=pu, phi_v=pv, u=u, v=v, inside=se.INSIDE,
-             t=tg[k], k=mode, run=Path(run).name, ts=tg, a=a, g=g)
+             t=tg[k], k=mode, run=Path(run).name, eps=se.params(run)['eps'], ts=tg, a=a, g=g)
     return tg[k], tg[-1]
 
 

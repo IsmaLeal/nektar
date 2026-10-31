@@ -47,7 +47,7 @@ def main():
     ap.add_argument("--pair", default="Re100_sig0.0144")
     ap.add_argument("--S", type=int, nargs="+", default=[8, 12, 16], help="rows")
     ap.add_argument("--Np", type=int, nargs="+", default=[1000, 2000, 5000], help="columns")
-    ap.add_argument("--eps", type=float, nargs="+", default=[1e-4, 1e-8], help="one DO curve per eps in every cell")
+    ap.add_argument("--eps", type=float, nargs="+", default=[1e-6], help="one DO curve per eps in every cell")
     ap.add_argument("--q", nargs="+", default=list(QS), choices=QS)
     ap.add_argument("--out", type=Path, help="figure path (one --q); default <pair>/vary_S_Np_eps/hist_<q>.png")
     ap.add_argument("--redraw", action="store_true", help="draw the saved hist_<q>.npz again, the h5 files unread")

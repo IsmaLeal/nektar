@@ -61,19 +61,19 @@ stills:
 
 # Crossings: A(t) in two windows, for DNS seeds 45 and 47 and for four particles of one DO run
 # (269 510 635 848: the draw of numpy default_rng(0) among its 1000). Twins: the DNS twin of
-# particle 0 against that particle in the eps 1e-4 and eps 1e-8 DO runs of the same (S, Np).
+# particle 0 against that particle in the DO run of the same (S, Np).
 traces:
 	@set -e; for s in 45 47; do \
 	    $(PANEL) --panel cross tlim=0:4000 seed$$s --panel cross tlim=4000:8000 \
 	        --out $(TAG)/dns_$(TAG)_seed$$s/cross.png; \
 	done
 	@set -e; for p in 269 510 635 848; do \
-	    $(PANEL) --panel cross tlim=0:4000 S6_Np1000_seed45_eps1e-4@$$p --panel cross tlim=4000:8000 \
-	        --out $(TAG)/do_$(TAG)_S6_Np1000_seed45_eps0.0001/cross_p$$p.png; \
+	    $(PANEL) --panel cross tlim=0:4000 S6_Np1000_seed45@$$p --panel cross tlim=4000:8000 \
+	        --out $(TAG)/do_$(TAG)_S6_Np1000_seed45/cross_p$$p.png; \
 	done
 	@set -e; for sn in "8 1000" "6 5000" "12 5000"; do set -- $$sn; \
 	    $(PANEL) --sharex --tags \
-	        --panel trace q=A seed45_Np$$2_S$$1p0 S$$1_Np$$2_seed45_eps1e-4@0 S$$1_Np$$2_seed45_eps1e-8@0 \
+	        --panel trace q=A seed45_Np$$2_S$$1p0 S$$1_Np$$2_seed45@0 \
 	        --panel trace q=M --panel trace q=dL --panel trace q=Y1 \
 	        --out $(TAG)/dns_$(TAG)_seed45_Np$$2_S$$1p0/twin.pdf; \
 	done
